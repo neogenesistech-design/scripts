@@ -1,6 +1,8 @@
 setTimeout(()=>{
 var malloc = getFunc("libc.so", "malloc", "pointer", ["int"])
 
+
+
 function getClassLoader() {
     const classLoader = {
         Gravity: Java.use("android.view.Gravity"),
@@ -58,7 +60,6 @@ class Menu {
     #WRAP_CONTENT
     #menuScrollLayout
     #menuScrollView
-    #sideLayout
     #colorOn
     #colorOff
 
@@ -72,7 +73,6 @@ class Menu {
         this.#createContentView()
         this.#createMainLayout()
         this.#createMenuScroll()
-        this.#createSideLayout()
     }
 
     #createContentView() {
@@ -87,12 +87,10 @@ class Menu {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
         this.#mainLayout = this.#classLoader.LinearLayout.$new(this.#activity)
         this.#mainLayout.setLayoutParams(layoutParams)
-        this.#mainLayout.setOrientation(this.#mainLayout.HORIZONTAL.value) // horizontal to hold options and side layouts side by side
     }
 
     #createMenuScroll() {
-        const widthDp = 120; // fixed width for the menu options scroll area
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(this.#activity, widthDp), this.#WRAP_CONTENT)
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT)
         this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity)
         const padding = pixelDensityToPixels(this.#activity, 8)
         this.#menuScrollView.setLayoutParams(layoutParams)
@@ -105,24 +103,6 @@ class Menu {
         this.#menuScrollLayout = this.#classLoader.LinearLayout.$new(this.#activity)
         this.#menuScrollLayout.setLayoutParams(layoutParams)
         this.#menuScrollLayout.setOrientation(this.#menuScrollLayout.VERTICAL.value)
-    }
-    
-    #createSideLayout() {
-        const widthDp = 60;  // fixed width for side layout
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(this.#activity, widthDp), this.#WRAP_CONTENT)
-        this.#sideLayout = this.#classLoader.LinearLayout.$new(this.#activity)
-        this.#sideLayout.setLayoutParams(layoutParams)
-        this.#sideLayout.setOrientation(this.#sideLayout.VERTICAL.value)
-        this.#sideLayout.setBackgroundColor(this.#classLoader.Color.parseColor("#252525")) // dark gray for visibility
-        
-        // Add a test TextView inside sideLayout to confirm it's shown
-        let testText = this.#classLoader.TextView.$new(this.#activity);
-        testText.setText(this.#classLoader.String.$new("Empty Side Layout"));
-        testText.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
-        testText.setTextSize(12);
-        const testLayoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
-        testText.setLayoutParams(testLayoutParams);
-        this.#sideLayout.addView(testText);
     }
 
     createMenuOptionsLayout(colorOn, colorOff) {
@@ -149,7 +129,7 @@ class Menu {
         this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity)
         this.#menuLayout.setLayoutParams(layoutParams)
         this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color))
-        this.#menuLayout.setOrientation(this.#menuLayout.HORIZONTAL.value) // horizontal for options + side layout side by side
+        this.#menuLayout.setOrientation(this.#menuLayout.VERTICAL.value)
     }
 
     createMenuBarLayout(color) {
@@ -196,7 +176,6 @@ class Menu {
     #drawMenuOptions() {
         this.#menuLayout.addView(this.#menuScrollView)
         this.#menuScrollView.addView(this.#menuScrollLayout)
-        this.#menuLayout.addView(this.#sideLayout) // add empty side layout next to options
     }
 
     #createOptionClickEvent(id, optionView, callbacks) {
@@ -225,31 +204,34 @@ class Menu {
     }
 
     addOption(id, name, callbacks) {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
-        const padding = pixelDensityToPixels(this.#activity, 5);
-        const option = this.#classLoader.TextView.$new(this.#activity);
-        const margin = pixelDensityToPixels(this.#activity, 10);
+    const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+    const padding = pixelDensityToPixels(this.#activity, 5);
+    const option = this.#classLoader.TextView.$new(this.#activity);
+    const margin = pixelDensityToPixels(this.#activity, 10);
 
-        option.setText(this.#classLoader.String.$new(name));
-        option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-        option.setTextColor(this.#classLoader.Color.parseColor("#75757B"));
-        layoutParams.setMargins(0, 0, 0, margin);
-        option.setLayoutParams(layoutParams);
-        option.setPadding(padding, padding, 0, padding);
+    option.setText(this.#classLoader.String.$new(name));
+    option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+    option.setTextColor(this.#classLoader.Color.parseColor("#75757B"));
+    layoutParams.setMargins(0, 0, 0, margin);
+    option.setLayoutParams(layoutParams);
+    option.setPadding(padding, padding, 0, padding);
 
-        this.#menuScrollLayout.addView(option);
-        this.#createOptionClickEvent(id, option, callbacks);
+    this.#menuScrollLayout.addView(option);
+    this.#createOptionClickEvent(id, option, callbacks);
 
-        this.#options[id] = { callbacks, optionView: option };
-    }
+    // Armazena os callbacks no objeto de opções
+    this.#options[id] = { callbacks, optionView: option };
+}
 
     turnOffAllOptions() {
         for (const id in this.#options) {
             const { callbacks, optionView } = this.#options[id];
+        // Altere o estado visual e chame o callback `off`
             optionView.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
             callbacks.off();
-        }
     }
+}
+
     
     addText(text, textSize, textColor) {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
@@ -317,9 +299,12 @@ class Menu {
 
         this.#menuScrollLayout.addView(seekBar);
 
+
         textView.setLayoutParams(layoutParams);
         textView.setGravity(this.#classLoader.Gravity.CENTER.value);
     }
+
+
 
     #createMainLayoutEvent() {
         const mainLayout = this.#mainLayout
@@ -383,7 +368,6 @@ class Menu {
         this.#drawContentView()
         this.#drawMainLayout()
         this.#drawMenuStart()
-        this.#drawMenuLayout()
         this.#drawMenuBarLayout()
         this.#drawMenuBarTitle()
         this.#drawMenuOptions()
@@ -410,6 +394,7 @@ const alpha = createTString('alpha=0.5');
 const zoom = createTString('zoom=1')
 
 var saveVarsToArray = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10sbidMalVNaEv"), "pointer", ["pointer"]);
+
 
 function getPlayerProperties(p) {
       let props = {
@@ -451,6 +436,10 @@ function getVars(varname, type) {
   return null
 }
 
+
+
+
+
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
   'onEnter': function(args) {
       if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && menu != null) {
@@ -483,7 +472,7 @@ Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPz
         return 0;
       }
       hurtPlayer(a,b,c,d,e,f)
-}, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
+}, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]))
 
 function makeExplosion(level){
     if (!level) return console.log("TServerLevel não recebido")
@@ -502,7 +491,7 @@ Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxU
       canExplode = false;
       makeExplosion(args[0])
   }
-});
+})
 
 const call_showAdmins = {
     on() {
@@ -516,6 +505,8 @@ const call_showAdmins = {
 const call_autoFarm = {
     on() {
         if (!explosionsInterval) {
+        
+            
             explosionsInterval = setInterval(() => { canExplode = true },1000)
         }
     },
@@ -560,6 +551,7 @@ const call_autoOFF = {
     }
 }
 
+
 const call_wallhack = {
     on() {
         wallhack = true
@@ -592,6 +584,7 @@ Java.perform(function () {
         menu.addOption("unhit", "unhit", call_unhit)
         menu.addOption("wallhack", "Wallhack", call_wallhack)
 
+       
         menu.start()
     })
 })
@@ -609,6 +602,7 @@ function createTString(str) {
   ptr(parseInt(str_struct) + 4).writeInt(1)
   ptr(parseInt(str_struct) + 8).writeUtf8String(str)
   return str_pointer
+
 }
 
 function readTString(str) {
@@ -626,10 +620,13 @@ function readTString(str) {
   }
 }
 
+
+
+
 function click() {
     Java.perform(function () {
         Java.scheduleOnMainThread(function () {
-            let timer7 = Java.use("android.os.SystemClock").uptimeMillis();
+            let timer7 = Java.use("android.os.SystemClock").uptimeMillis(); // Corrected: Removed the trailing comma
             let motionEvent = Java.use("android.view.MotionEvent").obtain(
                 timer7,
                 (timer7 + 50),
