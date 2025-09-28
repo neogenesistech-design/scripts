@@ -1,3 +1,4 @@
+//teste
 setTimeout(()=>{
 var malloc = getFunc("libc.so", "malloc", "pointer", ["int"])
 
@@ -642,5 +643,6 @@ function click() {
         });
     });
 }
+
 
 },5000)
