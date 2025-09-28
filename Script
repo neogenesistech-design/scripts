@@ -87,11 +87,12 @@ class Menu {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
         this.#mainLayout = this.#classLoader.LinearLayout.$new(this.#activity)
         this.#mainLayout.setLayoutParams(layoutParams)
-        this.#mainLayout.setOrientation(this.#mainLayout.HORIZONTAL.value) // horizontal to hold options and side layouts
+        this.#mainLayout.setOrientation(this.#mainLayout.HORIZONTAL.value) // horizontal to hold options and side layouts side by side
     }
 
     #createMenuScroll() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT)
+        const widthDp = 120; // fixed width for the menu options scroll area
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(this.#activity, widthDp), this.#WRAP_CONTENT)
         this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity)
         const padding = pixelDensityToPixels(this.#activity, 8)
         this.#menuScrollView.setLayoutParams(layoutParams)
@@ -107,13 +108,21 @@ class Menu {
     }
     
     #createSideLayout() {
-        const sizeDp = 180
-        const SIZE_DP = pixelDensityToPixels(this.#activity, sizeDp)
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(SIZE_DP, this.#WRAP_CONTENT)
+        const widthDp = 60;  // fixed width for side layout
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(this.#activity, widthDp), this.#WRAP_CONTENT)
         this.#sideLayout = this.#classLoader.LinearLayout.$new(this.#activity)
         this.#sideLayout.setLayoutParams(layoutParams)
         this.#sideLayout.setOrientation(this.#sideLayout.VERTICAL.value)
         this.#sideLayout.setBackgroundColor(this.#classLoader.Color.parseColor("#252525")) // dark gray for visibility
+        
+        // Add a test TextView inside sideLayout to confirm it's shown
+        let testText = this.#classLoader.TextView.$new(this.#activity);
+        testText.setText(this.#classLoader.String.$new("Empty Side Layout"));
+        testText.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
+        testText.setTextSize(12);
+        const testLayoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
+        testText.setLayoutParams(testLayoutParams);
+        this.#sideLayout.addView(testText);
     }
 
     createMenuOptionsLayout(colorOn, colorOff) {
@@ -140,7 +149,7 @@ class Menu {
         this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity)
         this.#menuLayout.setLayoutParams(layoutParams)
         this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color))
-        this.#menuLayout.setOrientation(this.#menuLayout.HORIZONTAL.value) // horizontal for options + side layout
+        this.#menuLayout.setOrientation(this.#menuLayout.HORIZONTAL.value) // horizontal for options + side layout side by side
     }
 
     createMenuBarLayout(color) {
