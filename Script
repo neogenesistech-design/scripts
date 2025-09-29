@@ -1,769 +1,642 @@
-setTimeout(()=>{
-// Função malloc para alocar memória em código nativo (libc)
-var malloc = getFunc("libc.so", "malloc", "pointer", ["int"])
+setTimeout(() => {
+    // Função malloc para alocar memória em código nativo (libc)
+    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"])
 
-// Variável para gerenciar toasts e evitar sobreposição
-let currentToast = null;
+    // Variável para gerenciar toasts e evitar sobreposição
+    let currentToast = null;
 
-// Variáveis globais para o sistema ESP
-let espView = null;
-let espEnabled = false;
-let detectedPlayersForUpdate = {}; // Lista unificada para alimentar Menu e ESP
-
-// Função que carrega classes Android
-function getClassLoader() {
-    return {
-        Gravity: Java.use("android.view.Gravity"),
-        TextView: Java.use("android.widget.TextView"),
-        LinearLayout: Java.use("android.widget.LinearLayout"),
-        ViewGroup_LayoutParams: Java.use("android.view.ViewGroup$LayoutParams"),
-        LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-        Color: Java.use("android.graphics.Color"),
-        ActivityThread: Java.use("android.app.ActivityThread"),
-        ActivityThread_ActivityClientRecord: Java.use("android.app.ActivityThread$ActivityClientRecord"),
-        View: Java.use("android.view.View"),
-        Paint: Java.use("android.graphics.Paint"),
-        Canvas: Java.use("android.graphics.Canvas"),
-        View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
-        MotionEvent: Java.use("android.view.MotionEvent"),
-        String: Java.use("java.lang.String"),
-        ScrollView: Java.use("android.widget.ScrollView"),
-        View_OnClickListener: Java.use("android.view.View$OnClickListener"),
-        SeekBar: Java.use("android.widget.SeekBar")
-    };
-}
-
-// Função que converte unidade dp (density independent pixels) para pixels reais na tela
-function pixelDensityToPixels(context, dp) {
-    const density = context.getResources().getDisplayMetrics().density.value
-    return parseInt(dp * density)
-}
-
-// Função para obter a Activity principal atual do aplicativo
-function getMainActivity(classLoader) {
-    const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value
-    const mActivities = activityThread.mActivities.value
-    const activityClientRecord = Java.cast(mActivities.valueAt(0), classLoader.ActivityThread_ActivityClientRecord)
-    return activityClientRecord.activity.value
-}
-
-// Função para exibir um Toast, cancelando o anterior se existir
-function showToast(text, time = 1) {
-  Java.perform(() => {
-      Java.scheduleOnMainThread(function() {
-          if (currentToast) {
-              currentToast.cancel();
-          }
-          var toast = Java.use("android.widget.Toast");
-          var newToast = toast.makeText(Java.use("android.app.ActivityThread").currentApplication().getApplicationContext(),
-                       Java.use("java.lang.String").$new(text), time);
-          newToast.show();
-          currentToast = newToast;
-      });
-  });
-}
-
-// [CORRIGIDO] Classe ESPView - A nossa tela de desenho customizada e estável
-function createESPView(classLoader, context) {
-    const ESPView = Java.registerClass({
-        name: 'com.example.ESPView',
-        extends: classLoader.View,
-        fields: {
-            playersToDraw: 'java.util.ArrayList',
-            myPlayerPos: '[D',
-            playerPaint: 'android.graphics.Paint',
-            adminPaint: 'android.graphics.Paint',
-            playerLinePaint: 'android.graphics.Paint',
-            adminLinePaint: 'android.graphics.Paint',
-            scaleFactor: 'java.lang.Double'
-        },
-        methods: {
-            $init: [{
-                returnType: 'void',
-                argumentTypes: ['android.content.Context'],
-                implementation: function(context) {
-                    this.$super.$init(context);
-                    this.playersToDraw.value = Java.use('java.util.ArrayList').$new();
-                    this.myPlayerPos.value = Java.use('[D').$new(2);
-
-                    const Paint = classLoader.Paint;
-                    const Color = classLoader.Color;
-
-                    let pPaint = Paint.$new();
-                    pPaint.setColor(Color.CYAN.value);
-                    pPaint.setStyle(Paint.Style.STROKE.value);
-                    pPaint.setStrokeWidth(3.0);
-                    this.playerPaint.value = pPaint;
-
-                    let aPaint = Paint.$new();
-                    aPaint.setColor(Color.YELLOW.value);
-                    aPaint.setStyle(Paint.Style.STROKE.value);
-                    aPaint.setStrokeWidth(4.0);
-                    this.adminPaint.value = aPaint;
-
-                    let plPaint = Paint.$new();
-                    plPaint.setColor(Color.CYAN.value);
-                    plPaint.setStrokeWidth(2.0);
-                    plPaint.setAlpha(150);
-                    this.playerLinePaint.value = plPaint;
-
-                    let alPaint = Paint.$new();
-                    alPaint.setColor(Color.YELLOW.value);
-                    alPaint.setStrokeWidth(3.0);
-                    this.adminLinePaint.value = alPaint;
-                    
-                    this.scaleFactor.value = Java.use('java.lang.Double').$new(5.0);
-                }
-            }],
-            onDraw: [{
-                returnType: 'void',
-                argumentTypes: ['android.graphics.Canvas'],
-                implementation: function(canvas) {
-                    this.$super.onDraw(canvas);
-                    if (this.playersToDraw.value.isEmpty()) {
-                        return;
-                    }
-
-                    const width = canvas.getWidth();
-                    const height = canvas.getHeight();
-                    const centerX = width / 2;
-                    const centerY = height / 2;
-
-                    const myX = this.myPlayerPos.value[0];
-                    const myY = this.myPlayerPos.value[1];
-                    
-                    const iterator = this.playersToDraw.value.iterator();
-                    while(iterator.hasNext()){
-                        const player = Java.cast(iterator.next(), Java.use('java.util.HashMap'));
-                        
-                        const pX = player.get('x').doubleValue();
-                        const pY = player.get('y').doubleValue();
-                        const isAdmin = player.get('isAdmin').booleanValue();
-
-                        const scale = this.scaleFactor.value.doubleValue();
-                        const deltaX = (pX - myX) * scale;
-                        const deltaY = (pY - myY) * scale;
-                        
-                        const screenX = centerX + deltaX;
-                        const screenY = centerY + deltaY;
-
-                        const boxWidth = 30;
-                        const boxHeight = 50;
-
-                        const boxPaint = isAdmin ? this.adminPaint.value : this.playerPaint.value;
-                        const linePaint = isAdmin ? this.adminLinePaint.value : this.playerLinePaint.value;
-
-                        canvas.drawLine(centerX, centerY, screenX, screenY, linePaint);
-                        canvas.drawRect(screenX - boxWidth / 2, screenY - boxHeight / 2, screenX + boxWidth / 2, screenY + boxHeight / 2, boxPaint);
-                    }
-                }
-            }],
-            updatePlayers: [{
-                returnType: 'void',
-                argumentTypes: ['java.util.ArrayList', '[D'],
-                implementation: function(playerList, myPos) {
-                    this.playersToDraw.value = playerList;
-                    this.myPlayerPos.value = myPos;
-                    this.invalidate();
-                }
-            }]
+    // Função que carrega classes Android necessárias para criar interface de usuário e manipular eventos
+    function getClassLoader() {
+        const classLoader = {
+            Gravity: Java.use("android.view.Gravity"),
+            TextView: Java.use("android.widget.TextView"),
+            LinearLayout: Java.use("android.widget.LinearLayout"),
+            ViewGroup_LayoutParams: Java.use("android.view.ViewGroup$LayoutParams"),
+            LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
+            Color: Java.use("android.graphics.Color"),
+            ActivityThread: Java.use("android.app.ActivityThread"),
+            ActivityThread_ActivityClientRecord: Java.use("android.app.ActivityThread$ActivityClientRecord"),
+            View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
+            MotionEvent: Java.use("android.view.MotionEvent"),
+            String: Java.use("java.lang.String"),
+            ScrollView: Java.use("android.widget.ScrollView"),
+            View_OnClickListener: Java.use("android.view.View$OnClickListener"),
+            SeekBar: Java.use("android.widget.SeekBar")
         }
-    });
-    return ESPView.$new(context);
-}
-
-
-// Classe Menu
-class Menu {
-    #classLoader
-    #activity
-    #MATCH_PARENT
-    #WRAP_CONTENT
-    #contentView
-    #mainLayout
-    #menuStart
-    #menuLayout
-    #menuBarLayout
-    #menuBarTitle
-    #options
-    #colorOn
-    #colorOff
-    #panelsContainerLayout
-    #leftPanelLayout
-    #rightPanelLayout
-    #menuScrollView
-    #menuScrollLayout
-    #infoScrollView
-    #infoLayout
-    #infoPlayerPositionTextView
-    #infoPlayerListLayout
-
-    constructor(classLoader, activity) {
-        this.#classLoader = classLoader
-        this.#activity = activity
-        this.#MATCH_PARENT = classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value
-        this.#WRAP_CONTENT = classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
-        this.#options = {}
-        this.#createContentView()
-        this.#createMainLayout()
+        return classLoader
     }
 
-    #createContentView() {
-        this.#contentView = this.#classLoader.LinearLayout.$new(this.#activity)
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT)
-        this.#contentView.setLayoutParams(layoutParams)
-        this.#contentView.setGravity(this.#classLoader.Gravity.CENTER.value)
-        this.#contentView.setBackgroundColor(this.#classLoader.Color.TRANSPARENT.value)
+    // Função que converte unidade dp (density independent pixels) para pixels reais na tela
+    function pixelDensityToPixels(context, dp) {
+        const density = context.getResources().getDisplayMetrics().density.value
+        return parseInt(dp * density)
     }
 
-    #createMainLayout() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
-        this.#mainLayout = this.#classLoader.LinearLayout.$new(this.#activity)
-        this.#mainLayout.setLayoutParams(layoutParams)
+    // Função para obter a Activity principal atual do aplicativo
+    function getMainActivity(classLoader) {
+        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value
+        const mActivities = activityThread.mActivities.value
+        const activityClientRecord = Java.cast(mActivities.valueAt(0), classLoader.ActivityThread_ActivityClientRecord)
+        return activityClientRecord.activity.value
     }
 
-    createMenuLayout(color, width, height) {
-        const widthPx = pixelDensityToPixels(this.#activity, width);
-        const heightPx = pixelDensityToPixels(this.#activity, height);
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(widthPx, heightPx);
-        this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-        this.#menuLayout.setLayoutParams(layoutParams);
-        this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color));
-        this.#menuLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-    }
-    
-    createMenuBarLayout(color) {
-        const padding = pixelDensityToPixels(this.#activity, 10)
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT)
-        this.#menuBarLayout = this.#classLoader.LinearLayout.$new(this.#activity)
-        this.#menuBarLayout.setLayoutParams(layoutParams)
-        this.#menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color))
-        this.#menuBarLayout.setPadding(padding, padding, 0, padding)
-    }
-
-    createMenuBarTitle(title, color) {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
-        this.#menuBarTitle = this.#classLoader.TextView.$new(this.#activity)
-        this.#menuBarTitle.setLayoutParams(layoutParams)
-        this.#menuBarTitle.setText(this.#classLoader.String.$new(title))
-        this.#menuBarTitle.setTextColor(this.#classLoader.Color.parseColor(color))
-    }
-
-    #createPanelsContainerLayout() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
-        this.#panelsContainerLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-        this.#panelsContainerLayout.setLayoutParams(layoutParams);
-        this.#panelsContainerLayout.setOrientation(this.#classLoader.LinearLayout.HORIZONTAL.value);
-    }
-
-    #createLeftPanelLayout() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.0);
-        this.#leftPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-        this.#leftPanelLayout.setLayoutParams(layoutParams);
-        this.#leftPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-    }
-
-    #createRightPanelLayout() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.0);
-        const padding = pixelDensityToPixels(this.#activity, 8);
-
-        this.#rightPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-        this.#rightPanelLayout.setLayoutParams(layoutParams);
-        this.#rightPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-        this.#rightPanelLayout.setPadding(padding, padding, padding, padding);
-
-        this.#infoScrollView = this.#classLoader.ScrollView.$new(this.#activity);
-        this.#infoLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-        this.#infoLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-
-        const infoTitle = this.#classLoader.TextView.$new(this.#activity);
-        infoTitle.setText(this.#classLoader.String.$new("== Informações =="));
-        infoTitle.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
-        infoTitle.setGravity(this.#classLoader.Gravity.CENTER.value);
-        this.#infoLayout.addView(infoTitle);
-
-        this.#infoPlayerPositionTextView = this.#classLoader.TextView.$new(this.#activity);
-        this.#infoPlayerPositionTextView.setText(this.#classLoader.String.$new("Posição: \nX: --\nY: --"));
-        this.#infoPlayerPositionTextView.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
-        this.#infoLayout.addView(this.#infoPlayerPositionTextView);
-        
-        const playerListTitle = this.#classLoader.TextView.$new(this.#activity);
-        playerListTitle.setText(this.#classLoader.String.$new("\nJogadores Próximos:"));
-        playerListTitle.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
-        this.#infoLayout.addView(playerListTitle);
-
-        this.#infoPlayerListLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-        this.#infoPlayerListLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-        this.#infoLayout.addView(this.#infoPlayerListLayout);
-
-        this.#infoScrollView.addView(this.#infoLayout);
-        this.#rightPanelLayout.addView(this.#infoScrollView);
-    }
-    
-    #createMenuScrollView() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
-        this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity);
-        const padding = pixelDensityToPixels(this.#activity, 8);
-        this.#menuScrollView.setLayoutParams(layoutParams);
-        this.#menuScrollView.setPadding(padding, padding, padding, padding);
-    }
-
-    #createMenuScrollLayout() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
-        this.#menuScrollLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-        this.#menuScrollLayout.setLayoutParams(layoutParams);
-        this.#menuScrollLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-    }
-    
-    createMenuOptionsLayout(colorOn, colorOff) {
-        this.#createMenuScrollView();
-        this.#createMenuScrollLayout();
-        this.#colorOn = colorOn;
-        this.#colorOff = colorOff;
-    }
-
-    createMenuStart(title, size, color) {
-        size = pixelDensityToPixels(this.#activity, size)
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
-        this.#menuStart = this.#classLoader.TextView.$new(this.#activity)
-        this.#menuStart.setLayoutParams(layoutParams)
-        this.#menuStart.setText(this.#classLoader.String.$new(title))
-        this.#menuStart.setTextSize(size)
-        this.#menuStart.setTextColor(this.#classLoader.Color.parseColor(color))
-        this.#menuStart.setBackgroundColor(this.#classLoader.Color.WHITE.value)
-    }
-
-    #drawContentView() { this.#activity.addContentView(this.#contentView, this.#contentView.getLayoutParams()) }
-    #drawMainLayout() { this.#contentView.addView(this.#mainLayout) }
-    #drawMenuStart() { this.#mainLayout.addView(this.#menuStart) }
-
-    #buildExpandedMenu() {
-        this.#menuBarLayout.addView(this.#menuBarTitle);
-        this.#menuLayout.addView(this.#menuBarLayout);
-
-        this.#createPanelsContainerLayout();
-        this.#menuLayout.addView(this.#panelsContainerLayout);
-
-        this.#createLeftPanelLayout();
-        this.#menuScrollView.addView(this.#menuScrollLayout);
-        this.#leftPanelLayout.addView(this.#menuScrollView);
-        this.#panelsContainerLayout.addView(this.#leftPanelLayout);
-
-        this.#createRightPanelLayout();
-        this.#panelsContainerLayout.addView(this.#rightPanelLayout);
-    }
-
-    #createOptionClickEvent(id, optionView, callbacks) {
-        const classLoader = this.#classLoader
-        const colorOn = this.#colorOn
-        const colorOff = this.#colorOff
-        const self = this; 
-
-        const optionOnClickListener = Java.registerClass({
-            name: "com.example." + id,
-            implements: [classLoader.View_OnClickListener],
-            methods: {
-                onClick(p1) {
-                    if (!self.#options[id].state) {
-                        p1.setBackgroundColor(classLoader.Color.parseColor(colorOn))
-                        self.#options[id].state = true
-                        callbacks.on()
-                    } else {
-                        p1.setBackgroundColor(classLoader.Color.parseColor(colorOff))
-                        self.#options[id].state = false
-                        callbacks.off()
-                    }
+    // [MELHORADO] Função para exibir um Toast, cancelando o anterior se existir
+    function showToast(text, time = 1) {
+        Java.perform(() => {
+            Java.scheduleOnMainThread(function() {
+                if (currentToast) {
+                    currentToast.cancel();
                 }
-            }
-        })
-        optionView.setOnClickListener(optionOnClickListener.$new())
-    }
-
-    addOption(id, name, callbacks) {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
-        const padding = pixelDensityToPixels(this.#activity, 5);
-        const option = this.#classLoader.TextView.$new(this.#activity);
-        const margin = pixelDensityToPixels(this.#activity, 10);
-
-        option.setText(this.#classLoader.String.$new(name));
-        option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-        option.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"));
-        layoutParams.setMargins(0, 0, 0, margin);
-        option.setLayoutParams(layoutParams);
-        option.setPadding(padding, padding, 0, padding);
-
-        this.#menuScrollLayout.addView(option);
-        
-        this.#options[id] = { callbacks, optionView: option, state: false };
-        this.#createOptionClickEvent(id, option, callbacks);
-    }
-    
-    turnOffAllOptions() {
-        for (const id in this.#options) {
-            const optionData = this.#options[id];
-            if (optionData.state) { 
-                optionData.optionView.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-                optionData.state = false; 
-                optionData.callbacks.off();
-            }
-        }
-    }
-
-    addText(text, textSize, textColor) {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
-        const margin = pixelDensityToPixels(this.#activity, 5);
-        const textView = this.#classLoader.TextView.$new(this.#activity);
-
-        textView.setText(this.#classLoader.String.$new(text));
-        textView.setTextSize(textSize);
-        textView.setTextColor(this.#classLoader.Color.parseColor(textColor));
-        layoutParams.setMargins(0, 0, 0, margin);
-        textView.setLayoutParams(layoutParams);
-
-        this.#menuScrollLayout.addView(textView);
-    }
-    
-    addSeekBar(textValue,initialValue, minValue, maxValue, callback) {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
-        const margin = pixelDensityToPixels(this.#activity,1);
-        const seekBar = this.#classLoader.SeekBar.$new(this.#activity, null, 0, Java.use("android.R$style").Widget_Holo_SeekBar.value);
-        const textView = this.#classLoader.TextView.$new(this.#activity);
-        seekBar.setMax(maxValue - minValue);
-        seekBar.setProgress(initialValue - minValue);
-        layoutParams.setMargins(0, 0, 0, margin);
-        seekBar.setLayoutParams(layoutParams);
-        const text = Java.use("java.lang.String").$new(textValue+ " "+ initialValue);
-        textView.setText(text)
-        textView.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"))
-        
-        const SeekBarChangeListener = Java.use("android.widget.SeekBar$OnSeekBarChangeListener");
-        const SeekBarChangeListenerImplementation = Java.registerClass({
-            name: "com.example.SeekBarChangeListener" + Math.floor(Math.random() * 1000),
-            implements: [SeekBarChangeListener],
-            methods: {
-                onProgressChanged(seekBar, progress, fromUser) {
-                    const value = progress + minValue;
-                    const text = Java.use("java.lang.String").$new(textValue+" "+value);
-                    textView.setText(text);
-                    if(fromUser) callback(value,"move");
-                },
-                onStartTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "start"); },
-                onStopTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "end"); }
-            }
-        });
-
-        seekBar.setOnSeekBarChangeListener(SeekBarChangeListenerImplementation.$new());
-        this.#menuScrollLayout.addView(textView);
-        this.#menuScrollLayout.addView(seekBar);
-
-        textView.setLayoutParams(layoutParams);
-        textView.setGravity(this.#classLoader.Gravity.CENTER.value);
-    }
-
-    updatePlayerPosition(x, y) {
-        Java.scheduleOnMainThread(() => {
-            if (this.#infoPlayerPositionTextView) {
-                const text = `Posição: \nX: ${x.toFixed(2)}\nY: ${y.toFixed(2)}`;
-                this.#infoPlayerPositionTextView.setText(this.#classLoader.String.$new(text));
-            }
+                var toast = Java.use("android.widget.Toast");
+                var newToast = toast.makeText(Java.use("android.app.ActivityThread").currentApplication().getApplicationContext(),
+                    Java.use("java.lang.String").$new(text), time);
+                newToast.show();
+                currentToast = newToast;
+            });
         });
     }
 
-    // [MELHORADO] A lista agora exibe mais detalhes dos jogadores
-    updatePlayerList(players) {
-        Java.scheduleOnMainThread(() => {
-            if (!this.#infoPlayerListLayout) return;
-            this.#infoPlayerListLayout.removeAllViews();
+    // Classe Menu para facilitar criar e gerenciar um menu na interface usando widgets Android
+    class Menu {
+        #classLoader
+        #activity
+        #MATCH_PARENT
+        #WRAP_CONTENT
+        #contentView
+        #mainLayout
+        #menuStart
+        #menuLayout
+        #menuBarLayout
+        #menuBarTitle
+        #options
+        #colorOn
+        #colorOff
 
-            for (const key in players) {
-                const playerData = players[key];
+        // Layout de dois painéis
+        #panelsContainerLayout
+        #leftPanelLayout
+        #rightPanelLayout
+        #menuScrollView
+        #menuScrollLayout
+        #infoScrollView
+        #infoLayout
+        #infoPlayerPositionTextView
+        #infoPlayerListLayout
+
+        // Sistema de detecção de jogadores
+        #detectedPlayers = {};
+        #playerRefreshTimer = null;
+
+        constructor(classLoader, activity) {
+            this.#classLoader = classLoader
+            this.#activity = activity
+            this.#MATCH_PARENT = classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value
+            this.#WRAP_CONTENT = classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
+            this.#options = {}
+            this.#createContentView()
+            this.#createMainLayout()
+        }
+
+        #createContentView() {
+            this.#contentView = this.#classLoader.LinearLayout.$new(this.#activity)
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT)
+            this.#contentView.setLayoutParams(layoutParams)
+            this.#contentView.setGravity(this.#classLoader.Gravity.CENTER.value)
+            this.#contentView.setBackgroundColor(this.#classLoader.Color.TRANSPARENT.value)
+        }
+
+        #createMainLayout() {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
+            this.#mainLayout = this.#classLoader.LinearLayout.$new(this.#activity)
+            this.#mainLayout.setLayoutParams(layoutParams)
+        }
+
+        createMenuLayout(color, width, height) {
+            const widthPx = pixelDensityToPixels(this.#activity, width);
+            const heightPx = pixelDensityToPixels(this.#activity, height);
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(widthPx, heightPx);
+            this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#menuLayout.setLayoutParams(layoutParams);
+            this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color));
+            this.#menuLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+        }
+
+        createMenuBarLayout(color) {
+            const padding = pixelDensityToPixels(this.#activity, 10)
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT)
+            this.#menuBarLayout = this.#classLoader.LinearLayout.$new(this.#activity)
+            this.#menuBarLayout.setLayoutParams(layoutParams)
+            this.#menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color))
+            this.#menuBarLayout.setPadding(padding, padding, 0, padding)
+        }
+
+        createMenuBarTitle(title, color) {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
+            this.#menuBarTitle = this.#classLoader.TextView.$new(this.#activity)
+            this.#menuBarTitle.setLayoutParams(layoutParams)
+            this.#menuBarTitle.setText(this.#classLoader.String.$new(title))
+            this.#menuBarTitle.setTextColor(this.#classLoader.Color.parseColor(color))
+        }
+
+        #createPanelsContainerLayout() {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
+            this.#panelsContainerLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#panelsContainerLayout.setLayoutParams(layoutParams);
+            this.#panelsContainerLayout.setOrientation(this.#classLoader.LinearLayout.HORIZONTAL.value);
+        }
+
+        #createLeftPanelLayout() {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.0);
+            this.#leftPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#leftPanelLayout.setLayoutParams(layoutParams);
+            this.#leftPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+        }
+
+        #createRightPanelLayout() {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.0);
+            const padding = pixelDensityToPixels(this.#activity, 8);
+
+            this.#rightPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#rightPanelLayout.setLayoutParams(layoutParams);
+            this.#rightPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+            this.#rightPanelLayout.setPadding(padding, padding, padding, padding);
+
+            this.#infoScrollView = this.#classLoader.ScrollView.$new(this.#activity);
+            this.#infoLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#infoLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+
+            const infoTitle = this.#classLoader.TextView.$new(this.#activity);
+            infoTitle.setText(this.#classLoader.String.$new("== Informações =="));
+            infoTitle.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
+            infoTitle.setGravity(this.#classLoader.Gravity.CENTER.value);
+            this.#infoLayout.addView(infoTitle);
+
+            this.#infoPlayerPositionTextView = this.#classLoader.TextView.$new(this.#activity);
+            this.#infoPlayerPositionTextView.setText(this.#classLoader.String.$new("Posição: \nX: --\nY: --"));
+            this.#infoPlayerPositionTextView.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
+            this.#infoLayout.addView(this.#infoPlayerPositionTextView);
+
+            const playerListTitle = this.#classLoader.TextView.$new(this.#activity);
+            playerListTitle.setText(this.#classLoader.String.$new("\nJogadores Próximos:"));
+            playerListTitle.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
+            this.#infoLayout.addView(playerListTitle);
+
+            this.#infoPlayerListLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#infoPlayerListLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+            this.#infoLayout.addView(this.#infoPlayerListLayout);
+
+            this.#infoScrollView.addView(this.#infoLayout);
+            this.#rightPanelLayout.addView(this.#infoScrollView);
+        }
+
+        #createMenuScrollView() {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
+            this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity);
+            const padding = pixelDensityToPixels(this.#activity, 8);
+            this.#menuScrollView.setLayoutParams(layoutParams);
+            this.#menuScrollView.setPadding(padding, padding, padding, padding);
+        }
+
+        #createMenuScrollLayout() {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+            this.#menuScrollLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#menuScrollLayout.setLayoutParams(layoutParams);
+            this.#menuScrollLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+        }
+
+        createMenuOptionsLayout(colorOn, colorOff) {
+            this.#createMenuScrollView();
+            this.#createMenuScrollLayout();
+            this.#colorOn = colorOn;
+            this.#colorOff = colorOff;
+        }
+
+        createMenuStart(title, size, color) {
+            size = pixelDensityToPixels(this.#activity, size)
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
+            this.#menuStart = this.#classLoader.TextView.$new(this.#activity)
+            this.#menuStart.setLayoutParams(layoutParams)
+            this.#menuStart.setText(this.#classLoader.String.$new(title))
+            this.#menuStart.setTextSize(size)
+            this.#menuStart.setTextColor(this.#classLoader.Color.parseColor(color))
+            this.#menuStart.setBackgroundColor(this.#classLoader.Color.WHITE.value)
+        }
+
+        #drawContentView() { this.#activity.addContentView(this.#contentView, this.#contentView.getLayoutParams()) }
+        #drawMainLayout() { this.#contentView.addView(this.#mainLayout) }
+        #drawMenuStart() { this.#mainLayout.addView(this.#menuStart) }
+
+        #buildExpandedMenu() {
+            this.#menuBarLayout.addView(this.#menuBarTitle);
+            this.#menuLayout.addView(this.#menuBarLayout);
+
+            this.#createPanelsContainerLayout();
+            this.#menuLayout.addView(this.#panelsContainerLayout);
+
+            this.#createLeftPanelLayout();
+            this.#menuScrollView.addView(this.#menuScrollLayout);
+            this.#leftPanelLayout.addView(this.#menuScrollView);
+            this.#panelsContainerLayout.addView(this.#leftPanelLayout);
+
+            this.#createRightPanelLayout();
+            this.#panelsContainerLayout.addView(this.#rightPanelLayout);
+        }
+
+        #createOptionClickEvent(id, optionView, callbacks) {
+            const classLoader = this.#classLoader
+            const colorOn = this.#colorOn
+            const colorOff = this.#colorOff
+            const self = this;
+
+            const optionOnClickListener = Java.registerClass({
+                name: "com.example." + id,
+                implements: [classLoader.View_OnClickListener],
+                methods: {
+                    onClick(p1) {
+                        if (!self.#options[id].state) {
+                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOn))
+                            self.#options[id].state = true
+                            callbacks.on()
+                        } else {
+                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOff))
+                            self.#options[id].state = false
+                            callbacks.off()
+                        }
+                    }
+                }
+            })
+            optionView.setOnClickListener(optionOnClickListener.$new())
+        }
+
+        addOption(id, name, callbacks) {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+            const padding = pixelDensityToPixels(this.#activity, 5);
+            const option = this.#classLoader.TextView.$new(this.#activity);
+            const margin = pixelDensityToPixels(this.#activity, 10);
+
+            option.setText(this.#classLoader.String.$new(name));
+            option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+            option.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"));
+            layoutParams.setMargins(0, 0, 0, margin);
+            option.setLayoutParams(layoutParams);
+            option.setPadding(padding, padding, 0, padding);
+
+            this.#menuScrollLayout.addView(option);
+
+            this.#options[id] = { callbacks, optionView: option, state: false };
+            this.#createOptionClickEvent(id, option, callbacks);
+        }
+
+        turnOffAllOptions() {
+            for (const id in this.#options) {
+                const optionData = this.#options[id];
+                if (optionData.state) {
+                    optionData.optionView.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+                    optionData.state = false;
+                    optionData.callbacks.off();
+                }
+            }
+        }
+
+        addText(text, textSize, textColor) {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
+            const margin = pixelDensityToPixels(this.#activity, 5);
+            const textView = this.#classLoader.TextView.$new(this.#activity);
+
+            textView.setText(this.#classLoader.String.$new(text));
+            textView.setTextSize(textSize);
+            textView.setTextColor(this.#classLoader.Color.parseColor(textColor));
+            layoutParams.setMargins(0, 0, 0, margin);
+            textView.setLayoutParams(layoutParams);
+
+            this.#menuScrollLayout.addView(textView);
+        }
+
+        addSeekBar(textValue, initialValue, minValue, maxValue, callback) {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+            const margin = pixelDensityToPixels(this.#activity, 1);
+            const seekBar = this.#classLoader.SeekBar.$new(this.#activity, null, 0, Java.use("android.R$style").Widget_Holo_SeekBar.value);
+            const textView = this.#classLoader.TextView.$new(this.#activity);
+            seekBar.setMax(maxValue - minValue);
+            seekBar.setProgress(initialValue - minValue);
+            layoutParams.setMargins(0, 0, 0, margin);
+            seekBar.setLayoutParams(layoutParams);
+            const text = Java.use("java.lang.String").$new(textValue + " " + initialValue);
+            textView.setText(text)
+            textView.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"))
+
+            const SeekBarChangeListener = Java.use("android.widget.SeekBar$OnSeekBarChangeListener");
+            const SeekBarChangeListenerImplementation = Java.registerClass({
+                name: "com.example.SeekBarChangeListener" + Math.floor(Math.random() * 1000),
+                implements: [SeekBarChangeListener],
+                methods: {
+                    onProgressChanged(seekBar, progress, fromUser) {
+                        const value = progress + minValue;
+                        const text = Java.use("java.lang.String").$new(textValue + " " + value);
+                        textView.setText(text);
+                        if (fromUser) callback(value, "move");
+                    },
+                    onStartTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "start"); },
+                    onStopTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "end"); }
+                }
+            });
+
+            seekBar.setOnSeekBarChangeListener(SeekBarChangeListenerImplementation.$new());
+            this.#menuScrollLayout.addView(textView);
+            this.#menuScrollLayout.addView(seekBar);
+
+            textView.setLayoutParams(layoutParams);
+            textView.setGravity(this.#classLoader.Gravity.CENTER.value);
+        }
+
+        updatePlayerPosition(x, y) {
+            Java.scheduleOnMainThread(() => {
+                if (this.#infoPlayerPositionTextView) {
+                    const text = `Posição: \nX: ${x.toFixed(2)}\nY: ${y.toFixed(2)}`;
+                    this.#infoPlayerPositionTextView.setText(this.#classLoader.String.$new(text));
+                }
+            });
+        }
+        
+        // [MODIFICADO] Adiciona um jogador à lista da UI com informações completas
+        #addPlayerToInfoPanel(playerObject) {
+            if (this.#infoPlayerListLayout) {
                 const playerTextView = this.#classLoader.TextView.$new(this.#activity);
                 
-                let displayText = `${playerData.nick} [${playerData.account || 'N/A'}]\nPos: (${playerData.x.toFixed(1)}, ${playerData.y.toFixed(1)})`;
+                const isAdminText = playerObject.isAdmin ? ` (ADMIN)` : '';
+                const accountText = playerObject.props.account || 'N/A';
                 
-                if (playerData.isAdmin) {
-                    playerTextView.setTextColor(this.#classLoader.Color.parseColor("#FFD700"));
-                } else {
-                    playerTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF"));
-                }
-                
-                playerTextView.setText(this.#classLoader.String.$new(displayText));
-                playerTextView.setTextSize(12);
+                const displayText = `- ${playerObject.props.nick}${isAdminText}\n  Conta: ${accountText}\n  Pos: ${playerObject.props.x.toFixed(1)}, ${playerObject.props.y.toFixed(1)}`;
 
-                const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value, this.#classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value);
-                layoutParams.setMargins(0, 0, 0, 15); // Adiciona margem inferior para separar
-                playerTextView.setLayoutParams(layoutParams);
-                
+                if (playerObject.isAdmin) {
+                    playerTextView.setTextColor(this.#classLoader.Color.parseColor("#FFD700")); // Dourado para admins
+                } else {
+                    playerTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF")); // Azul claro para jogadores normais
+                }
+                playerTextView.setText(this.#classLoader.String.$new(displayText));
                 this.#infoPlayerListLayout.addView(playerTextView);
             }
-        });
-    }
-    
-    #createMainLayoutEvent() {
-        const mainLayout = this.#mainLayout
-        const menuLayout = this.#menuLayout
-        const menuStart = this.#menuStart
-        const classLoader = this.#classLoader
-        let initialX = 0, initialY = 0, isMove = false, isMenuLayout = false, initialTouchTime = 0
+        }
+
+        #clearPlayerInfoPanel() {
+            if (this.#infoPlayerListLayout) {
+                this.#infoPlayerListLayout.removeAllViews();
+            }
+        }
+
+        #refreshPlayerListUI() {
+            Java.scheduleOnMainThread(() => {
+                this.#clearPlayerInfoPanel();
+                for (const key in this.#detectedPlayers) {
+                    this.#addPlayerToInfoPanel(this.#detectedPlayers[key]);
+                }
+                this.#detectedPlayers = {}; // Limpa para o próximo ciclo
+            });
+        }
         
-        const MainLayoutOnTouchListener = Java.registerClass({
-            name: "com.example.MainLayoutEvent",
-            implements: [classLoader.View_OnTouchListener],
-            methods: {
-                onTouch(view, event) {
-                    const menuHeight = menuLayout.getHeight();
-                    switch (event.getAction()) {
-                        case classLoader.MotionEvent.ACTION_DOWN.value:
-                            initialX = view.getX() - event.getRawX();
-                            initialY = view.getY() - event.getRawY();
-                            isMove = false
-                            initialTouchTime = Date.now()
-                            break
-                        case classLoader.MotionEvent.ACTION_UP.value:
-                            if (!isMove) {
-                                if (!isMenuLayout) {
-                                    const currentY = mainLayout.getY();
-                                    const targetY = (currentY + menuHeight / 2) - menuStart.getHeight()/1.5;
-                                    mainLayout.removeView(menuStart)
-                                    mainLayout.addView(menuLayout)
-                                    mainLayout.setY(targetY)
-                                    isMenuLayout = true
-                                } else {
-                                    const currentY = mainLayout.getY();
-                                    const targetY = (currentY - menuHeight / 2) + menuStart.getHeight()/1.5;
-                                    mainLayout.removeView(menuLayout)
-                                    mainLayout.addView(menuStart)
-                                    mainLayout.setY(targetY)
-                                    isMenuLayout = false
+        // [MODIFICADO] Registra um jogador com todas as suas propriedades
+        registerPlayer(playerProps, isAdmin) {
+            const key = playerProps.account || playerProps.nick; // Usa conta ou nick como identificador
+            if (!key) return;
+
+            // Armazena o objeto de propriedades completo e o status de admin
+            this.#detectedPlayers[key] = {
+                props: playerProps,
+                isAdmin: isAdmin
+            };
+
+            // Reseta o timer a cada jogador encontrado
+            if (this.#playerRefreshTimer) {
+                clearTimeout(this.#playerRefreshTimer);
+            }
+
+            // Agenda a atualização da UI
+            this.#playerRefreshTimer = setTimeout(() => {
+                this.#refreshPlayerListUI();
+            }, 500); // Meio segundo de espera
+        }
+
+        #createMainLayoutEvent() {
+            const mainLayout = this.#mainLayout
+            const menuLayout = this.#menuLayout
+            const menuStart = this.#menuStart
+            const classLoader = this.#classLoader
+            let initialX = 0,
+                initialY = 0,
+                isMove = false,
+                isMenuLayout = false,
+                initialTouchTime = 0
+
+            const MainLayoutOnTouchListener = Java.registerClass({
+                name: "com.example.MainLayoutEvent",
+                implements: [classLoader.View_OnTouchListener],
+                methods: {
+                    onTouch(view, event) {
+                        const menuHeight = menuLayout.getHeight();
+                        switch (event.getAction()) {
+                            case classLoader.MotionEvent.ACTION_DOWN.value:
+                                initialX = view.getX() - event.getRawX();
+                                initialY = view.getY() - event.getRawY();
+                                isMove = false
+                                initialTouchTime = Date.now()
+                                break
+                            case classLoader.MotionEvent.ACTION_UP.value:
+                                if (!isMove) {
+                                    if (!isMenuLayout) {
+                                        const currentY = mainLayout.getY();
+                                        const targetY = (currentY + menuHeight / 2) - menuStart.getHeight() / 1.5;
+                                        mainLayout.removeView(menuStart)
+                                        mainLayout.addView(menuLayout)
+                                        mainLayout.setY(targetY)
+                                        isMenuLayout = true
+                                    } else {
+                                        const currentY = mainLayout.getY();
+                                        const targetY = (currentY - menuHeight / 2) + menuStart.getHeight() / 1.5;
+                                        mainLayout.removeView(menuLayout)
+                                        mainLayout.addView(menuStart)
+                                        mainLayout.setY(targetY)
+                                        isMenuLayout = false
+                                    }
                                 }
-                            }
-                            break
-                        case classLoader.MotionEvent.ACTION_MOVE.value:
-                            view.setX(event.getRawX() + initialX)
-                            view.setY(event.getRawY() + initialY)
-                            if (Date.now() - initialTouchTime > 200) isMove = true
-                            break
-                        default: return false
-                    }
-                    return true
-                }
-            }
-        })
-        this.#mainLayout.setOnTouchListener(MainLayoutOnTouchListener.$new())
-    }
-
-    start() {
-        this.#drawContentView()
-        this.#drawMainLayout()
-        this.#drawMenuStart()
-        this.#buildExpandedMenu()
-        this.#createMainLayoutEvent()
-    }
-}
-
-
-// --- Lógica Principal do Script ---
-
-let menu = null
-const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
-const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
-const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
-const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
-let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
-let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false, afkInterval = null;
-const alpha = createTString('alpha=0.5');
-
-function getPlayerProperties(p) {
-      return {
-              "alpha": Memory.readFloat(ptr(p.toInt32() + 356)),
-              "x": Memory.readDouble(p.add(0x238)),
-              "y": Memory.readDouble(p.add(0x240)),
-              "nick": readTString(ptr(p.toInt32() + 464)),
-              "account": readTString(ptr(p.toInt32() + 696))
-      };
-}
-
-Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), {
-  'onLeave': function(ret) { if (wallhack) ret.replace(0); }
-});
-
-Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
-  'onEnter': function(args) {
-      const playerPtr = args[0];
-      if (autoOFF && playerPtr.toInt32() != activeplayer.toInt32() && menu != null) {
-          menu.turnOffAllOptions();
-          showToast("Jogador apareceu. Funções desativadas.");
-      }
-      
-      if (menu && playerPtr.toInt32() != activeplayer.toInt32()) {
-        const accRgx = /^(pc\:|graal\d+|guest.*)/;
-        const props = getPlayerProperties(playerPtr);
-        if(!props.nick) return;
-
-        if (props.alpha < 0.5) setVarValue(playerPtr, alpha);
-        
-        const account = (props.account || "").toLowerCase();
-        const isAdmin = account !== '' && !accRgx.test(account);
-
-        // [REATIVADO] Toast para administradores
-        if (isAdmin) showToast("!! ADMIN DETECTADO: " + props.nick);
-
-        const key = playerPtr.toString();
-        // [MELHORADO] Coleta todas as informações necessárias
-        detectedPlayersForUpdate[key] = {
-            nick: props.nick,
-            x: props.x,
-            y: props.y,
-            isAdmin: isAdmin,
-            account: props.account
-        };
-      }
-  }
-});
-
-Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), new NativeCallback((a, b, c, d, e, f) => {
-    if (unhit) return 0;
-    hurtPlayer(a,b,c,d,e,f);
-}, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
-
-
-function makeExplosion(level){
-    if (!level) return;
-    const playerX = getlocalx(activeplayer), playerY = getlocaly(activeplayer);
-    for (let i = 0; i < 80; i++) for (let j = 0; j < 80; j++) putExplosion(level,playerX+40-i,playerY+40-j,1,0,1);
-}
-
-Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), {
-  onEnter: function(args) {
-      if (!canExplode) return;
-      canExplode = false;
-      makeExplosion(args[0]);
-  }
-});
-
-function click() {
-    Java.perform(() => Java.scheduleOnMainThread(() => {
-        let time = Java.use("android.os.SystemClock").uptimeMillis();
-        let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 500, 500, 0);
-        getMainActivity(getClassLoader()).dispatchTouchEvent(event);
-        console.log("Anti-AFK click performed.");
-    }));
-}
-
-
-// Callbacks para as funções do menu
-const call_unhit = { on() { unhit = true }, off() { unhit = false } };
-const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } };
-const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } };
-const call_autoFarm = {
-    on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true },1000) },
-    off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } }
-};
-const call_antiAfk = {
-    on() { if (!afkInterval) afkInterval = setInterval(click,240*1000) },
-    off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } }
-};
-const call_esp = {
-    on() {
-        espEnabled = true;
-        if (espView) espView.setVisibility(0); // VISIBLE
-    },
-    off() {
-        espEnabled = false;
-        if (espView) espView.setVisibility(8); // GONE
-    }
-};
-
-Java.perform(function () {
-    Java.scheduleOnMainThread(function () {
-        const classLoader = getClassLoader();
-        const mainActivity = getMainActivity(classLoader);
-        menu = new Menu(classLoader, mainActivity);
-
-        espView = createESPView(classLoader, mainActivity);
-        const layoutParams = classLoader.ViewGroup_LayoutParams.$new(-1, -1);
-        mainActivity.addContentView(espView, layoutParams);
-        espView.setVisibility(8); // GONE
-
-        menu.createMenuStart("MENU", 15, "#006400")
-        menu.createMenuLayout("#18122B", 340, 280)
-        menu.createMenuBarLayout("#635985")
-        menu.createMenuBarTitle("EngModMobile", "#FFC107")
-        menu.createMenuOptionsLayout("#443C68", "#393053")
-        
-        menu.addOption("esp", "ESP (Radar)", call_esp)
-        menu.addOption("unhit", "Unhit (God Mode)", call_unhit)
-        menu.addOption("wallhack", "Wallhack", call_wallhack)
-        menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
-        menu.addText("--- Utilitários ---", 12, "#FFFFFF")
-        menu.addOption("autoOFF", "Auto Off", call_autoOFF)
-        menu.addOption("antiAfk","Anti AFK",call_antiAfk)
-        menu.addSeekBar("Zoom Radar", 5, 1, 20, (value, type) => {
-            if(espView && espView.scaleFactor) {
-                espView.scaleFactor.value = Java.use('java.lang.Double').$new(value);
-            }
-        });
-
-        menu.start()
-        
-        setInterval(() => {
-            if (activeplayer && !activeplayer.isNull()) {
-                try {
-                    const myX = getlocalx(activeplayer);
-                    const myY = getlocaly(activeplayer);
-                    
-                    if(menu) {
-                        menu.updatePlayerPosition(myX, myY);
-                        menu.updatePlayerList(detectedPlayersForUpdate);
-                    }
-
-                    if (espEnabled && espView) {
-                        const playerList = Java.use('java.util.ArrayList').$new();
-                        for(const key in detectedPlayersForUpdate){
-                            const pData = detectedPlayersForUpdate[key];
-                            const map = Java.use('java.util.HashMap').$new();
-                            map.put('x', Java.use('java.lang.Double').$new(pData.x));
-                            map.put('y', Java.use('java.lang.Double').$new(pData.y));
-                            map.put('isAdmin', Java.use('java.lang.Boolean').$new(pData.isAdmin));
-                            playerList.add(map);
+                                break
+                            case classLoader.MotionEvent.ACTION_MOVE.value:
+                                view.setX(event.getRawX() + initialX)
+                                view.setY(event.getRawY() + initialY)
+                                if (Date.now() - initialTouchTime > 200) isMove = true
+                                break
+                            default:
+                                return false
                         }
-                        
-                        const myPosArr = Java.use('[D').$new(2);
-                        myPosArr.value[0] = myX;
-                        myPosArr.value[1] = myY;
-
-                        espView.updatePlayers(playerList, myPosArr);
+                        return true
                     }
-                    // Limpa a lista para o próximo ciclo de detecção
-                    detectedPlayersForUpdate = {};
-                } catch(e) {
-                    // console.log("Update loop error: " + e);
                 }
+            })
+            this.#mainLayout.setOnTouchListener(MainLayoutOnTouchListener.$new())
+        }
+
+        start() {
+            this.#drawContentView()
+            this.#drawMainLayout()
+            this.#drawMenuStart()
+            this.#buildExpandedMenu()
+            this.#createMainLayoutEvent()
+        }
+    }
+
+    let menu = null
+    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
+    const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
+    const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
+    let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
+    const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
+    let canExplode = false,
+        explosionsInterval = null,
+        unhit = false,
+        wallhack = false,
+        autoOFF = false
+    const alpha = createTString('alpha=0.5');
+    const zoom = createTString('zoom=1')
+    var saveVarsToArray = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10sbidMalVNaEv"), "pointer", ["pointer"]);
+
+    function getPlayerProperties(p) {
+        return {
+            "alpha": Memory.readFloat(ptr(p.toInt32() + 356)),
+            "zoom": Memory.readFloat(p.add(0x138)),
+            "x": Memory.readDouble(p.add(0x238)),
+            "y": Memory.readDouble(p.add(0x240)),
+            "nick": readTString(ptr(p.toInt32() + 464)),
+            "account": readTString(ptr(p.toInt32() + 696))
+        };
+    }
+
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), {
+        'onLeave': function(ret) { if (wallhack) ret.replace(0); }
+    });
+
+    // [MODIFICADO] Interceptor agora exibe toast para admins e registra mais dados dos jogadores
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
+        'onEnter': function(args) {
+            const playerPtr = args[0];
+            if (autoOFF && playerPtr.toInt32() != activeplayer.toInt32() && menu != null) {
+                menu.turnOffAllOptions();
+                showToast("Jogador apareceu. Funções desativadas.");
             }
-        }, 100); // Roda 10x por segundo
+
+            if (menu) {
+                const accRgx = /^(pc\:|graal\d+|guest.*)/;
+                const props = getPlayerProperties(playerPtr);
+                if (props.alpha < 0.5) setVarValue(playerPtr, alpha);
+                if (props.zoom < 1) setVarValue(playerPtr, zoom);
+
+                const account = (props.account || "").toLowerCase();
+                const isAdmin = account !== '' && !accRgx.test(account);
+
+                // [NOVO] Exibe um toast quando um admin é detectado
+                if (isAdmin) {
+                    showToast(`Admin ${props.nick} detectado!`, 1);
+                }
+
+                menu.registerPlayer(props, isAdmin);
+            }
+        }
+    });
+
+    Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), new NativeCallback((a, b, c, d, e, f) => {
+        if (unhit) return 0;
+        hurtPlayer(a, b, c, d, e, f);
+    }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
+
+    function makeExplosion(level) {
+        if (!level) return;
+        const playerX = getlocalx(activeplayer),
+            playerY = getlocaly(activeplayer);
+        for (let i = 0; i < 80; i++)
+            for (let j = 0; j < 80; j++) putExplosion(level, playerX + 40 - i, playerY + 40 - j, 1, 0, 1);
+    }
+
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), {
+        onEnter: function(args) {
+            if (!canExplode) return;
+            canExplode = false;
+            makeExplosion(args[0]);
+        }
+    });
+
+    const call_autoFarm = {
+        on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true }, 1000) },
+        off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } }
+    };
+    let afkInterval = null;
+    const call_antiAfk = {
+        on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000) },
+        off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } }
+    };
+    const call_unhit = { on() { unhit = true }, off() { unhit = false } };
+    const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } };
+    const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } };
+
+    Java.perform(function() {
+        Java.scheduleOnMainThread(function() {
+            const classLoader = getClassLoader()
+            const mainActivity = getMainActivity(classLoader)
+            menu = new Menu(classLoader, mainActivity)
+
+            menu.createMenuStart("MENU", 15, "#006400")
+            menu.createMenuLayout("#18122B", 340, 250)
+            menu.createMenuBarLayout("#635985")
+            menu.createMenuBarTitle("EngModMobile", "#FFC107")
+            menu.createMenuOptionsLayout("#443C68", "#393053")
+
+            menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
+            menu.addOption("unhit", "Unhit (God Mode)", call_unhit)
+            menu.addOption("wallhack", "Wallhack", call_wallhack)
+            menu.addText("--- Utilitários ---", 12, "#FFFFFF")
+            menu.addOption("autoOFF", "Auto Off", call_autoOFF)
+            menu.addOption("antiAfk", "Anti AFK", call_antiAfk)
+
+            menu.start()
+
+            setInterval(() => {
+                if (menu && activeplayer && !activeplayer.isNull()) {
+                    try {
+                        menu.updatePlayerPosition(getlocalx(activeplayer), getlocaly(activeplayer));
+                    } catch (e) {}
+                }
+            }, 500);
+        })
     })
-})
 
-function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
+    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
 
-function createTString(str) {
-  var str_pointer = malloc(4), str_struct = malloc(str.length + 8);
-  str_pointer.writePointer(str_struct);
-  str_struct.writeInt(str.length);
-  ptr(parseInt(str_struct) + 4).writeInt(1);
-  ptr(parseInt(str_struct) + 8).writeUtf8String(str);
-  return str_pointer;
-}
+    function createTString(str) {
+        var str_pointer = malloc(4),
+            str_struct = malloc(str.length + 8);
+        str_pointer.writePointer(str_struct);
+        str_struct.writeInt(str.length);
+        ptr(parseInt(str_struct) + 4).writeInt(1);
+        ptr(parseInt(str_struct) + 8).writeUtf8String(str);
+        return str_pointer;
+    }
 
-function readTString(str) {
-  if (str && !str.isNull()) {
-      var pstr = str.readPointer();
-      if (pstr && !pstr.isNull()) {
-          var strlen = pstr.readInt();
-          if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen);
-      }
-  } return null;
-}
+    function readTString(str) {
+        if (str && !str.isNull()) {
+            var pstr = str.readPointer();
+            if (pstr && !pstr.isNull()) {
+                var strlen = pstr.readInt();
+                if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen);
+            }
+        }
+        return null;
+    }
 
-},5000)
+    function click() {
+        Java.perform(() => Java.scheduleOnMainThread(() => {
+            let time = Java.use("android.os.SystemClock").uptimeMillis();
+            let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 500, 500, 0);
+            getMainActivity(getClassLoader()).dispatchTouchEvent(event);
+            console.log("Anti-AFK click performed.");
+        }));
+    }
+
+}, 5000)
