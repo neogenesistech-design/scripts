@@ -141,7 +141,7 @@ setTimeout(() => {
             this.#entityListLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
 
             const infoTitle = this.#classLoader.TextView.$new(this.#activity);
-            infoTitle.setText(this.#classLoader.String.$new("--- Entity Auto-Explorer ---"));
+            infoTitle.setText(this.#classLoader.String.$new("--- Entity List Explorer ---"));
             infoTitle.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
             infoTitle.setGravity(this.#classLoader.Gravity.CENTER.value);
 
@@ -190,22 +190,18 @@ setTimeout(() => {
         #buildExpandedMenu() {
             this.#menuBarLayout.addView(this.#menuBarTitle);
             this.#menuLayout.addView(this.#menuBarLayout);
-
             this.#createPanelsContainerLayout();
             this.#menuLayout.addView(this.#panelsContainerLayout);
-
             this.#createLeftPanelLayout();
             this.#menuScrollView.addView(this.#menuScrollLayout);
             this.#leftPanelLayout.addView(this.#menuScrollView);
             this.#panelsContainerLayout.addView(this.#leftPanelLayout);
-
             this.#createRightPanelLayout();
             this.#panelsContainerLayout.addView(this.#rightPanelLayout);
         }
 
         #clearEntityListUI() {
             if (this.#entityListLayout) {
-                // Guarda o título e remove todo o resto
                 const title = this.#entityListLayout.getChildAt(0);
                 this.#entityListLayout.removeAllViews();
                 this.#entityListLayout.addView(title);
@@ -215,7 +211,13 @@ setTimeout(() => {
         #addEntityToUI(text) {
             if (this.#entityListLayout) {
                 const entityTextView = this.#classLoader.TextView.$new(this.#activity);
-                entityTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF"));
+                if (text.startsWith("--- LISTA")) {
+                    entityTextView.setTextColor(this.#classLoader.Color.parseColor("#03A9F4")); // Azul para cabeçalhos
+                } else if (text.trim().startsWith("[ATIVO]")) {
+                    entityTextView.setTextColor(this.#classLoader.Color.parseColor("#FFEB3B")); // Amarelo para ativos
+                } else {
+                    entityTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF")); // Cor padrão
+                }
                 entityTextView.setText(this.#classLoader.String.$new(text));
                 this.#entityListLayout.addView(entityTextView);
             }
@@ -225,7 +227,7 @@ setTimeout(() => {
             Java.scheduleOnMainThread(() => {
                 this.#clearEntityListUI();
                 if (entityTexts.length === 0) {
-                     this.#addEntityToUI("Nenhuma entidade encontrada.");
+                    this.#addEntityToUI("Nenhuma lista de entidades ativas encontrada.");
                 } else {
                     entityTexts.forEach(text => {
                         this.#addEntityToUI(text);
@@ -235,16 +237,23 @@ setTimeout(() => {
         }
 
         #createOptionClickEvent(id, optionView, callbacks) {
-            const classLoader = this.#classLoader, colorOn = this.#colorOn, colorOff = this.#colorOff, self = this;
+            const classLoader = this.#classLoader,
+                colorOn = this.#colorOn,
+                colorOff = this.#colorOff,
+                self = this;
             const optionOnClickListener = Java.registerClass({
                 name: "com.example." + id,
                 implements: [classLoader.View_OnClickListener],
                 methods: {
                     onClick(p1) {
                         if (!self.#options[id].state) {
-                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOn)); self.#options[id].state = true; callbacks.on()
+                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOn));
+                            self.#options[id].state = true;
+                            callbacks.on()
                         } else {
-                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOff)); self.#options[id].state = false; callbacks.off()
+                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOff));
+                            self.#options[id].state = false;
+                            callbacks.off()
                         }
                     }
                 }
@@ -253,7 +262,10 @@ setTimeout(() => {
         }
 
         addOption(id, name, callbacks) {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT), padding = pixelDensityToPixels(this.#activity, 5), option = this.#classLoader.TextView.$new(this.#activity), margin = pixelDensityToPixels(this.#activity, 10);
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT),
+                padding = pixelDensityToPixels(this.#activity, 5),
+                option = this.#classLoader.TextView.$new(this.#activity),
+                margin = pixelDensityToPixels(this.#activity, 10);
             option.setText(this.#classLoader.String.$new(name));
             option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
             option.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"));
@@ -261,7 +273,11 @@ setTimeout(() => {
             option.setLayoutParams(layoutParams);
             option.setPadding(padding, padding, 0, padding);
             this.#menuScrollLayout.addView(option);
-            this.#options[id] = { callbacks, optionView: option, state: false };
+            this.#options[id] = {
+                callbacks,
+                optionView: option,
+                state: false
+            };
             this.#createOptionClickEvent(id, option, callbacks);
         }
 
@@ -277,7 +293,9 @@ setTimeout(() => {
         }
 
         addText(text, textSize, textColor) {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT), margin = pixelDensityToPixels(this.#activity, 5), textView = this.#classLoader.TextView.$new(this.#activity);
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT),
+                margin = pixelDensityToPixels(this.#activity, 5),
+                textView = this.#classLoader.TextView.$new(this.#activity);
             textView.setText(this.#classLoader.String.$new(text));
             textView.setTextSize(textSize);
             textView.setTextColor(this.#classLoader.Color.parseColor(textColor));
@@ -287,7 +305,10 @@ setTimeout(() => {
         }
 
         addSeekBar(textValue, initialValue, minValue, maxValue, callback) {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT), margin = pixelDensityToPixels(this.#activity, 1), seekBar = this.#classLoader.SeekBar.$new(this.#activity, null, 0, Java.use("android.R$style").Widget_Holo_SeekBar.value), textView = this.#classLoader.TextView.$new(this.#activity);
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT),
+                margin = pixelDensityToPixels(this.#activity, 1),
+                seekBar = this.#classLoader.SeekBar.$new(this.#activity, null, 0, Java.use("android.R$style").Widget_Holo_SeekBar.value),
+                textView = this.#classLoader.TextView.$new(this.#activity);
             seekBar.setMax(maxValue - minValue);
             seekBar.setProgress(initialValue - minValue);
             layoutParams.setMargins(0, 0, 0, margin);
@@ -301,12 +322,17 @@ setTimeout(() => {
                 implements: [SeekBarChangeListener],
                 methods: {
                     onProgressChanged(seekBar, progress, fromUser) {
-                        const value = progress + minValue, text = Java.use("java.lang.String").$new(textValue + " " + value);
+                        const value = progress + minValue,
+                            text = Java.use("java.lang.String").$new(textValue + " " + value);
                         textView.setText(text);
                         if (fromUser) callback(value, "move");
                     },
-                    onStartTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "start"); },
-                    onStopTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "end"); }
+                    onStartTrackingTouch(seekBar) {
+                        callback(seekBar.getProgress() + minValue, "start");
+                    },
+                    onStopTrackingTouch(seekBar) {
+                        callback(seekBar.getProgress() + minValue, "end");
+                    }
                 }
             });
             seekBar.setOnSeekBarChangeListener(SeekBarChangeListenerImplementation.$new());
@@ -317,8 +343,15 @@ setTimeout(() => {
         }
 
         #createMainLayoutEvent() {
-            const mainLayout = this.#mainLayout, menuLayout = this.#menuLayout, menuStart = this.#menuStart, classLoader = this.#classLoader;
-            let initialX = 0, initialY = 0, isMove = false, isMenuLayout = false, initialTouchTime = 0;
+            const mainLayout = this.#mainLayout,
+                menuLayout = this.#menuLayout,
+                menuStart = this.#menuStart,
+                classLoader = this.#classLoader;
+            let initialX = 0,
+                initialY = 0,
+                isMove = false,
+                isMenuLayout = false,
+                initialTouchTime = 0;
             const MainLayoutOnTouchListener = Java.registerClass({
                 name: "com.example.MainLayoutEvent",
                 implements: [classLoader.View_OnTouchListener],
@@ -326,20 +359,38 @@ setTimeout(() => {
                     onTouch(view, event) {
                         const menuHeight = menuLayout.getHeight();
                         switch (event.getAction()) {
-                            case classLoader.MotionEvent.ACTION_DOWN.value: initialX = view.getX() - event.getRawX(); initialY = view.getY() - event.getRawY(); isMove = false; initialTouchTime = Date.now(); break;
+                            case classLoader.MotionEvent.ACTION_DOWN.value:
+                                initialX = view.getX() - event.getRawX();
+                                initialY = view.getY() - event.getRawY();
+                                isMove = false;
+                                initialTouchTime = Date.now();
+                                break;
                             case classLoader.MotionEvent.ACTION_UP.value:
                                 if (!isMove) {
                                     if (!isMenuLayout) {
-                                        const currentY = mainLayout.getY(), targetY = (currentY + menuHeight / 2) - menuStart.getHeight() / 1.5;
-                                        mainLayout.removeView(menuStart); mainLayout.addView(menuLayout); mainLayout.setY(targetY); isMenuLayout = true;
+                                        const currentY = mainLayout.getY(),
+                                            targetY = (currentY + menuHeight / 2) - menuStart.getHeight() / 1.5;
+                                        mainLayout.removeView(menuStart);
+                                        mainLayout.addView(menuLayout);
+                                        mainLayout.setY(targetY);
+                                        isMenuLayout = true;
                                     } else {
-                                        const currentY = mainLayout.getY(), targetY = (currentY - menuHeight / 2) + menuStart.getHeight() / 1.5;
-                                        mainLayout.removeView(menuLayout); mainLayout.addView(menuStart); mainLayout.setY(targetY); isMenuLayout = false;
+                                        const currentY = mainLayout.getY(),
+                                            targetY = (currentY - menuHeight / 2) + menuStart.getHeight() / 1.5;
+                                        mainLayout.removeView(menuLayout);
+                                        mainLayout.addView(menuStart);
+                                        mainLayout.setY(targetY);
+                                        isMenuLayout = false;
                                     }
                                 }
                                 break;
-                            case classLoader.MotionEvent.ACTION_MOVE.value: view.setX(event.getRawX() + initialX); view.setY(event.getRawY() + initialY); if (Date.now() - initialTouchTime > 200) isMove = true; break;
-                            default: return false;
+                            case classLoader.MotionEvent.ACTION_MOVE.value:
+                                view.setX(event.getRawX() + initialX);
+                                view.setY(event.getRawY() + initialY);
+                                if (Date.now() - initialTouchTime > 200) isMove = true;
+                                break;
+                            default:
+                                return false;
                         }
                         return true;
                     }
@@ -349,7 +400,11 @@ setTimeout(() => {
         }
 
         start() {
-            this.#drawContentView(); this.#drawMainLayout(); this.#drawMenuStart(); this.#buildExpandedMenu(); this.#createMainLayoutEvent();
+            this.#drawContentView();
+            this.#drawMainLayout();
+            this.#drawMenuStart();
+            this.#buildExpandedMenu();
+            this.#createMainLayoutEvent();
         }
     }
 
@@ -361,215 +416,274 @@ setTimeout(() => {
     let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
 
-    // Variáveis de controle das funções
-    let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false, showAdmins = false;
+    let canExplode = false,
+        explosionsInterval = null,
+        unhit = false,
+        wallhack = false,
+        autoOFF = false,
+        showAdmins = false;
     let explosionSize = 80;
     let entityScannerInterval = null;
-    let scanRadius = 1024; // Valor inicial do raio de busca em bytes
-
+    let scanRadius = 1024;
     const alpha = createTString('alpha=0.5');
     const zoom = createTString('zoom=1');
+    let entityStateTracker = {};
 
-    function getPlayerProperties(p) {
-        return {
-            "alpha": Memory.readFloat(ptr(p.toInt32() + 356)), "zoom": Memory.readFloat(p.add(0x138)), "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)), "nick": readTString(ptr(p.toInt32() + 464)), "account": readTString(ptr(p.toInt32() + 696))
-        };
-    }
-
-    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), {
-        'onLeave': function(ret) { if (wallhack) ret.replace(0); }
-    });
-
-    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
-        'onEnter': function(args) {
-            if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && menu != null) {
-                menu.turnOffAllOptions();
-                showToast("Jogador apareceu. Funções desativadas.");
-            }
-            if (!showAdmins) return;
-            const playerPtr = args[0];
-            const accRgx = /^(pc\:|graal\d+|guest.*)/;
-            const props = getPlayerProperties(playerPtr);
-            if (props.alpha < 0.5) setVarValue(playerPtr, alpha);
-            if (props.zoom < 1) setVarValue(playerPtr, zoom);
-            if (!props.account) return;
-            const account = props.account.toLowerCase();
-            if (account === '') return;
-            if (!accRgx.test(account)) {
-                showToast('Admin: ' + props.nick);
-            }
-        }
-    });
-
-    Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), new NativeCallback((a, b, c, d, e, f) => {
-        if (unhit) return 0;
-        hurtPlayer(a, b, c, d, e, f);
-    }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
-
-    function makeExplosion(level) {
-        if (!level) return;
-        const playerX = getlocalx(activeplayer), playerY = getlocaly(activeplayer);
-        const radius = explosionSize;
-        const offset = radius / 2;
-        for (let i = 0; i < radius; i++) {
-            for (let j = 0; j < radius; j++) {
-                putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1);
-            }
-        }
-    }
-
-    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), {
-        onEnter: function(args) {
-            if (!canExplode) return;
-            canExplode = false;
-            makeExplosion(args[0]);
-        }
-    });
-
-    // =========================================================================================
-    // == INÍCIO DA LÓGICA DO AUTO-EXPLORER DE ENTIDADES =======================================
-    // =========================================================================================
+    // ====================================================================================================
+    // == INÍCIO DA LÓGICA DO AUTO-EXPLORER DE LISTAS DE ENTIDADES (VERSÃO AVANÇADA) =======================
+    // ====================================================================================================
 
     function autoScanEntities() {
         if (activeplayer.isNull()) return;
 
-        let foundEntities = [];
-        let processedPtrs = new Set(); // Para evitar entidades duplicadas na lista
-        
+        const now = Date.now();
         const playerX = getlocalx(activeplayer);
         const playerY = getlocaly(activeplayer);
-        
-        // Define a distância máxima em "unidades do jogo" para uma entidade ser considerada válida
-        const maxDistance = 100.0; 
+        const maxDistance = 100.0;
+        const pointerSize = 4; // 4 bytes para arquitetura 32-bit
+        const INACTIVITY_TIMEOUT = 5000; // 5 segundos
 
-        // Itera para frente e para trás do jogador, dentro do raio de busca definido
-        for (let offset = -scanRadius; offset <= scanRadius; offset += 4) { // Pula de 4 em 4 bytes (tamanho de um ponteiro)
+        let validEntityPointers = new Map();
+
+        // 1. PRIMEIRA PASSAGEM: Encontra todos os ponteiros válidos que apontam para entidades
+        for (let offset = -scanRadius; offset <= scanRadius; offset += pointerSize) {
             try {
                 const currentAddress = activeplayer.add(offset);
                 const potentialEntityPtr = currentAddress.readPointer();
 
-                // Pula se o ponteiro for nulo, inválido ou já tiver sido processado
-                if (potentialEntityPtr.isNull() || processedPtrs.has(potentialEntityPtr.toString())) {
-                    continue;
-                }
-                
-                // --- HEURÍSTICA 1: Tenta ler as coordenadas ---
+                if (potentialEntityPtr.isNull()) continue;
+
                 const entityX = potentialEntityPtr.add(0x238).readDouble();
                 const entityY = potentialEntityPtr.add(0x240).readDouble();
 
-                // --- HEURÍSTICA 2: Verifica se as coordenadas são válidas e próximas ---
+                if ((entityX === 0 && entityY === 0) || isNaN(entityX) || isNaN(entityY)) continue;
+
                 const distance = Math.sqrt(Math.pow(playerX - entityX, 2) + Math.pow(playerY - entityY, 2));
-                if (isNaN(distance) || distance > maxDistance) {
-                    continue; // Descarta se for NaN ou muito longe
+                if (distance > maxDistance) continue;
+
+                // Armazena o ponteiro da entidade e o endereço onde esse ponteiro foi encontrado
+                validEntityPointers.set(currentAddress.toInt32(), potentialEntityPtr);
+
+            } catch (e) { /* Ignora erros de leitura */ }
+        }
+
+        let finalDisplayList = [];
+        let processedPointers = new Set();
+        let processedForTimeout = new Set();
+
+        // 2. SEGUNDA PASSAGEM: Agrupa os ponteiros encontrados em listas sequenciais
+        const sortedAddresses = Array.from(validEntityPointers.keys()).sort((a, b) => a - b);
+
+        for (const startAddress of sortedAddresses) {
+            if (processedPointers.has(startAddress)) continue;
+
+            let currentList = [];
+            let currentAddress = startAddress;
+
+            // Constrói a lista enquanto os endereços forem sequenciais
+            while (validEntityPointers.has(currentAddress)) {
+                const entityPtr = validEntityPointers.get(currentAddress);
+                currentList.push(entityPtr);
+                processedPointers.add(currentAddress);
+                currentAddress += pointerSize;
+            }
+
+            if (currentList.length > 0) {
+                let listEntitiesForDisplay = [];
+
+                for (const entityPtr of currentList) {
+                    const entityAddressStr = entityPtr.toString();
+                    processedForTimeout.add(entityAddressStr); // Marca como visto nesta varredura
+
+                    const entityX = entityPtr.add(0x238).readDouble();
+                    const entityY = entityPtr.add(0x240).readDouble();
+
+                    let status = '[NOVO]';
+                    let hasMoved = false;
+                    let lastMoved = entityStateTracker[entityAddressStr]?.lastMoved || now;
+
+                    if (entityStateTracker[entityAddressStr]) {
+                        const lastState = entityStateTracker[entityAddressStr];
+                        if (Math.abs(lastState.x - entityX) > 0.01 || Math.abs(lastState.y - entityY) > 0.01) {
+                            status = '[ATIVO]';
+                            hasMoved = true;
+                            lastMoved = now; // Atualiza o timestamp do último movimento
+                        } else {
+                            status = '[PARADO]';
+                        }
+                    }
+
+                    // TIMEOUT: Se estiver parado por mais de 5 segundos, pula a exibição
+                    if (status === '[PARADO]' && (now - lastMoved) > INACTIVITY_TIMEOUT) {
+                        continue;
+                    }
+
+                    let entityNick = entityStateTracker[entityAddressStr]?.nick || "N/A";
+                    if (entityNick === "N/A") {
+                        try {
+                            const n = readTString(entityPtr.add(464));
+                            if (n) entityNick = n;
+                        } catch (e) {}
+                    }
+
+                    entityStateTracker[entityAddressStr] = {
+                        x: entityX,
+                        y: entityY,
+                        nick: entityNick,
+                        lastMoved: lastMoved
+                    };
+
+                    listEntitiesForDisplay.push({
+                        text: `  ${status} ${entityNick} @ (${entityX.toFixed(1)}, ${entityY.toFixed(1)})`,
+                        active: hasMoved,
+                        isNew: status === '[NOVO]'
+                    });
                 }
 
-                // Se passou nos testes, é uma entidade provável!
-                processedPtrs.add(potentialEntityPtr.toString());
+                if (listEntitiesForDisplay.length > 0) {
+                    // Ordena as entidades DENTRO da lista
+                    listEntitiesForDisplay.sort((a, b) => (b.active || b.isNew) - (a.active || a.isNew));
 
-                // --- HEURÍSTICA 3: Tenta ler o nome para ter mais informações ---
-                let entityNick = "N/A";
-                try {
-                     const nick = readTString(potentialEntityPtr.add(464)); // 464 = 0x1D0
-                     if (nick && nick.length > 0) {
-                         entityNick = nick;
-                     }
-                } catch(e) { /* falha ao ler o nome é normal */ }
-               
-                // Formata o texto para exibição
-                const displayText = `[${potentialEntityPtr}]\n  Nick: ${entityNick}\n  Pos: (${entityX.toFixed(2)}, ${entityY.toFixed(2)})`;
-                foundEntities.push(displayText);
-
-            } catch (e) {
-                // Erros de leitura de memória são esperados. Apenas ignora e continua a busca.
+                    // Adiciona o cabeçalho da lista e suas entidades à lista de exibição final
+                    finalDisplayList.push(`--- LISTA @ 0x${startAddress.toString(16).toUpperCase()} (${listEntitiesForDisplay.length}) ---`);
+                    listEntitiesForDisplay.forEach(e => finalDisplayList.push(e.text));
+                }
             }
         }
-        
-        // Atualiza a interface do menu com a lista de entidades encontradas
+
+        // 3. LIMPEZA FINAL: Remove do tracker as entidades que não foram vistas nesta varredura
+        for (const trackedAddress in entityStateTracker) {
+            if (!processedForTimeout.has(trackedAddress)) {
+                delete entityStateTracker[trackedAddress];
+            }
+        }
+
         if (menu) {
-            menu.updateEntityListUI(foundEntities);
+            menu.updateEntityListUI(finalDisplayList);
         }
     }
 
-    // =========================================================================================
-    // == FIM DA LÓGICA DO AUTO-EXPLORER =======================================================
-    // =========================================================================================
-
+    // ====================================================================================================
+    // == FIM DA LÓGICA DO AUTO-EXPLORER ==================================================================
+    // ====================================================================================================
 
     const call_autoFarm = {
-        on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true }, 1000) },
-        off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } }
+        on() {
+            if (!explosionsInterval) explosionsInterval = setInterval(() => {
+                canExplode = true
+            }, 1000)
+        },
+        off() {
+            if (explosionsInterval) {
+                clearInterval(explosionsInterval);
+                explosionsInterval = null;
+                canExplode = false;
+            }
+        }
     };
     let afkInterval = null;
     const call_antiAfk = {
-        on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000) },
-        off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } }
+        on() {
+            if (!afkInterval) afkInterval = setInterval(click, 240 * 1000)
+        },
+        off() {
+            if (afkInterval) {
+                clearInterval(afkInterval);
+                afkInterval = null;
+            }
+        }
     };
-    const call_unhit = { on() { unhit = true }, off() { unhit = false } };
-    const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } };
-    const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } };
-    const call_showAdmins = { on() { showAdmins = true }, off() { showAdmins = false } };
-
+    const call_unhit = {
+        on() {
+            unhit = true
+        },
+        off() {
+            unhit = false
+        }
+    };
+    const call_autoOFF = {
+        on() {
+            autoOFF = true
+        },
+        off() {
+            autoOFF = false
+        }
+    };
+    const call_wallhack = {
+        on() {
+            wallhack = true
+        },
+        off() {
+            wallhack = false
+        }
+    };
+    const call_showAdmins = {
+        on() {
+            showAdmins = true
+        },
+        off() {
+            showAdmins = false
+        }
+    };
     const call_entityScanner = {
         on() {
             if (!entityScannerInterval) {
-                autoScanEntities(); // Roda uma vez imediatamente ao ativar
-                entityScannerInterval = setInterval(autoScanEntities, 2000); // Depois atualiza a cada 2 segundos
+                entityStateTracker = {}; // Reseta o rastreador ao ativar
+                autoScanEntities();
+                entityScannerInterval = setInterval(autoScanEntities, 1000); // Roda a cada 1 segundo para maior precisão no timeout
             }
         },
         off() {
             if (entityScannerInterval) {
                 clearInterval(entityScannerInterval);
                 entityScannerInterval = null;
-                if (menu) menu.updateEntityListUI([]); // Limpa a lista ao desativar
+                if (menu) menu.updateEntityListUI([]);
             }
         }
     };
 
     Java.perform(function() {
         Java.scheduleOnMainThread(function() {
-            const classLoader = getClassLoader(), mainActivity = getMainActivity(classLoader);
+            const classLoader = getClassLoader(),
+                mainActivity = getMainActivity(classLoader);
             menu = new Menu(classLoader, mainActivity)
             menu.createMenuStart("MENU", 15, "#006400")
-            menu.createMenuLayout("#18122B", 420, 300) // Largura e Altura do menu
+            menu.createMenuLayout("#18122B", 420, 300)
             menu.createMenuBarLayout("#635985")
             menu.createMenuBarTitle("EngModMobile", "#FFC107")
             menu.createMenuOptionsLayout("#443C68", "#393053")
-
             menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
-
             menu.addSeekBar("Raio da Explosão:", explosionSize, 10, 150, function(value, type) {
                 explosionSize = value;
                 if (type === 'end') {
                     showToast(`Raio da explosão definido para ${value}x${value}.`, 0);
                 }
             });
-
             menu.addOption("unhit", "Unhit (God Mode)", call_unhit)
             menu.addOption("wallhack", "Wallhack", call_wallhack)
             menu.addText("--- Utilitários ---", 12, "#FFFFFF")
             menu.addOption("showAdmins", "Show Admins", call_showAdmins)
             menu.addOption("autoOFF", "Auto Off", call_autoOFF)
             menu.addOption("antiAfk", "Anti AFK", call_antiAfk)
-
             menu.addText("--- Testes ---", 12, "#FFC107")
             menu.addOption("entityScanner", "Auto-Explorer Entidades", call_entityScanner)
-
-            // NOVA SEEKBAR PARA CONTROLAR O RAIO DA BUSCA
             menu.addSeekBar("Raio da Busca (bytes):", scanRadius, 256, 8192, function(value, type) {
-                 scanRadius = value;
-                 if (type === 'end') {
-                     showToast(`Raio de busca definido para ${value} bytes.`, 0);
-                 }
+                scanRadius = value;
+                if (type === 'end') {
+                    showToast(`Raio de busca definido para ${value} bytes.`, 0);
+                }
             });
-
             menu.start()
         })
     })
 
-    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
+    function getFunc(lib, func, type, params) {
+        return new NativeFunction(Module.findExportByName(lib, func), type, params);
+    }
 
     function createTString(str) {
-        var str_pointer = malloc(4), str_struct = malloc(str.length + 8);
+        var str_pointer = malloc(4),
+            str_struct = malloc(str.length + 8);
         str_pointer.writePointer(str_struct);
         str_struct.writeInt(str.length);
         ptr(parseInt(str_struct) + 4).writeInt(1);
@@ -590,7 +704,8 @@ setTimeout(() => {
 
     function click() {
         Java.perform(() => Java.scheduleOnMainThread(() => {
-            let time = Java.use("android.os.SystemClock").uptimeMillis(), event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 500, 500, 0);
+            let time = Java.use("android.os.SystemClock").uptimeMillis(),
+                event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 500, 500, 0);
             getMainActivity(getClassLoader()).dispatchTouchEvent(event);
             console.log("Anti-AFK click performed.");
         }));
