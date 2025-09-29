@@ -413,7 +413,7 @@ setTimeout(() => {
             // Agenda a atualização da UI
             this.#playerRefreshTimer = setTimeout(() => {
                 this.#refreshPlayerListUI();
-            }, 500); // Meio segundo de espera
+            }, 16); // Meio segundo de espera
         }
 
         #createMainLayoutEvent() {
@@ -640,3 +640,4 @@ setTimeout(() => {
     }
 
 }, 5000)
+
