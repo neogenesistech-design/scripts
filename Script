@@ -2,23 +2,26 @@ setTimeout(()=>{
 // Função malloc para alocar memória em código nativo (libc)
 var malloc = getFunc("libc.so", "malloc", "pointer", ["int"])
 
+// Variável para gerenciar toasts e evitar sobreposição
+let currentToast = null;
+
 // Função que carrega classes Android necessárias para criar interface de usuário e manipular eventos
 function getClassLoader() {
     const classLoader = {
-        Gravity: Java.use("android.view.Gravity"), // Constantes de gravidade para layouts
-        TextView: Java.use("android.widget.TextView"), // Widget para textos
-        LinearLayout: Java.use("android.widget.LinearLayout"), // Layout linear vertical/horizontal
-        ViewGroup_LayoutParams: Java.use("android.view.ViewGroup$LayoutParams"), // Layout base
-        LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"), // Parametros layout linear
-        Color: Java.use("android.graphics.Color"), // Manipula cores
-        ActivityThread: Java.use("android.app.ActivityThread"), // Thread principal do app
-        ActivityThread_ActivityClientRecord: Java.use("android.app.ActivityThread$ActivityClientRecord"), // Registros internos da activity
-        View_OnTouchListener: Java.use("android.view.View$OnTouchListener"), // Interface para eventos touch
-        MotionEvent: Java.use("android.view.MotionEvent"), // Evento touch
-        String: Java.use("java.lang.String"), // Classe java String
-        ScrollView: Java.use("android.widget.ScrollView"), // ScrollView para área rolável
-        View_OnClickListener: Java.use("android.view.View$OnClickListener"), // Interface para click
-        SeekBar: Java.use("android.widget.SeekBar") // Barra deslizante
+        Gravity: Java.use("android.view.Gravity"),
+        TextView: Java.use("android.widget.TextView"),
+        LinearLayout: Java.use("android.widget.LinearLayout"),
+        ViewGroup_LayoutParams: Java.use("android.view.ViewGroup$LayoutParams"),
+        LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
+        Color: Java.use("android.graphics.Color"),
+        ActivityThread: Java.use("android.app.ActivityThread"),
+        ActivityThread_ActivityClientRecord: Java.use("android.app.ActivityThread$ActivityClientRecord"),
+        View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
+        MotionEvent: Java.use("android.view.MotionEvent"),
+        String: Java.use("java.lang.String"),
+        ScrollView: Java.use("android.widget.ScrollView"),
+        View_OnClickListener: Java.use("android.view.View$OnClickListener"),
+        SeekBar: Java.use("android.widget.SeekBar")
     }
     return classLoader
 }
@@ -29,81 +32,85 @@ function pixelDensityToPixels(context, dp) {
     return parseInt(dp * density)
 }
 
-// Função para obter a Activity principal atual do aplicativo via ActivityThread interno do Android
+// Função para obter a Activity principal atual do aplicativo
 function getMainActivity(classLoader) {
     const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value
     const mActivities = activityThread.mActivities.value
-    // Pega a primeira activity registrada no conjunto de activities
     const activityClientRecord = Java.cast(mActivities.valueAt(0), classLoader.ActivityThread_ActivityClientRecord)
     return activityClientRecord.activity.value
 }
 
-// Função para exibir um Toast no Android que mostra um texto na tela por pouco tempo
+// [MELHORADO] Função para exibir um Toast, cancelando o anterior se existir
 function showToast(text, time = 1) {
   Java.perform(() => {
       Java.scheduleOnMainThread(function() {
+          if (currentToast) {
+              currentToast.cancel();
+          }
           var toast = Java.use("android.widget.Toast");
-          toast.makeText(Java.use("android.app.ActivityThread").currentApplication().getApplicationContext(),
-                       Java.use("java.lang.String").$new(text), time).show();
+          var newToast = toast.makeText(Java.use("android.app.ActivityThread").currentApplication().getApplicationContext(),
+                       Java.use("java.lang.String").$new(text), time);
+          newToast.show();
+          currentToast = newToast;
       });
   });
 }
 
 // Classe Menu para facilitar criar e gerenciar um menu na interface usando widgets Android
 class Menu {
-    #classLoader        // Referência ao classLoader com classes Android
-    #activity           // Activity no contexto da qual o menu é criado
-    #MATCH_PARENT       // Constante layout params para "preencher o pai"
-    #WRAP_CONTENT       // Constante layout params para "enrolar conteúdo"
-    #contentView        // Layout de conteúdo principal para o menu (raiz)
-    #mainLayout         // Layout principal que agrupa todo o menu (movível)
-    #menuStart          // Widget TextView que representa botão/menu minimizado inicial
-    #menuLayout         // Layout que envolve o menu expandido (barra de título + painéis)
-    #menuBarLayout      // Layout da barra superior do menu
-    #menuBarTitle       // Texto da barra de título do menu
-    #options            // Objeto para guardar as opções e seus callbacks
-    #colorOn            // Cor para estado ligado das opções
-    #colorOff           // Cor para estado desligado das opções
+    #classLoader
+    #activity
+    #MATCH_PARENT
+    #WRAP_CONTENT
+    #contentView
+    #mainLayout
+    #menuStart
+    #menuLayout
+    #menuBarLayout
+    #menuBarTitle
+    #options
+    #colorOn
+    #colorOff
 
-    // NOVOS ELEMENTOS PARA O LAYOUT DE DOIS PAINÉIS
-    #panelsContainerLayout    // Layout horizontal que contém os painéis esquerdo e direito
-    #leftPanelLayout          // Painel esquerdo para as opções (funções)
-    #rightPanelLayout         // Painel direito para as informações
-    #menuScrollView           // ScrollView para as opções no painel esquerdo
-    #menuScrollLayout         // Layout dentro do ScrollView das opções
-    #infoScrollView           // ScrollView para as informações no painel direito
-    #infoLayout               // Layout dentro do ScrollView de informações
-    #infoPlayerPositionTextView // TextView para mostrar a posição do jogador
-    #infoPlayerListLayout     // Layout para listar jogadores encontrados
+    // Layout de dois painéis
+    #panelsContainerLayout
+    #leftPanelLayout
+    #rightPanelLayout
+    #menuScrollView
+    #menuScrollLayout
+    #infoScrollView
+    #infoLayout
+    #infoPlayerPositionTextView
+    #infoPlayerListLayout
 
-    // Construtor inicializa propriedades, dimensões e cria widgets básicos
+    // [NOVO] Sistema de detecção de jogadores
+    #detectedPlayers = {};
+    #playerRefreshTimer = null;
+
     constructor(classLoader, activity) {
         this.#classLoader = classLoader
         this.#activity = activity
         this.#MATCH_PARENT = classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value
         this.#WRAP_CONTENT = classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
         this.#options = {}
-        this.#createContentView() // Cria o container de conteúdo
-        this.#createMainLayout()  // Cria layout para o menu
+        this.#createContentView()
+        this.#createMainLayout()
     }
 
-    // Cria um container LinearLayout transparente que será raiz do menu
     #createContentView() {
         this.#contentView = this.#classLoader.LinearLayout.$new(this.#activity)
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT)
         this.#contentView.setLayoutParams(layoutParams)
-        this.#contentView.setGravity(this.#classLoader.Gravity.CENTER.value) // centraliza conteúdo
-        this.#contentView.setBackgroundColor(this.#classLoader.Color.TRANSPARENT.value) // transparente
+        this.#contentView.setGravity(this.#classLoader.Gravity.CENTER.value)
+        this.#contentView.setBackgroundColor(this.#classLoader.Color.TRANSPARENT.value)
     }
 
-    // Cria o layout principal que contém o menu
     #createMainLayout() {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
         this.#mainLayout = this.#classLoader.LinearLayout.$new(this.#activity)
         this.#mainLayout.setLayoutParams(layoutParams)
     }
 
-    // Cria o layout que conterá o menu expandido, com cor e tamanho definidos
     createMenuLayout(color, width, height) {
         const widthPx = pixelDensityToPixels(this.#activity, width);
         const heightPx = pixelDensityToPixels(this.#activity, height);
@@ -111,10 +118,9 @@ class Menu {
         this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
         this.#menuLayout.setLayoutParams(layoutParams);
         this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color));
-        this.#menuLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value); // Orientação vertical para a barra e o container dos painéis
+        this.#menuLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
     }
     
-    // Cria o layout da barra superior do menu com cor e padding
     createMenuBarLayout(color) {
         const padding = pixelDensityToPixels(this.#activity, 10)
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT)
@@ -124,7 +130,6 @@ class Menu {
         this.#menuBarLayout.setPadding(padding, padding, 0, padding)
     }
 
-    // Cria o título da barra do menu com texto e cor
     createMenuBarTitle(title, color) {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
         this.#menuBarTitle = this.#classLoader.TextView.$new(this.#activity)
@@ -133,25 +138,20 @@ class Menu {
         this.#menuBarTitle.setTextColor(this.#classLoader.Color.parseColor(color))
     }
 
-    // [NOVO] Cria o container horizontal para os dois painéis
     #createPanelsContainerLayout() {
-        // O container dos painéis ocupará o espaço restante
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
         this.#panelsContainerLayout = this.#classLoader.LinearLayout.$new(this.#activity);
         this.#panelsContainerLayout.setLayoutParams(layoutParams);
-        this.#panelsContainerLayout.setOrientation(this.#classLoader.LinearLayout.HORIZONTAL.value); // Orientação horizontal
+        this.#panelsContainerLayout.setOrientation(this.#classLoader.LinearLayout.HORIZONTAL.value);
     }
 
-    // [NOVO] Cria o painel esquerdo para as opções
     #createLeftPanelLayout() {
-        // Usamos peso (weight) para dividir o espaço igualmente
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.0);
         this.#leftPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
         this.#leftPanelLayout.setLayoutParams(layoutParams);
         this.#leftPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
     }
 
-    // [NOVO] Cria o painel direito para as informações
     #createRightPanelLayout() {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.0);
         const padding = pixelDensityToPixels(this.#activity, 8);
@@ -161,31 +161,26 @@ class Menu {
         this.#rightPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
         this.#rightPanelLayout.setPadding(padding, padding, padding, padding);
 
-        // ScrollView para o conteúdo de informação
         this.#infoScrollView = this.#classLoader.ScrollView.$new(this.#activity);
         this.#infoLayout = this.#classLoader.LinearLayout.$new(this.#activity);
         this.#infoLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
 
-        // Título do painel de informações
         const infoTitle = this.#classLoader.TextView.$new(this.#activity);
         infoTitle.setText(this.#classLoader.String.$new("== Informações =="));
         infoTitle.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
         infoTitle.setGravity(this.#classLoader.Gravity.CENTER.value);
         this.#infoLayout.addView(infoTitle);
 
-        // TextView para a posição do jogador
         this.#infoPlayerPositionTextView = this.#classLoader.TextView.$new(this.#activity);
         this.#infoPlayerPositionTextView.setText(this.#classLoader.String.$new("Posição: \nX: --\nY: --"));
         this.#infoPlayerPositionTextView.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
         this.#infoLayout.addView(this.#infoPlayerPositionTextView);
         
-        // Título da lista de jogadores
         const playerListTitle = this.#classLoader.TextView.$new(this.#activity);
-        playerListTitle.setText(this.#classLoader.String.$new("\nJogadores Encontrados:"));
+        playerListTitle.setText(this.#classLoader.String.$new("\nJogadores Próximos:"));
         playerListTitle.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
         this.#infoLayout.addView(playerListTitle);
 
-        // Layout que conterá a lista de jogadores
         this.#infoPlayerListLayout = this.#classLoader.LinearLayout.$new(this.#activity);
         this.#infoPlayerListLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
         this.#infoLayout.addView(this.#infoPlayerListLayout);
@@ -194,7 +189,6 @@ class Menu {
         this.#rightPanelLayout.addView(this.#infoScrollView);
     }
     
-    // Cria a ScrollView que enrola as opções do menu e configura o padding
     #createMenuScrollView() {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
         this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity);
@@ -203,7 +197,6 @@ class Menu {
         this.#menuScrollView.setPadding(padding, padding, padding, padding);
     }
 
-    // Cria o layout que receberá as opções dentro do ScrollView
     #createMenuScrollLayout() {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
         this.#menuScrollLayout = this.#classLoader.LinearLayout.$new(this.#activity);
@@ -211,7 +204,6 @@ class Menu {
         this.#menuScrollLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
     }
     
-    // Inicializa o layout das opções, configurando cores para ligado/desligado
     createMenuOptionsLayout(colorOn, colorOff) {
         this.#createMenuScrollView();
         this.#createMenuScrollLayout();
@@ -219,7 +211,6 @@ class Menu {
         this.#colorOff = colorOff;
     }
 
-    // Cria o botão de menu inicial (minimizado) com título, tamanho e cor do texto
     createMenuStart(title, size, color) {
         size = pixelDensityToPixels(this.#activity, size)
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
@@ -228,63 +219,57 @@ class Menu {
         this.#menuStart.setText(this.#classLoader.String.$new(title))
         this.#menuStart.setTextSize(size)
         this.#menuStart.setTextColor(this.#classLoader.Color.parseColor(color))
-        this.#menuStart.setBackgroundColor(this.#classLoader.Color.WHITE.value) // fundo branco
+        this.#menuStart.setBackgroundColor(this.#classLoader.Color.WHITE.value)
     }
 
-    // Funções para "desenhar" os componentes na tela
     #drawContentView() { this.#activity.addContentView(this.#contentView, this.#contentView.getLayoutParams()) }
     #drawMainLayout() { this.#contentView.addView(this.#mainLayout) }
     #drawMenuStart() { this.#mainLayout.addView(this.#menuStart) }
 
-    // [ATUALIZADO] Monta a estrutura do menu expandido
     #buildExpandedMenu() {
-        // Barra de título
         this.#menuBarLayout.addView(this.#menuBarTitle);
         this.#menuLayout.addView(this.#menuBarLayout);
 
-        // Container dos painéis
         this.#createPanelsContainerLayout();
         this.#menuLayout.addView(this.#panelsContainerLayout);
 
-        // Painel Esquerdo (Opções)
         this.#createLeftPanelLayout();
-        this.#menuScrollView.addView(this.#menuScrollLayout); // Coloca o layout das opções dentro do scroll
-        this.#leftPanelLayout.addView(this.#menuScrollView); // Coloca o scroll no painel esquerdo
+        this.#menuScrollView.addView(this.#menuScrollLayout);
+        this.#leftPanelLayout.addView(this.#menuScrollView);
         this.#panelsContainerLayout.addView(this.#leftPanelLayout);
 
-        // Painel Direito (Informações)
         this.#createRightPanelLayout();
         this.#panelsContainerLayout.addView(this.#rightPanelLayout);
     }
 
-    // Cria listener interno que troca o estado visual e chama callbacks on/off quando clicar na opção
+    // [CORRIGIDO] O listener agora usa um estado centralizado para evitar bugs
     #createOptionClickEvent(id, optionView, callbacks) {
         const classLoader = this.#classLoader
-        let optionState = false // guarda estado da opção
         const colorOn = this.#colorOn
         const colorOff = this.#colorOff
-        // Define a classe interna para o evento onClick
+        const self = this; // Captura a instância 'this' do Menu
+
         const optionOnClickListener = Java.registerClass({
-            name: "com.example." + id, // nome único para a classe do listener
+            name: "com.example." + id,
             implements: [classLoader.View_OnClickListener],
             methods: {
                 onClick(p1) {
-                    if (!optionState) {
+                    // Usa o estado armazenado no objeto #options
+                    if (!self.#options[id].state) {
                         p1.setBackgroundColor(classLoader.Color.parseColor(colorOn))
-                        optionState = true
-                        callbacks.on() // chama callback on
+                        self.#options[id].state = true
+                        callbacks.on()
                     } else {
                         p1.setBackgroundColor(classLoader.Color.parseColor(colorOff))
-                        optionState = false
-                        callbacks.off() // chama callback off
+                        self.#options[id].state = false
+                        callbacks.off()
                     }
                 }
             }
         })
-        optionView.setOnClickListener(optionOnClickListener.$new()) // Associa listener à opção
+        optionView.setOnClickListener(optionOnClickListener.$new())
     }
 
-    // Adiciona uma opção ao menu, com id, texto e callbacks on/off
     addOption(id, name, callbacks) {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
         const padding = pixelDensityToPixels(this.#activity, 5);
@@ -292,29 +277,31 @@ class Menu {
         const margin = pixelDensityToPixels(this.#activity, 10);
 
         option.setText(this.#classLoader.String.$new(name));
-        option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff)); // cor inicial off
-        option.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF")); // cor do texto
+        option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+        option.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"));
         layoutParams.setMargins(0, 0, 0, margin);
         option.setLayoutParams(layoutParams);
         option.setPadding(padding, padding, 0, padding);
 
-        this.#menuScrollLayout.addView(option); // Adiciona opção visualmente na lista
-        this.#createOptionClickEvent(id, option, callbacks); // Cria evento de clique com callbacks
-
-        // Armazena callbacks e referência da view para controle futuro (ex: desligar todas opções)
-        this.#options[id] = { callbacks, optionView: option };
+        this.#menuScrollLayout.addView(option);
+        
+        // [CORRIGIDO] Armazena o estado junto com as outras propriedades da opção
+        this.#options[id] = { callbacks, optionView: option, state: false };
+        this.#createOptionClickEvent(id, option, callbacks);
     }
     
-    // Desliga todas opções do menu, mudando visual e chamando callback off
+    // [CORRIGIDO] A função agora também reseta o estado interno do botão
     turnOffAllOptions() {
         for (const id in this.#options) {
-            const { callbacks, optionView } = this.#options[id];
-            optionView.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-            callbacks.off();
+            const optionData = this.#options[id];
+            if (optionData.state) { // Só desativa se estiver ativo
+                optionData.optionView.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+                optionData.state = false; // Reseta o estado
+                optionData.callbacks.off();
+            }
         }
     }
 
-    // Adiciona um TextView ao menu, com texto, tamanho da fonte e cor do texto
     addText(text, textSize, textColor) {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
         const margin = pixelDensityToPixels(this.#activity, 5);
@@ -329,23 +316,19 @@ class Menu {
         this.#menuScrollLayout.addView(textView);
     }
     
-    // Adiciona um SeekBar (barra deslizante) ao menu com texto descritivo e callbacks
     addSeekBar(textValue,initialValue, minValue, maxValue, callback) {
         const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
         const margin = pixelDensityToPixels(this.#activity,1);
         const seekBar = this.#classLoader.SeekBar.$new(this.#activity, null, 0, Java.use("android.R$style").Widget_Holo_SeekBar.value);
         const textView = this.#classLoader.TextView.$new(this.#activity);
         seekBar.setMax(maxValue - minValue);
-        seekBar.setProgress(0);
+        seekBar.setProgress(initialValue - minValue);
         layoutParams.setMargins(0, 0, 0, margin);
         seekBar.setLayoutParams(layoutParams);
-        // Set label inicial do seekbar
         const text = Java.use("java.lang.String").$new(textValue+ " "+ initialValue);
         textView.setText(text)
         textView.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"))
-        seekBar.setProgress(initialValue);
-
-        // Registra listener para mudanças na barra
+        
         const SeekBarChangeListener = Java.use("android.widget.SeekBar$OnSeekBarChangeListener");
         const SeekBarChangeListenerImplementation = Java.registerClass({
             name: "com.example.SeekBarChangeListener" + Math.floor(Math.random() * 1000),
@@ -355,34 +338,21 @@ class Menu {
                     const value = progress + minValue;
                     const text = Java.use("java.lang.String").$new(textValue+" "+value);
                     textView.setText(text);
-                    callback(value,"move"); // callback para movimento
+                    if(fromUser) callback(value,"move");
                 },
-                onStartTrackingTouch(seekBar) {
-                    const progress = seekBar.getProgress()
-                    const value = progress + minValue;
-                    const text = Java.use("java.lang.String").$new(textValue+" "+value);
-                    textView.setText(text);
-                    callback(value,"start"); // callback para início do toque
-                },
-                onStopTrackingTouch(seekBar) {
-                    const progress = seekBar.getProgress()
-                    const value = progress + minValue;
-                    const text = Java.use("java.lang.String").$new(textValue+" "+value);
-                    textView.setText(text);
-                    callback(value,"end"); // callback para fim do toque
-                }
+                onStartTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "start"); },
+                onStopTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "end"); }
             }
         });
 
         seekBar.setOnSeekBarChangeListener(SeekBarChangeListenerImplementation.$new());
-        this.#menuScrollLayout.addView(textView); // adiciona label
-        this.#menuScrollLayout.addView(seekBar);   // adiciona seekbar
+        this.#menuScrollLayout.addView(textView);
+        this.#menuScrollLayout.addView(seekBar);
 
         textView.setLayoutParams(layoutParams);
-        textView.setGravity(this.#classLoader.Gravity.CENTER.value); // centra texto
+        textView.setGravity(this.#classLoader.Gravity.CENTER.value);
     }
 
-    // [NOVO] Métodos públicos para atualizar o painel de informações
     updatePlayerPosition(x, y) {
         Java.scheduleOnMainThread(() => {
             if (this.#infoPlayerPositionTextView) {
@@ -391,37 +361,69 @@ class Menu {
             }
         });
     }
-
-    addPlayerToInfoPanel(name, account) {
-        Java.scheduleOnMainThread(() => {
-            if (this.#infoPlayerListLayout) {
-                const playerTextView = this.#classLoader.TextView.$new(this.#activity);
-                playerTextView.setText(this.#classLoader.String.$new(`- ${name} (${account})`));
-                playerTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF")); // Cor azul claro para jogadores
-                this.#infoPlayerListLayout.addView(playerTextView);
+    
+    // [NOVO] Adiciona um jogador à lista da UI, com cor diferente para admins
+    #addPlayerToInfoPanel(playerData) {
+        if (this.#infoPlayerListLayout) {
+            const playerTextView = this.#classLoader.TextView.$new(this.#activity);
+            let displayText = `- ${playerData.nick}`;
+            if (playerData.isAdmin) {
+                displayText += ` (ADMIN)`;
+                playerTextView.setTextColor(this.#classLoader.Color.parseColor("#FFD700")); // Dourado para admins
+            } else {
+                playerTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF")); // Azul claro para jogadores normais
             }
+            playerTextView.setText(this.#classLoader.String.$new(displayText));
+            this.#infoPlayerListLayout.addView(playerTextView);
+        }
+    }
+
+    // [NOVO] Limpa a lista de jogadores da UI
+    #clearPlayerInfoPanel() {
+        if (this.#infoPlayerListLayout) {
+            this.#infoPlayerListLayout.removeAllViews();
+        }
+    }
+
+    // [NOVO] Atualiza a lista de jogadores na UI com base nos dados detectados
+    #refreshPlayerListUI() {
+        Java.scheduleOnMainThread(() => {
+            this.#clearPlayerInfoPanel();
+            for (const key in this.#detectedPlayers) {
+                this.#addPlayerToInfoPanel(this.#detectedPlayers[key]);
+            }
+            this.#detectedPlayers = {}; // Limpa para o próximo ciclo de detecção
         });
     }
 
-    clearPlayerInfoPanel() {
-        Java.scheduleOnMainThread(() => {
-            if (this.#infoPlayerListLayout) {
-                this.#infoPlayerListLayout.removeAllViews();
-            }
-        });
+    // [NOVO] Registra um jogador detectado e agenda a atualização da UI
+    registerPlayer(playerProps, isAdmin) {
+        const key = playerProps.account || playerProps.nick; // Usa conta ou nick como identificador
+        if (!key) return;
+
+        this.#detectedPlayers[key] = {
+            nick: playerProps.nick,
+            isAdmin: isAdmin
+        };
+
+        // Reseta o timer a cada jogador encontrado
+        if (this.#playerRefreshTimer) {
+            clearTimeout(this.#playerRefreshTimer);
+        }
+
+        // Agenda a atualização da UI para acontecer após um curto período sem novas detecções
+        this.#playerRefreshTimer = setTimeout(() => {
+            this.#refreshPlayerListUI();
+        }, 500); // Meio segundo de espera
     }
     
-    // Cria o listener para eventos de toque do layout principal para movimentar o menu ou alternar entre estados
     #createMainLayoutEvent() {
         const mainLayout = this.#mainLayout
         const menuLayout = this.#menuLayout
         const menuStart = this.#menuStart
         const classLoader = this.#classLoader
-        let initialX = 0
-        let initialY = 0
-        let isMove = false
-        let isMenuLayout = false
-        let initialTouchTime = 0
+        let initialX = 0, initialY = 0, isMove = false, isMenuLayout = false, initialTouchTime = 0
+        
         const MainLayoutOnTouchListener = Java.registerClass({
             name: "com.example.MainLayoutEvent",
             implements: [classLoader.View_OnTouchListener],
@@ -436,7 +438,6 @@ class Menu {
                             initialTouchTime = Date.now()
                             break
                         case classLoader.MotionEvent.ACTION_UP.value:
-                            // Se foi um toque sem movimento, alterna menu minimizado/expandido
                             if (!isMove) {
                                 if (!isMenuLayout) {
                                     const currentY = mainLayout.getY();
@@ -456,14 +457,11 @@ class Menu {
                             }
                             break
                         case classLoader.MotionEvent.ACTION_MOVE.value:
-                            // Move o menu conforme o movimento do dedo
                             view.setX(event.getRawX() + initialX)
                             view.setY(event.getRawY() + initialY)
-                            let deltaTime = Date.now() - initialTouchTime
-                            if (deltaTime > 200) isMove = true
+                            if (Date.now() - initialTouchTime > 200) isMove = true
                             break
-                        default:
-                            return false
+                        default: return false
                     }
                     return true
                 }
@@ -472,299 +470,156 @@ class Menu {
         this.#mainLayout.setOnTouchListener(MainLayoutOnTouchListener.$new())
     }
 
-    // Chama todas as funções para desenhar e mostrar o menu completo na tela
     start() {
-        this.#drawContentView()    // Adiciona layout raiz na Activity
-        this.#drawMainLayout()     // Adiciona layout principal dentro do conteúdo
-        this.#drawMenuStart()      // Adiciona botão/menu minimizado
-        this.#buildExpandedMenu()  // Constrói a estrutura interna do menu expandido
-        this.#createMainLayoutEvent() // Cria listener para eventos touch do menu
+        this.#drawContentView()
+        this.#drawMainLayout()
+        this.#drawMenuStart()
+        this.#buildExpandedMenu()
+        this.#createMainLayoutEvent()
     }
 }
 
-// Variável que guardará objeto de menu criado
 let menu = null
-
-// Define ponteiro para jogador ativo na lib native
 const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
-
-// Define funções nativas para obter coordenadas do jogador atual
 const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
 const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
-
-// Função nativa para criar explosões
 const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
-
-// Função nativa para causar dano ao jogador
 let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-
-// Função nativa para alterar variáveis
 const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
-
-
-// Flags para controlar funcionalidades do cheat
-let canExplode = false
-let explosionsInterval = null
-let unhit = false
-let wallhack = false
-let showAdmins = false
-let autoOFF = false
-
-// Strings configuradas para usar em chamadas nativas (com malloc)
+let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false
 const alpha = createTString('alpha=0.5');
 const zoom = createTString('zoom=1')
-
-// Função nativa para salvar variáveis num array
 var saveVarsToArray = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10sbidMalVNaEv"), "pointer", ["pointer"]);
 
-// Função para ler propriedades do jogador ativo (posição, zoom, alfa, nick e conta)
 function getPlayerProperties(p) {
-      let props = {
+      return {
               "alpha": Memory.readFloat(ptr(p.toInt32() + 356)),
               "zoom": Memory.readFloat(p.add(0x138)),
               "x": Memory.readDouble(p.add(0x238)),
               "y": Memory.readDouble(p.add(0x240)),
               "nick": readTString(ptr(p.toInt32() + 464)),
               "account": readTString(ptr(p.toInt32() + 696))
-      }
-      return props
+      };
 }
 
-// Interceptor que ao sair da função responsável pela renderização, força visibilidade no modo wallhack
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), {
-  'onLeave': function(ret) {
-      if (wallhack) {
-          ret.replace(0);
-      }
-  }
+  'onLeave': function(ret) { if (wallhack) ret.replace(0); }
 });
 
-// Função para obter variáveis do jogo do lado nativo, converte para objeto ou lista
-function getVars(varname, type) {
-  let arrayInstance = saveVarsToArray(varname)
-  let arrayLen = arrayInstance.add(0x8).readInt()
-  let obj = {}
-  if (arrayLen > 0) {
-      let arrayIterator = arrayInstance.add(0x4).readPointer()
-      let str = []
-      for (let i = 0; i < arrayLen; i++) {
-          str[i] = readTString(arrayIterator.add(i * 0x4).readPointer())
-          const [key, value] = str[i].split('=');
-          obj[key] = value;
-      }
-      if (type == "obj") {
-          return obj
-      } else {
-          return str
-      }
-  }
-  return null
-}
-
-// Intercepta função da lib para detectar entrada de outros jogadores para auto OFF
+// [MELHORADO] Interceptor agora sempre ativo para listar jogadores e admins
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
   'onEnter': function(args) {
-      if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && menu != null) {
-          menu.turnOffAllOptions()
-          showToast("Player appeared. All cheats have been turned off.")
+      const playerPtr = args[0];
+      if (autoOFF && playerPtr.toInt32() != activeplayer.toInt32() && menu != null) {
+          menu.turnOffAllOptions();
+          showToast("Jogador apareceu. Funções desativadas.");
       }
-      if (!showAdmins) return
-      const accRgx = /^(pc\:|graal\d+|guest.*)/;
-      const props = getPlayerProperties(args[0]);
-      if (props.alpha < 0.5) setVarValue(args[0],alpha)
-      if (props.zoom < 1) setVarValue(args[0],zoom)
-      if (!props.account) return
-      const account = props.account.toLowerCase()
-      if (account == '') return
-      if (!accRgx.test(account)) {
-          showToast('Admin: '+ props.nick);
-          if (menu) {
-              menu.addPlayerToInfoPanel(props.nick, props.account);
-          }
+      
+      if (menu) {
+        const accRgx = /^(pc\:|graal\d+|guest.*)/;
+        const props = getPlayerProperties(playerPtr);
+        if (props.alpha < 0.5) setVarValue(playerPtr, alpha);
+        if (props.zoom < 1) setVarValue(playerPtr, zoom);
+        
+        const account = (props.account || "").toLowerCase();
+        const isAdmin = account !== '' && !accRgx.test(account);
+
+        menu.registerPlayer(props, isAdmin);
       }
   }
 });
 
-// Substitui a função de causar dano para ignorar dano se flag unhit estiver ativa
 Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), new NativeCallback((a, b, c, d, e, f) => {
-          if (unhit) {
-        return 0;  // Ignora dano
-      }
-      hurtPlayer(a,b,c,d,e,f) // Executa função original
-}, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]))
+    if (unhit) return 0;
+    hurtPlayer(a,b,c,d,e,f);
+}, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
 
-// Função para criar uma explosão em uma área ao redor do jogador ativo
 function makeExplosion(level){
-    if (!level) return console.log("TServerLevel não recebido")
-      const playerX = getlocalx(activeplayer);
-      const playerY = getlocaly(activeplayer);
-      for (let i = 0; i < 80; i++){
-          for (let j = 0; j < 80; j++){
-              putExplosion(level,playerX+40-i,playerY+40-j,1,0,1)
-          }
-      }
+    if (!level) return;
+    const playerX = getlocalx(activeplayer), playerY = getlocaly(activeplayer);
+    for (let i = 0; i < 80; i++) for (let j = 0; j < 80; j++) putExplosion(level,playerX+40-i,playerY+40-j,1,0,1);
 }
 
-// Atacha um interceptor para que, se a flag canExplode estiver ativa, dispare a função de explosão definida
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), {
   onEnter: function(args) {
-      if (!canExplode) return
+      if (!canExplode) return;
       canExplode = false;
-      makeExplosion(args[0])
+      makeExplosion(args[0]);
   }
-})
+});
 
-// Objeto com métodos para ligar e desligar a funcionalidade "mostrar admins"
-const call_showAdmins = {
-    on() {
-        showAdmins = true;
-        if (menu) menu.clearPlayerInfoPanel(); // Limpa a lista ao ativar
-        showToast("Show Admins: ON");
-    },
-    off() {
-        showAdmins = false;
-        if (menu) menu.clearPlayerInfoPanel(); // Limpa a lista ao desativar
-        showToast("Show Admins: OFF");
-    }
-}
-
-// Objeto com métodos para ligar e desligar "auto farm" (faz explosões automáticas periodicamente)
 const call_autoFarm = {
-    on() {
-        if (!explosionsInterval) {
-            explosionsInterval = setInterval(() => { canExplode = true },1000)
-        }
-    },
-    off() {
-        if (explosionsInterval != null) {
-            clearInterval(explosionsInterval)
-            explosionsInterval = null
-            canExplode = false
-        }
-    }
-}
-
-let afkInterval = null
-// Objeto para ligar e desligar anti-AFK (clicar automaticamente)
+    on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true },1000) },
+    off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } }
+};
+let afkInterval = null;
 const call_antiAfk = {
-    on() {
-        if (!afkInterval) {
-            afkInterval = setInterval(click,240*1000)
-        }
-    },
-    off() {
-        if (afkInterval != null) {
-            clearInterval(afkInterval)
-            afkInterval = null
-        }
-    }
-}
+    on() { if (!afkInterval) afkInterval = setInterval(click,240*1000) },
+    off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } }
+};
+const call_unhit = { on() { unhit = true }, off() { unhit = false } };
+const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } };
+const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } };
 
-// Objetos para ligar e desligar modos unhit, autoOFF e wallhack
-const call_unhit = {
-    on() { unhit = true },
-    off() { unhit = false }
-}
-
-const call_autoOFF = {
-    on() { autoOFF = true },
-    off() { autoOFF = false }
-}
-
-const call_wallhack = {
-    on() { wallhack = true },
-    off() { wallhack = false }
-}
-
-// Inicialização do menu na thread principal Android
 Java.perform(function () {
     Java.scheduleOnMainThread(function () {
         const classLoader = getClassLoader()
         const mainActivity = getMainActivity(classLoader)
         menu = new Menu(classLoader, mainActivity)
-        // Configurações visuais e opções do menu
+
         menu.createMenuStart("MENU", 15, "#006400")
-        menu.createMenuLayout("#18122B", 340, 250) // (cor, largura, altura) em dp
+        menu.createMenuLayout("#18122B", 340, 250)
         menu.createMenuBarLayout("#635985")
         menu.createMenuBarTitle("EngModMobile", "#FFC107")
-        menu.createMenuOptionsLayout("#443C68", "#393053") // Cores opções on/off
+        menu.createMenuOptionsLayout("#443C68", "#393053")
         
-        // Adiciona opções do menu com seus callbacks on e off
         menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
         menu.addOption("unhit", "Unhit (God Mode)", call_unhit)
         menu.addOption("wallhack", "Wallhack", call_wallhack)
         menu.addText("--- Utilitários ---", 12, "#FFFFFF")
-        menu.addOption("showAdmins", "Show Admins", call_showAdmins)
         menu.addOption("autoOFF", "Auto Off", call_autoOFF)
         menu.addOption("antiAfk","Anti AFK",call_antiAfk)
 
-        menu.start() // Inicia e mostra o menu
+        menu.start()
         
-        // [NOVO] Loop para atualizar a posição do jogador no menu
         setInterval(() => {
             if (menu && activeplayer && !activeplayer.isNull()) {
                 try {
-                    const x = getlocalx(activeplayer);
-                    const y = getlocaly(activeplayer);
-                    menu.updatePlayerPosition(x, y);
-                } catch(e) {
-                    // Ignora erros que podem acontecer antes do jogador estar totalmente carregado
-                }
+                    menu.updatePlayerPosition(getlocalx(activeplayer), getlocaly(activeplayer));
+                } catch(e) {}
             }
-        }, 500); // Atualiza 2 vezes por segundo
+        }, 500);
     })
 })
 
-// Função para criar função nativa apontando para função em biblioteca nativa
-function getFunc(lib, func, type, params) {
-  return new NativeFunction(Module.findExportByName(lib, func), type, params);
-}
+function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
 
-// Cria string com formato interno usado nos ponteiros da lib (para manipulação nativa)
 function createTString(str) {
-  var str_pointer = malloc(4)
-  var str_struct = malloc(str.length + 8)
-  str_pointer.writePointer(str_struct)
-  str_struct.writeInt(str.length)
-  ptr(parseInt(str_struct) + 4).writeInt(1)
-  ptr(parseInt(str_struct) + 8).writeUtf8String(str)
-  return str_pointer
+  var str_pointer = malloc(4), str_struct = malloc(str.length + 8);
+  str_pointer.writePointer(str_struct);
+  str_struct.writeInt(str.length);
+  ptr(parseInt(str_struct) + 4).writeInt(1);
+  ptr(parseInt(str_struct) + 8).writeUtf8String(str);
+  return str_pointer;
 }
 
-// Lê a string no formato interno salvo em ponteiros usados na lib nativa
 function readTString(str) {
-  if (!str.isNull()) {
-      if (parseInt(str) != 0) {
-          var pstr = str.readPointer()
-          if (!pstr.isNull()) {
-              var strlen = pstr.readInt()
-              if (strlen > 0) {
-                  var strStart = parseInt(pstr) + 8
-                  return ptr(strStart).readCString(strlen)
-              }
-          }
+  if (str && !str.isNull()) {
+      var pstr = str.readPointer();
+      if (pstr && !pstr.isNull()) {
+          var strlen = pstr.readInt();
+          if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen);
       }
-  }
+  } return null;
 }
 
-// Função que simula um clique na tela para evitar desconexão por inatividade (anti-AFK)
 function click() {
-    Java.perform(function () {
-        Java.scheduleOnMainThread(function () {
-            let timer7 = Java.use("android.os.SystemClock").uptimeMillis();
-            let motionEvent = Java.use("android.view.MotionEvent").obtain(
-                timer7,
-                (timer7 + 50),
-                Java.use("android.view.MotionEvent").ACTION_DOWN.value,
-                1915,
-                1945,
-                0
-            );
-            // Envia evento de toque para o componente principal da atividade
-            getMainActivity(getClassLoader()).dispatchTouchEvent(motionEvent);
-            console.log("clicked")
-        });
-    });
+    Java.perform(() => Java.scheduleOnMainThread(() => {
+        let time = Java.use("android.os.SystemClock").uptimeMillis();
+        let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 500, 500, 0);
+        getMainActivity(getClassLoader()).dispatchTouchEvent(event);
+        console.log("Anti-AFK click performed.");
+    }));
 }
 
 },5000)
