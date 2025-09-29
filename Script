@@ -540,7 +540,8 @@ setTimeout(() => {
                     });
                 }
 
-                if (listEntitiesForDisplay.length > 0) {
+                // NOVO FILTRO: Apenas mostra a lista se ela tiver 3 ou mais entidades visíveis
+                if (listEntitiesForDisplay.length >= 3) {
                     // Ordena as entidades DENTRO da lista
                     listEntitiesForDisplay.sort((a, b) => (b.active || b.isNew) - (a.active || a.isNew));
 
