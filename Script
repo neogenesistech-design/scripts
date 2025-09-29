@@ -5,9 +5,14 @@ var malloc = getFunc("libc.so", "malloc", "pointer", ["int"])
 // Variável para gerenciar toasts e evitar sobreposição
 let currentToast = null;
 
-// Função que carrega classes Android necessárias para criar interface de usuário e manipular eventos
+// Variáveis globais para o sistema ESP
+let espView = null;
+let espEnabled = false;
+let detectedPlayersForUpdate = {}; // Lista unificada para alimentar Menu e ESP
+
+// Função que carrega classes Android
 function getClassLoader() {
-    const classLoader = {
+    return {
         Gravity: Java.use("android.view.Gravity"),
         TextView: Java.use("android.widget.TextView"),
         LinearLayout: Java.use("android.widget.LinearLayout"),
@@ -16,14 +21,16 @@ function getClassLoader() {
         Color: Java.use("android.graphics.Color"),
         ActivityThread: Java.use("android.app.ActivityThread"),
         ActivityThread_ActivityClientRecord: Java.use("android.app.ActivityThread$ActivityClientRecord"),
+        View: Java.use("android.view.View"),
+        Paint: Java.use("android.graphics.Paint"),
+        Canvas: Java.use("android.graphics.Canvas"),
         View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
         MotionEvent: Java.use("android.view.MotionEvent"),
         String: Java.use("java.lang.String"),
         ScrollView: Java.use("android.widget.ScrollView"),
         View_OnClickListener: Java.use("android.view.View$OnClickListener"),
         SeekBar: Java.use("android.widget.SeekBar")
-    }
-    return classLoader
+    };
 }
 
 // Função que converte unidade dp (density independent pixels) para pixels reais na tela
@@ -40,7 +47,7 @@ function getMainActivity(classLoader) {
     return activityClientRecord.activity.value
 }
 
-// [MELHORADO] Função para exibir um Toast, cancelando o anterior se existir
+// Função para exibir um Toast, cancelando o anterior se existir
 function showToast(text, time = 1) {
   Java.perform(() => {
       Java.scheduleOnMainThread(function() {
@@ -56,7 +63,117 @@ function showToast(text, time = 1) {
   });
 }
 
-// Classe Menu para facilitar criar e gerenciar um menu na interface usando widgets Android
+// [CORRIGIDO] Classe ESPView - A nossa tela de desenho customizada e estável
+function createESPView(classLoader, context) {
+    const ESPView = Java.registerClass({
+        name: 'com.example.ESPView',
+        extends: classLoader.View,
+        fields: {
+            playersToDraw: 'java.util.ArrayList',
+            myPlayerPos: '[D',
+            playerPaint: 'android.graphics.Paint',
+            adminPaint: 'android.graphics.Paint',
+            playerLinePaint: 'android.graphics.Paint',
+            adminLinePaint: 'android.graphics.Paint',
+            scaleFactor: 'java.lang.Double'
+        },
+        methods: {
+            $init: [{
+                returnType: 'void',
+                argumentTypes: ['android.content.Context'],
+                implementation: function(context) {
+                    this.$super.$init(context);
+                    this.playersToDraw.value = Java.use('java.util.ArrayList').$new();
+                    this.myPlayerPos.value = Java.use('[D').$new(2);
+
+                    const Paint = classLoader.Paint;
+                    const Color = classLoader.Color;
+
+                    let pPaint = Paint.$new();
+                    pPaint.setColor(Color.CYAN.value);
+                    pPaint.setStyle(Paint.Style.STROKE.value);
+                    pPaint.setStrokeWidth(3.0);
+                    this.playerPaint.value = pPaint;
+
+                    let aPaint = Paint.$new();
+                    aPaint.setColor(Color.YELLOW.value);
+                    aPaint.setStyle(Paint.Style.STROKE.value);
+                    aPaint.setStrokeWidth(4.0);
+                    this.adminPaint.value = aPaint;
+
+                    let plPaint = Paint.$new();
+                    plPaint.setColor(Color.CYAN.value);
+                    plPaint.setStrokeWidth(2.0);
+                    plPaint.setAlpha(150);
+                    this.playerLinePaint.value = plPaint;
+
+                    let alPaint = Paint.$new();
+                    alPaint.setColor(Color.YELLOW.value);
+                    alPaint.setStrokeWidth(3.0);
+                    this.adminLinePaint.value = alPaint;
+                    
+                    this.scaleFactor.value = Java.use('java.lang.Double').$new(5.0);
+                }
+            }],
+            onDraw: [{
+                returnType: 'void',
+                argumentTypes: ['android.graphics.Canvas'],
+                implementation: function(canvas) {
+                    this.$super.onDraw(canvas);
+                    if (this.playersToDraw.value.isEmpty()) {
+                        return;
+                    }
+
+                    const width = canvas.getWidth();
+                    const height = canvas.getHeight();
+                    const centerX = width / 2;
+                    const centerY = height / 2;
+
+                    const myX = this.myPlayerPos.value[0];
+                    const myY = this.myPlayerPos.value[1];
+                    
+                    const iterator = this.playersToDraw.value.iterator();
+                    while(iterator.hasNext()){
+                        const player = Java.cast(iterator.next(), Java.use('java.util.HashMap'));
+                        
+                        const pX = player.get('x').doubleValue();
+                        const pY = player.get('y').doubleValue();
+                        const isAdmin = player.get('isAdmin').booleanValue();
+
+                        const scale = this.scaleFactor.value.doubleValue();
+                        const deltaX = (pX - myX) * scale;
+                        const deltaY = (pY - myY) * scale;
+                        
+                        const screenX = centerX + deltaX;
+                        const screenY = centerY + deltaY;
+
+                        const boxWidth = 30;
+                        const boxHeight = 50;
+
+                        const boxPaint = isAdmin ? this.adminPaint.value : this.playerPaint.value;
+                        const linePaint = isAdmin ? this.adminLinePaint.value : this.playerLinePaint.value;
+
+                        canvas.drawLine(centerX, centerY, screenX, screenY, linePaint);
+                        canvas.drawRect(screenX - boxWidth / 2, screenY - boxHeight / 2, screenX + boxWidth / 2, screenY + boxHeight / 2, boxPaint);
+                    }
+                }
+            }],
+            updatePlayers: [{
+                returnType: 'void',
+                argumentTypes: ['java.util.ArrayList', '[D'],
+                implementation: function(playerList, myPos) {
+                    this.playersToDraw.value = playerList;
+                    this.myPlayerPos.value = myPos;
+                    this.invalidate();
+                }
+            }]
+        }
+    });
+    return ESPView.$new(context);
+}
+
+
+// Classe Menu
 class Menu {
     #classLoader
     #activity
@@ -71,8 +188,6 @@ class Menu {
     #options
     #colorOn
     #colorOff
-
-    // Layout de dois painéis
     #panelsContainerLayout
     #leftPanelLayout
     #rightPanelLayout
@@ -82,10 +197,6 @@ class Menu {
     #infoLayout
     #infoPlayerPositionTextView
     #infoPlayerListLayout
-
-    // [NOVO] Sistema de detecção de jogadores
-    #detectedPlayers = {};
-    #playerRefreshTimer = null;
 
     constructor(classLoader, activity) {
         this.#classLoader = classLoader
@@ -242,19 +353,17 @@ class Menu {
         this.#panelsContainerLayout.addView(this.#rightPanelLayout);
     }
 
-    // [CORRIGIDO] O listener agora usa um estado centralizado para evitar bugs
     #createOptionClickEvent(id, optionView, callbacks) {
         const classLoader = this.#classLoader
         const colorOn = this.#colorOn
         const colorOff = this.#colorOff
-        const self = this; // Captura a instância 'this' do Menu
+        const self = this; 
 
         const optionOnClickListener = Java.registerClass({
             name: "com.example." + id,
             implements: [classLoader.View_OnClickListener],
             methods: {
                 onClick(p1) {
-                    // Usa o estado armazenado no objeto #options
                     if (!self.#options[id].state) {
                         p1.setBackgroundColor(classLoader.Color.parseColor(colorOn))
                         self.#options[id].state = true
@@ -285,18 +394,16 @@ class Menu {
 
         this.#menuScrollLayout.addView(option);
         
-        // [CORRIGIDO] Armazena o estado junto com as outras propriedades da opção
         this.#options[id] = { callbacks, optionView: option, state: false };
         this.#createOptionClickEvent(id, option, callbacks);
     }
     
-    // [CORRIGIDO] A função agora também reseta o estado interno do botão
     turnOffAllOptions() {
         for (const id in this.#options) {
             const optionData = this.#options[id];
-            if (optionData.state) { // Só desativa se estiver ativo
+            if (optionData.state) { 
                 optionData.optionView.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-                optionData.state = false; // Reseta o estado
+                optionData.state = false; 
                 optionData.callbacks.off();
             }
         }
@@ -361,60 +468,35 @@ class Menu {
             }
         });
     }
-    
-    // [NOVO] Adiciona um jogador à lista da UI, com cor diferente para admins
-    #addPlayerToInfoPanel(playerData) {
-        if (this.#infoPlayerListLayout) {
-            const playerTextView = this.#classLoader.TextView.$new(this.#activity);
-            let displayText = `- ${playerData.nick}`;
-            if (playerData.isAdmin) {
-                displayText += ` (ADMIN)`;
-                playerTextView.setTextColor(this.#classLoader.Color.parseColor("#FFD700")); // Dourado para admins
-            } else {
-                playerTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF")); // Azul claro para jogadores normais
-            }
-            playerTextView.setText(this.#classLoader.String.$new(displayText));
-            this.#infoPlayerListLayout.addView(playerTextView);
-        }
-    }
 
-    // [NOVO] Limpa a lista de jogadores da UI
-    #clearPlayerInfoPanel() {
-        if (this.#infoPlayerListLayout) {
-            this.#infoPlayerListLayout.removeAllViews();
-        }
-    }
-
-    // [NOVO] Atualiza a lista de jogadores na UI com base nos dados detectados
-    #refreshPlayerListUI() {
+    // [MELHORADO] A lista agora exibe mais detalhes dos jogadores
+    updatePlayerList(players) {
         Java.scheduleOnMainThread(() => {
-            this.#clearPlayerInfoPanel();
-            for (const key in this.#detectedPlayers) {
-                this.#addPlayerToInfoPanel(this.#detectedPlayers[key]);
+            if (!this.#infoPlayerListLayout) return;
+            this.#infoPlayerListLayout.removeAllViews();
+
+            for (const key in players) {
+                const playerData = players[key];
+                const playerTextView = this.#classLoader.TextView.$new(this.#activity);
+                
+                let displayText = `${playerData.nick} [${playerData.account || 'N/A'}]\nPos: (${playerData.x.toFixed(1)}, ${playerData.y.toFixed(1)})`;
+                
+                if (playerData.isAdmin) {
+                    playerTextView.setTextColor(this.#classLoader.Color.parseColor("#FFD700"));
+                } else {
+                    playerTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF"));
+                }
+                
+                playerTextView.setText(this.#classLoader.String.$new(displayText));
+                playerTextView.setTextSize(12);
+
+                const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value, this.#classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value);
+                layoutParams.setMargins(0, 0, 0, 15); // Adiciona margem inferior para separar
+                playerTextView.setLayoutParams(layoutParams);
+                
+                this.#infoPlayerListLayout.addView(playerTextView);
             }
-            this.#detectedPlayers = {}; // Limpa para o próximo ciclo de detecção
         });
-    }
-
-    // [NOVO] Registra um jogador detectado e agenda a atualização da UI
-    registerPlayer(playerProps, isAdmin) {
-        const key = playerProps.account || playerProps.nick; // Usa conta ou nick como identificador
-        if (!key) return;
-
-        this.#detectedPlayers[key] = {
-            nick: playerProps.nick,
-            isAdmin: isAdmin
-        };
-
-        // Reseta o timer a cada jogador encontrado
-        if (this.#playerRefreshTimer) {
-            clearTimeout(this.#playerRefreshTimer);
-        }
-
-        // Agenda a atualização da UI para acontecer após um curto período sem novas detecções
-        this.#playerRefreshTimer = setTimeout(() => {
-            this.#refreshPlayerListUI();
-        }, 500); // Meio segundo de espera
     }
     
     #createMainLayoutEvent() {
@@ -479,6 +561,9 @@ class Menu {
     }
 }
 
+
+// --- Lógica Principal do Script ---
+
 let menu = null
 const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
 const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
@@ -486,15 +571,12 @@ const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN
 const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
 let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
 const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
-let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false
+let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false, afkInterval = null;
 const alpha = createTString('alpha=0.5');
-const zoom = createTString('zoom=1')
-var saveVarsToArray = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10sbidMalVNaEv"), "pointer", ["pointer"]);
 
 function getPlayerProperties(p) {
       return {
               "alpha": Memory.readFloat(ptr(p.toInt32() + 356)),
-              "zoom": Memory.readFloat(p.add(0x138)),
               "x": Memory.readDouble(p.add(0x238)),
               "y": Memory.readDouble(p.add(0x240)),
               "nick": readTString(ptr(p.toInt32() + 464)),
@@ -506,7 +588,6 @@ Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7
   'onLeave': function(ret) { if (wallhack) ret.replace(0); }
 });
 
-// [MELHORADO] Interceptor agora sempre ativo para listar jogadores e admins
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
   'onEnter': function(args) {
       const playerPtr = args[0];
@@ -515,16 +596,28 @@ Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7
           showToast("Jogador apareceu. Funções desativadas.");
       }
       
-      if (menu) {
+      if (menu && playerPtr.toInt32() != activeplayer.toInt32()) {
         const accRgx = /^(pc\:|graal\d+|guest.*)/;
         const props = getPlayerProperties(playerPtr);
+        if(!props.nick) return;
+
         if (props.alpha < 0.5) setVarValue(playerPtr, alpha);
-        if (props.zoom < 1) setVarValue(playerPtr, zoom);
         
         const account = (props.account || "").toLowerCase();
         const isAdmin = account !== '' && !accRgx.test(account);
 
-        menu.registerPlayer(props, isAdmin);
+        // [REATIVADO] Toast para administradores
+        if (isAdmin) showToast("!! ADMIN DETECTADO: " + props.nick);
+
+        const key = playerPtr.toString();
+        // [MELHORADO] Coleta todas as informações necessárias
+        detectedPlayersForUpdate[key] = {
+            nick: props.nick,
+            x: props.x,
+            y: props.y,
+            isAdmin: isAdmin,
+            account: props.account
+        };
       }
   }
 });
@@ -533,6 +626,7 @@ Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPz
     if (unhit) return 0;
     hurtPlayer(a,b,c,d,e,f);
 }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
+
 
 function makeExplosion(level){
     if (!level) return;
@@ -548,47 +642,106 @@ Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxU
   }
 });
 
+function click() {
+    Java.perform(() => Java.scheduleOnMainThread(() => {
+        let time = Java.use("android.os.SystemClock").uptimeMillis();
+        let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 500, 500, 0);
+        getMainActivity(getClassLoader()).dispatchTouchEvent(event);
+        console.log("Anti-AFK click performed.");
+    }));
+}
+
+
+// Callbacks para as funções do menu
+const call_unhit = { on() { unhit = true }, off() { unhit = false } };
+const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } };
+const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } };
 const call_autoFarm = {
     on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true },1000) },
     off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } }
 };
-let afkInterval = null;
 const call_antiAfk = {
     on() { if (!afkInterval) afkInterval = setInterval(click,240*1000) },
     off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } }
 };
-const call_unhit = { on() { unhit = true }, off() { unhit = false } };
-const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } };
-const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } };
+const call_esp = {
+    on() {
+        espEnabled = true;
+        if (espView) espView.setVisibility(0); // VISIBLE
+    },
+    off() {
+        espEnabled = false;
+        if (espView) espView.setVisibility(8); // GONE
+    }
+};
 
 Java.perform(function () {
     Java.scheduleOnMainThread(function () {
-        const classLoader = getClassLoader()
-        const mainActivity = getMainActivity(classLoader)
-        menu = new Menu(classLoader, mainActivity)
+        const classLoader = getClassLoader();
+        const mainActivity = getMainActivity(classLoader);
+        menu = new Menu(classLoader, mainActivity);
+
+        espView = createESPView(classLoader, mainActivity);
+        const layoutParams = classLoader.ViewGroup_LayoutParams.$new(-1, -1);
+        mainActivity.addContentView(espView, layoutParams);
+        espView.setVisibility(8); // GONE
 
         menu.createMenuStart("MENU", 15, "#006400")
-        menu.createMenuLayout("#18122B", 340, 250)
+        menu.createMenuLayout("#18122B", 340, 280)
         menu.createMenuBarLayout("#635985")
         menu.createMenuBarTitle("EngModMobile", "#FFC107")
         menu.createMenuOptionsLayout("#443C68", "#393053")
         
-        menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
+        menu.addOption("esp", "ESP (Radar)", call_esp)
         menu.addOption("unhit", "Unhit (God Mode)", call_unhit)
         menu.addOption("wallhack", "Wallhack", call_wallhack)
+        menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
         menu.addText("--- Utilitários ---", 12, "#FFFFFF")
         menu.addOption("autoOFF", "Auto Off", call_autoOFF)
         menu.addOption("antiAfk","Anti AFK",call_antiAfk)
+        menu.addSeekBar("Zoom Radar", 5, 1, 20, (value, type) => {
+            if(espView && espView.scaleFactor) {
+                espView.scaleFactor.value = Java.use('java.lang.Double').$new(value);
+            }
+        });
 
         menu.start()
         
         setInterval(() => {
-            if (menu && activeplayer && !activeplayer.isNull()) {
+            if (activeplayer && !activeplayer.isNull()) {
                 try {
-                    menu.updatePlayerPosition(getlocalx(activeplayer), getlocaly(activeplayer));
-                } catch(e) {}
+                    const myX = getlocalx(activeplayer);
+                    const myY = getlocaly(activeplayer);
+                    
+                    if(menu) {
+                        menu.updatePlayerPosition(myX, myY);
+                        menu.updatePlayerList(detectedPlayersForUpdate);
+                    }
+
+                    if (espEnabled && espView) {
+                        const playerList = Java.use('java.util.ArrayList').$new();
+                        for(const key in detectedPlayersForUpdate){
+                            const pData = detectedPlayersForUpdate[key];
+                            const map = Java.use('java.util.HashMap').$new();
+                            map.put('x', Java.use('java.lang.Double').$new(pData.x));
+                            map.put('y', Java.use('java.lang.Double').$new(pData.y));
+                            map.put('isAdmin', Java.use('java.lang.Boolean').$new(pData.isAdmin));
+                            playerList.add(map);
+                        }
+                        
+                        const myPosArr = Java.use('[D').$new(2);
+                        myPosArr.value[0] = myX;
+                        myPosArr.value[1] = myY;
+
+                        espView.updatePlayers(playerList, myPosArr);
+                    }
+                    // Limpa a lista para o próximo ciclo de detecção
+                    detectedPlayersForUpdate = {};
+                } catch(e) {
+                    // console.log("Update loop error: " + e);
+                }
             }
-        }, 500);
+        }, 100); // Roda 10x por segundo
     })
 })
 
@@ -611,15 +764,6 @@ function readTString(str) {
           if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen);
       }
   } return null;
-}
-
-function click() {
-    Java.perform(() => Java.scheduleOnMainThread(() => {
-        let time = Java.use("android.os.SystemClock").uptimeMillis();
-        let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 500, 500, 0);
-        getMainActivity(getClassLoader()).dispatchTouchEvent(event);
-        console.log("Anti-AFK click performed.");
-    }));
 }
 
 },5000)
