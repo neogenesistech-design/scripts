@@ -58,7 +58,7 @@ setTimeout(() => {
 
     // Classe Menu para facilitar criar e gerenciar um menu na interface usando widgets Android
     class Menu {
-        #classLoader; #activity; #MATCH_PARENT; #WRAP_CONTENT; #contentView; #mainLayout; #menuStart; #menuLayout; #menuBarLayout; #menuBarTitle; #options; #colorOn; #colorOff; #panelsContainerLayout; #leftPanelLayout; #rightPanelLayout; #menuScrollView; #menuScrollLayout; #infoScrollView; #infoLayout; #infoPlayerPositionTextView; #infoPlayerListLayout; #detectedPlayers = {}; #playerUpdateInterval = null;
+        #classLoader; #activity; #MATCH_PARENT; #WRAP_CONTENT; #contentView; #mainLayout; #menuStart; #menuLayout; #menuBarLayout; #menuBarTitle; #options; #colorOn; #colorOff; #menuScrollView; #menuScrollLayout;
 
         constructor(classLoader, activity) {
             this.#classLoader = classLoader
@@ -111,50 +111,6 @@ setTimeout(() => {
             this.#menuBarTitle.setTextColor(this.#classLoader.Color.parseColor(color))
         }
 
-        #createPanelsContainerLayout() {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
-            this.#panelsContainerLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            this.#panelsContainerLayout.setLayoutParams(layoutParams);
-            this.#panelsContainerLayout.setOrientation(this.#classLoader.LinearLayout.HORIZONTAL.value);
-        }
-
-        #createLeftPanelLayout() {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.0);
-            this.#leftPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            this.#leftPanelLayout.setLayoutParams(layoutParams);
-            this.#leftPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-        }
-
-        #createRightPanelLayout() {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.0);
-            const padding = pixelDensityToPixels(this.#activity, 8);
-            this.#rightPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            this.#rightPanelLayout.setLayoutParams(layoutParams);
-            this.#rightPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-            this.#rightPanelLayout.setPadding(padding, padding, padding, padding);
-            this.#infoScrollView = this.#classLoader.ScrollView.$new(this.#activity);
-            this.#infoLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            this.#infoLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-            const infoTitle = this.#classLoader.TextView.$new(this.#activity);
-            infoTitle.setText(this.#classLoader.String.$new("== Informações =="));
-            infoTitle.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
-            infoTitle.setGravity(this.#classLoader.Gravity.CENTER.value);
-            this.#infoLayout.addView(infoTitle);
-            this.#infoPlayerPositionTextView = this.#classLoader.TextView.$new(this.#activity);
-            this.#infoPlayerPositionTextView.setText(this.#classLoader.String.$new("Posição: \nX: --\nY: --"));
-            this.#infoPlayerPositionTextView.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
-            this.#infoLayout.addView(this.#infoPlayerPositionTextView);
-            const playerListTitle = this.#classLoader.TextView.$new(this.#activity);
-            playerListTitle.setText(this.#classLoader.String.$new("\nJogadores Próximos:"));
-            playerListTitle.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
-            this.#infoLayout.addView(playerListTitle);
-            this.#infoPlayerListLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            this.#infoPlayerListLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-            this.#infoLayout.addView(this.#infoPlayerListLayout);
-            this.#infoScrollView.addView(this.#infoLayout);
-            this.#rightPanelLayout.addView(this.#infoScrollView);
-        }
-
         #createMenuScrollView() {
             const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
             this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity);
@@ -195,14 +151,8 @@ setTimeout(() => {
         #buildExpandedMenu() {
             this.#menuBarLayout.addView(this.#menuBarTitle);
             this.#menuLayout.addView(this.#menuBarLayout);
-            this.#createPanelsContainerLayout();
-            this.#menuLayout.addView(this.#panelsContainerLayout);
-            this.#createLeftPanelLayout();
             this.#menuScrollView.addView(this.#menuScrollLayout);
-            this.#leftPanelLayout.addView(this.#menuScrollView);
-            this.#panelsContainerLayout.addView(this.#leftPanelLayout);
-            this.#createRightPanelLayout();
-            this.#panelsContainerLayout.addView(this.#rightPanelLayout);
+            this.#menuLayout.addView(this.#menuScrollView);
         }
 
         #createOptionClickEvent(id, optionView, callbacks) {
@@ -287,61 +237,6 @@ setTimeout(() => {
             textView.setGravity(this.#classLoader.Gravity.CENTER.value);
         }
 
-        updatePlayerPosition(x, y) {
-            Java.scheduleOnMainThread(() => {
-                if (this.#infoPlayerPositionTextView) {
-                    const text = `Posição: \nX: ${x.toFixed(2)}\nY: ${y.toFixed(2)}`;
-                    this.#infoPlayerPositionTextView.setText(this.#classLoader.String.$new(text));
-                }
-            });
-        }
-
-        #addPlayerToInfoPanel(playerObject) {
-            if (this.#infoPlayerListLayout) {
-                const playerTextView = this.#classLoader.TextView.$new(this.#activity), isAdminText = playerObject.isAdmin ? ` (ADMIN)` : '', accountText = playerObject.props.account || 'N/A', displayText = `- ${playerObject.props.nick}${isAdminText}\n  Conta: ${accountText}\n  Pos: ${playerObject.props.x.toFixed(1)}, ${playerObject.props.y.toFixed(1)}`;
-                if (playerObject.isAdmin) playerTextView.setTextColor(this.#classLoader.Color.parseColor("#FFD700"));
-                else playerTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF"));
-                playerTextView.setText(this.#classLoader.String.$new(displayText));
-                this.#infoPlayerListLayout.addView(playerTextView);
-            }
-        }
-
-        #clearPlayerInfoPanel() {
-            if (this.#infoPlayerListLayout) this.#infoPlayerListLayout.removeAllViews();
-        }
-
-        #refreshPlayerListUI() {
-            Java.scheduleOnMainThread(() => {
-                this.#clearPlayerInfoPanel();
-                for (const key in this.#detectedPlayers) {
-                    this.#addPlayerToInfoPanel(this.#detectedPlayers[key]);
-                }
-            });
-        }
-
-        registerPlayer(playerProps, isAdmin) {
-            const key = playerProps.account || playerProps.nick;
-            if (!key) return;
-            this.#detectedPlayers[key] = {
-                props: playerProps,
-                isAdmin: isAdmin,
-                lastSeen: Date.now()
-            };
-        }
-
-        startPlayerManagement() {
-            if (this.#playerUpdateInterval) clearInterval(this.#playerUpdateInterval);
-            this.#playerUpdateInterval = setInterval(() => {
-                const now = Date.now(), staleThreshold = 4000;
-                for (const key in this.#detectedPlayers) {
-                    if (now - this.#detectedPlayers[key].lastSeen > staleThreshold) {
-                        delete this.#detectedPlayers[key];
-                    }
-                }
-                this.#refreshPlayerListUI();
-            }, 1000);
-        }
-
         #createMainLayoutEvent() {
             const mainLayout = this.#mainLayout, menuLayout = this.#menuLayout, menuStart = this.#menuStart, classLoader = this.#classLoader;
             let initialX = 0, initialY = 0, isMove = false, isMenuLayout = false, initialTouchTime = 0;
@@ -375,7 +270,7 @@ setTimeout(() => {
         }
 
         start() {
-            this.#drawContentView(); this.#drawMainLayout(); this.#drawMenuStart(); this.#buildExpandedMenu(); this.#createMainLayoutEvent(); this.startPlayerManagement();
+            this.#drawContentView(); this.#drawMainLayout(); this.#drawMenuStart(); this.#buildExpandedMenu(); this.#createMainLayoutEvent();
         }
     }
 
@@ -387,9 +282,9 @@ setTimeout(() => {
     let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
     
-    // [MODIFICADO] Variáveis de controle das funções
-    let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false;
-    let explosionSize = 80; // [NOVO] Variável para controlar o tamanho da explosão, com valor padrão 80
+    // Variáveis de controle das funções
+    let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false, showAdmins = false;
+    let explosionSize = 80; // Variável para controlar o tamanho da explosão, com valor padrão 80
 
     const alpha = createTString('alpha=0.5');
     const zoom = createTString('zoom=1');
@@ -407,19 +302,25 @@ setTimeout(() => {
 
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
         'onEnter': function(args) {
-            const playerPtr = args[0];
-            if (autoOFF && playerPtr.toInt32() != activeplayer.toInt32() && menu != null) {
-                menu.turnOffAllOptions(); showToast("Jogador apareceu. Funções desativadas.");
+            if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && menu != null) {
+                menu.turnOffAllOptions();
+                showToast("Jogador apareceu. Funções desativadas.");
             }
-            if (menu) {
-                const accRgx = /^(pc\:|graal\d+|guest.*)/;
-                const props = getPlayerProperties(playerPtr);
-                if (props.alpha < 0.5) setVarValue(playerPtr, alpha);
-                if (props.zoom < 1) setVarValue(playerPtr, zoom);
-                const account = (props.account || "").toLowerCase();
-                const isAdmin = account !== '' && !accRgx.test(account);
-                if (isAdmin) showToast(`Admin ${props.nick} detectado!`, 1);
-                menu.registerPlayer(props, isAdmin);
+            if (!showAdmins) return;
+
+            const playerPtr = args[0];
+            const accRgx = /^(pc\:|graal\d+|guest.*)/;
+            const props = getPlayerProperties(playerPtr);
+            
+            if (props.alpha < 0.5) setVarValue(playerPtr, alpha);
+            if (props.zoom < 1) setVarValue(playerPtr, zoom);
+            
+            if (!props.account) return;
+            const account = props.account.toLowerCase();
+            if (account === '') return;
+            
+            if (!accRgx.test(account)) {
+                showToast('Admin: ' + props.nick);
             }
         }
     });
@@ -429,11 +330,10 @@ setTimeout(() => {
         hurtPlayer(a, b, c, d, e, f);
     }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
 
-    // [MODIFICADO] Função de explosão agora usa a variável 'explosionSize'
     function makeExplosion(level) {
         if (!level) return;
         const playerX = getlocalx(activeplayer), playerY = getlocaly(activeplayer);
-        const radius = explosionSize; // Usa a variável global
+        const radius = explosionSize;
         const offset = radius / 2;
         for (let i = 0; i < radius; i++) {
             for (let j = 0; j < radius; j++) {
@@ -462,23 +362,23 @@ setTimeout(() => {
     const call_unhit = { on() { unhit = true }, off() { unhit = false } };
     const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } };
     const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } };
+    const call_showAdmins = { on() { showAdmins = true }, off() { showAdmins = false } };
 
     Java.perform(function() {
         Java.scheduleOnMainThread(function() {
             const classLoader = getClassLoader(), mainActivity = getMainActivity(classLoader);
             menu = new Menu(classLoader, mainActivity)
             menu.createMenuStart("MENU", 15, "#006400")
-            menu.createMenuLayout("#18122B", 340, 250)
+            menu.createMenuLayout("#18122B", 180, 250)
             menu.createMenuBarLayout("#635985")
             menu.createMenuBarTitle("EngModMobile", "#FFC107")
             menu.createMenuOptionsLayout("#443C68", "#393053")
 
             menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
             
-            // [NOVO] Adiciona o SeekBar para controlar o raio da explosão
             menu.addSeekBar("Raio da Explosão:", explosionSize, 10, 150, function(value, type) {
-                explosionSize = value; // Atualiza a variável global
-                if (type === 'end') { // Mostra a notificação apenas quando o usuário solta o controle
+                explosionSize = value;
+                if (type === 'end') {
                     showToast(`Raio da explosão definido para ${value}x${value}.`, 0);
                 }
             });
@@ -486,16 +386,10 @@ setTimeout(() => {
             menu.addOption("unhit", "Unhit (God Mode)", call_unhit)
             menu.addOption("wallhack", "Wallhack", call_wallhack)
             menu.addText("--- Utilitários ---", 12, "#FFFFFF")
+            menu.addOption("showAdmins", "Show Admins", call_showAdmins)
             menu.addOption("autoOFF", "Auto Off", call_autoOFF)
             menu.addOption("antiAfk", "Anti AFK", call_antiAfk)
             menu.start()
-            setInterval(() => {
-                if (menu && activeplayer && !activeplayer.isNull()) {
-                    try {
-                        menu.updatePlayerPosition(getlocalx(activeplayer), getlocaly(activeplayer));
-                    } catch (e) {}
-                }
-            }, 500);
         })
     })
 
