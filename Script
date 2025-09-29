@@ -41,7 +41,7 @@ setTimeout(() => {
     }
 
     // Função para exibir um Toast, cancelando o anterior se existir
-    function showToast(text, time = 1) {
+    function showToast(text, time = 1) { // 1 = Long, 0 = Short
         Java.perform(() => {
             Java.scheduleOnMainThread(function() {
                 if (currentToast) {
@@ -58,32 +58,7 @@ setTimeout(() => {
 
     // Classe Menu para facilitar criar e gerenciar um menu na interface usando widgets Android
     class Menu {
-        #classLoader
-        #activity
-        #MATCH_PARENT
-        #WRAP_CONTENT
-        #contentView
-        #mainLayout
-        #menuStart
-        #menuLayout
-        #menuBarLayout
-        #menuBarTitle
-        #options
-        #colorOn
-        #colorOff
-        #panelsContainerLayout
-        #leftPanelLayout
-        #rightPanelLayout
-        #menuScrollView
-        #menuScrollLayout
-        #infoScrollView
-        #infoLayout
-        #infoPlayerPositionTextView
-        #infoPlayerListLayout
-
-        // [MODIFICADO] Sistema de detecção de jogadores
-        #detectedPlayers = {};
-        #playerUpdateInterval = null; // Alterado de timer para um intervalo
+        #classLoader; #activity; #MATCH_PARENT; #WRAP_CONTENT; #contentView; #mainLayout; #menuStart; #menuLayout; #menuBarLayout; #menuBarTitle; #options; #colorOn; #colorOff; #panelsContainerLayout; #leftPanelLayout; #rightPanelLayout; #menuScrollView; #menuScrollLayout; #infoScrollView; #infoLayout; #infoPlayerPositionTextView; #infoPlayerListLayout; #detectedPlayers = {}; #playerUpdateInterval = null;
 
         constructor(classLoader, activity) {
             this.#classLoader = classLoader
@@ -231,23 +206,16 @@ setTimeout(() => {
         }
 
         #createOptionClickEvent(id, optionView, callbacks) {
-            const classLoader = this.#classLoader,
-                colorOn = this.#colorOn,
-                colorOff = this.#colorOff,
-                self = this;
+            const classLoader = this.#classLoader, colorOn = this.#colorOn, colorOff = this.#colorOff, self = this;
             const optionOnClickListener = Java.registerClass({
                 name: "com.example." + id,
                 implements: [classLoader.View_OnClickListener],
                 methods: {
                     onClick(p1) {
                         if (!self.#options[id].state) {
-                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOn))
-                            self.#options[id].state = true
-                            callbacks.on()
+                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOn)); self.#options[id].state = true; callbacks.on()
                         } else {
-                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOff))
-                            self.#options[id].state = false
-                            callbacks.off()
+                            p1.setBackgroundColor(classLoader.Color.parseColor(colorOff)); self.#options[id].state = false; callbacks.off()
                         }
                     }
                 }
@@ -256,10 +224,7 @@ setTimeout(() => {
         }
 
         addOption(id, name, callbacks) {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT),
-                padding = pixelDensityToPixels(this.#activity, 5),
-                option = this.#classLoader.TextView.$new(this.#activity),
-                margin = pixelDensityToPixels(this.#activity, 10);
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT), padding = pixelDensityToPixels(this.#activity, 5), option = this.#classLoader.TextView.$new(this.#activity), margin = pixelDensityToPixels(this.#activity, 10);
             option.setText(this.#classLoader.String.$new(name));
             option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
             option.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"));
@@ -283,9 +248,7 @@ setTimeout(() => {
         }
 
         addText(text, textSize, textColor) {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT),
-                margin = pixelDensityToPixels(this.#activity, 5),
-                textView = this.#classLoader.TextView.$new(this.#activity);
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT), margin = pixelDensityToPixels(this.#activity, 5), textView = this.#classLoader.TextView.$new(this.#activity);
             textView.setText(this.#classLoader.String.$new(text));
             textView.setTextSize(textSize);
             textView.setTextColor(this.#classLoader.Color.parseColor(textColor));
@@ -295,10 +258,7 @@ setTimeout(() => {
         }
 
         addSeekBar(textValue, initialValue, minValue, maxValue, callback) {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT),
-                margin = pixelDensityToPixels(this.#activity, 1),
-                seekBar = this.#classLoader.SeekBar.$new(this.#activity, null, 0, Java.use("android.R$style").Widget_Holo_SeekBar.value),
-                textView = this.#classLoader.TextView.$new(this.#activity);
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT), margin = pixelDensityToPixels(this.#activity, 1), seekBar = this.#classLoader.SeekBar.$new(this.#activity, null, 0, Java.use("android.R$style").Widget_Holo_SeekBar.value), textView = this.#classLoader.TextView.$new(this.#activity);
             seekBar.setMax(maxValue - minValue);
             seekBar.setProgress(initialValue - minValue);
             layoutParams.setMargins(0, 0, 0, margin);
@@ -312,8 +272,7 @@ setTimeout(() => {
                 implements: [SeekBarChangeListener],
                 methods: {
                     onProgressChanged(seekBar, progress, fromUser) {
-                        const value = progress + minValue,
-                            text = Java.use("java.lang.String").$new(textValue + " " + value);
+                        const value = progress + minValue, text = Java.use("java.lang.String").$new(textValue + " " + value);
                         textView.setText(text);
                         if (fromUser) callback(value, "move");
                     },
@@ -339,10 +298,7 @@ setTimeout(() => {
 
         #addPlayerToInfoPanel(playerObject) {
             if (this.#infoPlayerListLayout) {
-                const playerTextView = this.#classLoader.TextView.$new(this.#activity),
-                    isAdminText = playerObject.isAdmin ? ` (ADMIN)` : '',
-                    accountText = playerObject.props.account || 'N/A',
-                    displayText = `- ${playerObject.props.nick}${isAdminText}\n  Conta: ${accountText}\n  Pos: ${playerObject.props.x.toFixed(1)}, ${playerObject.props.y.toFixed(1)}`;
+                const playerTextView = this.#classLoader.TextView.$new(this.#activity), isAdminText = playerObject.isAdmin ? ` (ADMIN)` : '', accountText = playerObject.props.account || 'N/A', displayText = `- ${playerObject.props.nick}${isAdminText}\n  Conta: ${accountText}\n  Pos: ${playerObject.props.x.toFixed(1)}, ${playerObject.props.y.toFixed(1)}`;
                 if (playerObject.isAdmin) playerTextView.setTextColor(this.#classLoader.Color.parseColor("#FFD700"));
                 else playerTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF"));
                 playerTextView.setText(this.#classLoader.String.$new(displayText));
@@ -354,60 +310,41 @@ setTimeout(() => {
             if (this.#infoPlayerListLayout) this.#infoPlayerListLayout.removeAllViews();
         }
 
-        // [MODIFICADO] Atualiza a UI sem limpar a lista de origem
         #refreshPlayerListUI() {
             Java.scheduleOnMainThread(() => {
                 this.#clearPlayerInfoPanel();
                 for (const key in this.#detectedPlayers) {
                     this.#addPlayerToInfoPanel(this.#detectedPlayers[key]);
                 }
-                // A linha que limpava a lista foi removida daqui
             });
         }
 
-        // [MODIFICADO] Apenas registra ou atualiza o jogador com um timestamp
         registerPlayer(playerProps, isAdmin) {
             const key = playerProps.account || playerProps.nick;
             if (!key) return;
             this.#detectedPlayers[key] = {
                 props: playerProps,
                 isAdmin: isAdmin,
-                lastSeen: Date.now() // Adiciona ou atualiza o timestamp
+                lastSeen: Date.now()
             };
         }
-        
-        // [NOVO] Inicia o processo que gerencia a lista de jogadores
+
         startPlayerManagement() {
             if (this.#playerUpdateInterval) clearInterval(this.#playerUpdateInterval);
             this.#playerUpdateInterval = setInterval(() => {
-                const now = Date.now();
-                const staleThreshold = 4000; // 4 segundos de inatividade
-                let listChanged = false;
-
-                // Loop para remover jogadores inativos
+                const now = Date.now(), staleThreshold = 4000;
                 for (const key in this.#detectedPlayers) {
                     if (now - this.#detectedPlayers[key].lastSeen > staleThreshold) {
                         delete this.#detectedPlayers[key];
-                        listChanged = true;
                     }
                 }
-                
-                // Atualiza a UI. Fazemos isso sempre para que as coordenadas X,Y sejam atualizadas
                 this.#refreshPlayerListUI();
-
-            }, 1000); // Roda a cada segundo
+            }, 1000);
         }
 
         #createMainLayoutEvent() {
-            const mainLayout = this.#mainLayout,
-                menuLayout = this.#menuLayout,
-                menuStart = this.#menuStart,
-                classLoader = this.#classLoader;
-            let initialX = 0,
-                initialY = 0,
-                isMove = false,
-                isMenuLayout = false,
-                initialTouchTime = 0;
+            const mainLayout = this.#mainLayout, menuLayout = this.#menuLayout, menuStart = this.#menuStart, classLoader = this.#classLoader;
+            let initialX = 0, initialY = 0, isMove = false, isMenuLayout = false, initialTouchTime = 0;
             const MainLayoutOnTouchListener = Java.registerClass({
                 name: "com.example.MainLayoutEvent",
                 implements: [classLoader.View_OnTouchListener],
@@ -415,39 +352,22 @@ setTimeout(() => {
                     onTouch(view, event) {
                         const menuHeight = menuLayout.getHeight();
                         switch (event.getAction()) {
-                            case classLoader.MotionEvent.ACTION_DOWN.value:
-                                initialX = view.getX() - event.getRawX();
-                                initialY = view.getY() - event.getRawY();
-                                isMove = false
-                                initialTouchTime = Date.now()
-                                break
+                            case classLoader.MotionEvent.ACTION_DOWN.value: initialX = view.getX() - event.getRawX(); initialY = view.getY() - event.getRawY(); isMove = false; initialTouchTime = Date.now(); break;
                             case classLoader.MotionEvent.ACTION_UP.value:
                                 if (!isMove) {
                                     if (!isMenuLayout) {
-                                        const currentY = mainLayout.getY(),
-                                            targetY = (currentY + menuHeight / 2) - menuStart.getHeight() / 1.5;
-                                        mainLayout.removeView(menuStart)
-                                        mainLayout.addView(menuLayout)
-                                        mainLayout.setY(targetY)
-                                        isMenuLayout = true
+                                        const currentY = mainLayout.getY(), targetY = (currentY + menuHeight / 2) - menuStart.getHeight() / 1.5;
+                                        mainLayout.removeView(menuStart); mainLayout.addView(menuLayout); mainLayout.setY(targetY); isMenuLayout = true;
                                     } else {
-                                        const currentY = mainLayout.getY(),
-                                            targetY = (currentY - menuHeight / 2) + menuStart.getHeight() / 1.5;
-                                        mainLayout.removeView(menuLayout)
-                                        mainLayout.addView(menuStart)
-                                        mainLayout.setY(targetY)
-                                        isMenuLayout = false
+                                        const currentY = mainLayout.getY(), targetY = (currentY - menuHeight / 2) + menuStart.getHeight() / 1.5;
+                                        mainLayout.removeView(menuLayout); mainLayout.addView(menuStart); mainLayout.setY(targetY); isMenuLayout = false;
                                     }
                                 }
-                                break
-                            case classLoader.MotionEvent.ACTION_MOVE.value:
-                                view.setX(event.getRawX() + initialX)
-                                view.setY(event.getRawY() + initialY)
-                                if (Date.now() - initialTouchTime > 200) isMove = true
-                                break
-                            default: return false
+                                break;
+                            case classLoader.MotionEvent.ACTION_MOVE.value: view.setX(event.getRawX() + initialX); view.setY(event.getRawY() + initialY); if (Date.now() - initialTouchTime > 200) isMove = true; break;
+                            default: return false;
                         }
-                        return true
+                        return true;
                     }
                 }
             })
@@ -455,39 +375,29 @@ setTimeout(() => {
         }
 
         start() {
-            this.#drawContentView()
-            this.#drawMainLayout()
-            this.#drawMenuStart()
-            this.#buildExpandedMenu()
-            this.#createMainLayoutEvent()
-            this.startPlayerManagement() // [NOVO] Inicia o gerenciador da lista
+            this.#drawContentView(); this.#drawMainLayout(); this.#drawMenuStart(); this.#buildExpandedMenu(); this.#createMainLayoutEvent(); this.startPlayerManagement();
         }
     }
 
-    let menu = null
+    let menu = null;
     const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
     const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
     const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
     const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
     let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
-    let canExplode = false,
-        explosionsInterval = null,
-        unhit = false,
-        wallhack = false,
-        autoOFF = false
+    
+    // [MODIFICADO] Variáveis de controle das funções
+    let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false;
+    let explosionSize = 80; // [NOVO] Variável para controlar o tamanho da explosão, com valor padrão 80
+
     const alpha = createTString('alpha=0.5');
-    const zoom = createTString('zoom=1')
+    const zoom = createTString('zoom=1');
     var saveVarsToArray = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10sbidMalVNaEv"), "pointer", ["pointer"]);
 
     function getPlayerProperties(p) {
         return {
-            "alpha": Memory.readFloat(ptr(p.toInt32() + 356)),
-            "zoom": Memory.readFloat(p.add(0x138)),
-            "x": Memory.readDouble(p.add(0x238)),
-            "y": Memory.readDouble(p.add(0x240)),
-            "nick": readTString(ptr(p.toInt32() + 464)),
-            "account": readTString(ptr(p.toInt32() + 696))
+            "alpha": Memory.readFloat(ptr(p.toInt32() + 356)), "zoom": Memory.readFloat(p.add(0x138)), "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)), "nick": readTString(ptr(p.toInt32() + 464)), "account": readTString(ptr(p.toInt32() + 696))
         };
     }
 
@@ -499,8 +409,7 @@ setTimeout(() => {
         'onEnter': function(args) {
             const playerPtr = args[0];
             if (autoOFF && playerPtr.toInt32() != activeplayer.toInt32() && menu != null) {
-                menu.turnOffAllOptions();
-                showToast("Jogador apareceu. Funções desativadas.");
+                menu.turnOffAllOptions(); showToast("Jogador apareceu. Funções desativadas.");
             }
             if (menu) {
                 const accRgx = /^(pc\:|graal\d+|guest.*)/;
@@ -520,12 +429,17 @@ setTimeout(() => {
         hurtPlayer(a, b, c, d, e, f);
     }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
 
+    // [MODIFICADO] Função de explosão agora usa a variável 'explosionSize'
     function makeExplosion(level) {
         if (!level) return;
-        const playerX = getlocalx(activeplayer),
-            playerY = getlocaly(activeplayer);
-        for (let i = 0; i < 80; i++)
-            for (let j = 0; j < 80; j++) putExplosion(level, playerX + 40 - i, playerY + 40 - j, 1, 0, 1);
+        const playerX = getlocalx(activeplayer), playerY = getlocaly(activeplayer);
+        const radius = explosionSize; // Usa a variável global
+        const offset = radius / 2;
+        for (let i = 0; i < radius; i++) {
+            for (let j = 0; j < radius; j++) {
+                putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1);
+            }
+        }
     }
 
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), {
@@ -551,15 +465,24 @@ setTimeout(() => {
 
     Java.perform(function() {
         Java.scheduleOnMainThread(function() {
-            const classLoader = getClassLoader(),
-                mainActivity = getMainActivity(classLoader);
+            const classLoader = getClassLoader(), mainActivity = getMainActivity(classLoader);
             menu = new Menu(classLoader, mainActivity)
             menu.createMenuStart("MENU", 15, "#006400")
             menu.createMenuLayout("#18122B", 340, 250)
             menu.createMenuBarLayout("#635985")
             menu.createMenuBarTitle("EngModMobile", "#FFC107")
             menu.createMenuOptionsLayout("#443C68", "#393053")
+
             menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
+            
+            // [NOVO] Adiciona o SeekBar para controlar o raio da explosão
+            menu.addSeekBar("Raio da Explosão:", explosionSize, 10, 150, function(value, type) {
+                explosionSize = value; // Atualiza a variável global
+                if (type === 'end') { // Mostra a notificação apenas quando o usuário solta o controle
+                    showToast(`Raio da explosão definido para ${value}x${value}.`, 0);
+                }
+            });
+
             menu.addOption("unhit", "Unhit (God Mode)", call_unhit)
             menu.addOption("wallhack", "Wallhack", call_wallhack)
             menu.addText("--- Utilitários ---", 12, "#FFFFFF")
@@ -579,8 +502,7 @@ setTimeout(() => {
     function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
 
     function createTString(str) {
-        var str_pointer = malloc(4),
-            str_struct = malloc(str.length + 8);
+        var str_pointer = malloc(4), str_struct = malloc(str.length + 8);
         str_pointer.writePointer(str_struct);
         str_struct.writeInt(str.length);
         ptr(parseInt(str_struct) + 4).writeInt(1);
@@ -601,8 +523,7 @@ setTimeout(() => {
 
     function click() {
         Java.perform(() => Java.scheduleOnMainThread(() => {
-            let time = Java.use("android.os.SystemClock").uptimeMillis(),
-                event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 500, 500, 0);
+            let time = Java.use("android.os.SystemClock").uptimeMillis(), event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 500, 500, 0);
             getMainActivity(getClassLoader()).dispatchTouchEvent(event);
             console.log("Anti-AFK click performed.");
         }));
