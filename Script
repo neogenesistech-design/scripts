@@ -200,7 +200,6 @@ setTimeout(() => {
             this.#panelsContainerLayout.addView(this.#rightPanelLayout);
         }
         
-        // NOVO: Adiciona uma função à lista da UI, com evento de clique para copiar
         #addFunctionToUI(funcInfo) {
             if (!this.#tracerListLayout) return;
             const context = this.#activity.getApplicationContext();
@@ -216,13 +215,12 @@ setTimeout(() => {
 
             funcTextView.setText(this.#classLoader.String.$new(displayText));
 
-            // Adiciona o listener de clique para copiar
             const OnClickListener = this.#classLoader.View_OnClickListener;
             const clickListener = Java.registerClass({
                 name: 'com.example.CopyClickListener' + Math.random().toString(36).substring(2),
                 implements: [OnClickListener],
                 methods: {
-                    onClick(view) {
+                    onClick: () => { // Use arrow function to keep 'this' context if needed elsewhere, though not strictly necessary here
                         const clipboard = context.getSystemService("clipboard");
                         const label = funcInfo.knownName || funcInfo.name;
                         const textToCopy = `${label}: ${funcInfo.name}`;
@@ -236,7 +234,6 @@ setTimeout(() => {
             this.#tracerListLayout.addView(funcTextView);
         }
         
-        // NOVO: Atualiza a lista de funções na UI
         updateFunctionListUI(functionList) {
              Java.scheduleOnMainThread(() => {
                 const title = this.#tracerListLayout.getChildAt(0);
@@ -380,28 +377,38 @@ setTimeout(() => {
     }
 
     let menu = null;
+    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
+    const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
+    const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
+    let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
+    const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
+
+    let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false, showAdmins = false;
+    let explosionSize = 80;
+    const alpha = createTString('alpha=0.5');
+    const zoom = createTString('zoom=1');
     
     // ====================================================================================================
-    // == INÍCIO DA LÓGICA DO FUNCTION TRACER =============================================================
+    // == LÓGICA DO FUNCTION TRACER =======================================================================
     // ====================================================================================================
 
     let functionCallStats = {};
     let activeHooks = [];
     let displayInterval = null;
 
-    // Dicionário de funções conhecidas para fácil identificação
     const knownFunctions = {
         "_ZN10zF9VgaBKxR10tMaombuGXrEdddii": "Put Explosion",
         "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy": "Player Hurt"
-        // Adicione outras funções conhecidas aqui
+        // Adicione outras aqui conforme for descobrindo
     };
 
     function startFunctionTracer() {
-        if (activeHooks.length > 0) return; // Já está rodando
+        if (activeHooks.length > 0) return;
 
         functionCallStats = {};
         const exports = Module.enumerateExports('libqplay.so');
-        const NOISE_THRESHOLD = 20; // Funções chamadas mais de 20 vezes por segundo são ruído
+        const NOISE_THRESHOLD = 20; // Funções chamadas mais de 20x por segundo são ruído
 
         exports.forEach(exp => {
             if (exp.type === 'function') {
@@ -414,8 +421,8 @@ setTimeout(() => {
                                     name: name,
                                     knownName: knownFunctions[name] || null,
                                     count: 0,
-                                    lastCalled: 0,
-                                    isInteraction: false
+                                    firstCalled: Date.now(),
+                                    lastCalled: 0
                                 };
                             }
                             functionCallStats[name].count++;
@@ -423,13 +430,10 @@ setTimeout(() => {
                         }
                     });
                     activeHooks.push(listener);
-                } catch (e) {
-                    // console.log(`Could not hook ${exp.name}: ${e.message}`);
-                }
+                } catch (e) {}
             }
         });
 
-        // Intervalo para analisar as chamadas e atualizar a UI
         displayInterval = setInterval(() => {
             const now = Date.now();
             let interactionCalls = [];
@@ -437,23 +441,21 @@ setTimeout(() => {
             for (const name in functionCallStats) {
                 const func = functionCallStats[name];
 
-                // Filtro de ruído: ignora funções chamadas muito frequentemente
-                const secondsSinceFirstCall = (now - (func.firstCalled || now)) / 1000 || 1;
+                const secondsSinceFirstCall = (now - func.firstCalled) / 1000 || 1;
                 const callsPerSecond = func.count / secondsSinceFirstCall;
-                if (callsPerSecond > NOISE_THRESHOLD) {
-                    continue; // É ruído, pular
+
+                if (func.count > 5 && callsPerSecond > NOISE_THRESHOLD) {
+                    continue; // Filtro de ruído
                 }
 
-                // Considera uma interação se foi chamada no último segundo
                 if (now - func.lastCalled < 1000) {
                     interactionCalls.push(func);
                 }
             }
 
-            // Ordena a lista: conhecidas primeiro, depois as mais recentes
             interactionCalls.sort((a, b) => {
                 if (a.knownName && !b.knownName) return -1;
-                if (!a.knownName && b.knownName) return 1;
+                if (!b.knownName && a.knownName) return 1;
                 return b.lastCalled - a.lastCalled;
             });
             
@@ -461,7 +463,7 @@ setTimeout(() => {
                 menu.updateFunctionListUI(interactionCalls);
             }
 
-        }, 1000); // Roda a análise a cada segundo
+        }, 1000);
 
         showToast("Function Tracer Ativado!", 0);
     }
@@ -479,9 +481,80 @@ setTimeout(() => {
     }
     
     // ====================================================================================================
-    // == FIM DA LÓGICA DO FUNCTION TRACER ================================================================
+    // == CALLBACKS E INTERCEPTORS DO MENU ================================================================
     // ====================================================================================================
+    
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), {
+        'onLeave': function(ret) { if (wallhack) ret.replace(0); }
+    });
 
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
+        'onEnter': function(args) {
+            if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && menu != null) {
+                menu.turnOffAllOptions();
+                showToast("Jogador apareceu. Funções desativadas.");
+            }
+            if (!showAdmins) return;
+            const playerPtr = args[0];
+            const accRgx = /^(pc\:|graal\d+|guest.*)/;
+            const props = getPlayerProperties(playerPtr);
+            if (props.alpha < 0.5) setVarValue(playerPtr, alpha);
+            if (props.zoom < 1) setVarValue(playerPtr, zoom);
+            if (!props.account) return;
+            const account = props.account.toLowerCase();
+            if (account === '') return;
+            if (!accRgx.test(account)) {
+                showToast('Admin: ' + props.nick);
+            }
+        }
+    });
+
+    Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), new NativeCallback((a, b, c, d, e, f) => {
+        if (unhit) return 0;
+        hurtPlayer(a, b, c, d, e, f);
+    }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
+
+    function makeExplosion(level) {
+        if (!level) return;
+        const playerX = getlocalx(activeplayer), playerY = getlocaly(activeplayer);
+        const radius = explosionSize;
+        const offset = radius / 2;
+        for (let i = 0; i < radius; i++) {
+            for (let j = 0; j < radius; j++) {
+                putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1);
+            }
+        }
+    }
+
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), {
+        onEnter: function(args) {
+            if (!canExplode) return;
+            canExplode = false;
+            makeExplosion(args[0]);
+        }
+    });
+
+    const call_autoFarm = {
+        on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true }, 1000) },
+        off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } }
+    };
+    let afkInterval = null;
+    const call_antiAfk = {
+        on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000) },
+        off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } }
+    };
+    const call_unhit = { on() { unhit = true }, off() { unhit = false } };
+    const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } };
+    const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } };
+    const call_showAdmins = { on() { showAdmins = true }, off() { showAdmins = false } };
+    const call_functionTracer = {
+        on: startFunctionTracer,
+        off: stopFunctionTracer
+    };
+    
+    // ====================================================================================================
+    // == SETUP DO MENU ===================================================================================
+    // ====================================================================================================
     Java.perform(function() {
         Java.scheduleOnMainThread(function() {
             const classLoader = getClassLoader();
@@ -493,17 +566,22 @@ setTimeout(() => {
             menu.createMenuBarTitle("EngModMobile", "#FFC107")
             menu.createMenuOptionsLayout("#443C68", "#393053")
             
-            // Adicionando a nova opção do Function Tracer
-            menu.addText("--- Análise de Funções ---", 12, "#FFC107")
-            menu.addOption("functionTracer", "Rastrear Funções", {
-                on: startFunctionTracer,
-                off: stopFunctionTracer
-            })
-
-            // Adicione outras opções do seu menu antigo se desejar
+            menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
+            menu.addSeekBar("Raio da Explosão:", explosionSize, 10, 150, function(value, type) {
+                explosionSize = value;
+                if (type === 'end') {
+                    showToast(`Raio da explosão definido para ${value}x${value}.`, 0);
+                }
+            });
+            menu.addOption("unhit", "Unhit (God Mode)", call_unhit)
+            menu.addOption("wallhack", "Wallhack", call_wallhack)
             menu.addText("--- Utilitários ---", 12, "#FFFFFF")
-            // menu.addOption("unhit", "Unhit (God Mode)", call_unhit) // Exemplo
-
+            menu.addOption("showAdmins", "Show Admins", call_showAdmins)
+            menu.addOption("autoOFF", "Auto Off", call_autoOFF)
+            menu.addOption("antiAfk", "Anti AFK", call_antiAfk)
+            menu.addText("--- Análise ---", 12, "#FFC107")
+            menu.addOption("functionTracer", "Rastrear Funções", call_functionTracer)
+            
             menu.start()
         })
     })
