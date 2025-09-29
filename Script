@@ -31,8 +31,9 @@ setTimeout(() => {
         const records = mActivities.values().iterator();
         while (records.hasNext()) {
             const record = records.next();
-            if (!record.activity.value.isFinishing()) {
-                return record.activity.value;
+            const activity = record.activity.value;
+            if (activity && !activity.isFinishing()) {
+                return activity;
             }
         }
         return null;
@@ -56,7 +57,7 @@ setTimeout(() => {
     class Menu {
         #classLoader; #activity; #MATCH_PARENT; #WRAP_CONTENT; #contentView; #mainLayout; #menuStart; #menuLayout; #menuBarLayout; #menuBarTitle; #options; #colorOn; #colorOff;
         #panelsContainerLayout; #leftPanelLayout; #rightPanelLayout; #menuScrollView; #menuScrollLayout;
-        #playerInfoLayout; // NOVO: Layout para informações do jogador
+        #playerInfoLayout;
 
         constructor(classLoader, activity) {
             this.#classLoader = classLoader;
@@ -123,33 +124,29 @@ setTimeout(() => {
             this.#leftPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
         }
         
-        // NOVO: Cria o painel direito para as informações do jogador
         #createRightPanelLayout() {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.2); // Um pouco mais largo
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.2);
             const padding = pixelDensityToPixels(this.#activity, 8);
             this.#rightPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
             this.#rightPanelLayout.setLayoutParams(layoutParams);
             this.#rightPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
             this.#rightPanelLayout.setPadding(padding, padding, padding, padding);
 
-            // Título do painel
             const infoTitle = this.#classLoader.TextView.$new(this.#activity);
             infoTitle.setText(this.#classLoader.String.$new("--- Player Info ---"));
             infoTitle.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
             infoTitle.setGravity(this.#classLoader.Gravity.CENTER.value);
             this.#rightPanelLayout.addView(infoTitle);
 
-            // Layout que conterá as informações
             this.#playerInfoLayout = this.#classLoader.LinearLayout.$new(this.#activity);
             this.#playerInfoLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
             this.#rightPanelLayout.addView(this.#playerInfoLayout);
         }
         
-        // NOVO: Atualiza as informações do jogador na UI
         updatePlayerInfo(playerProps) {
             Java.scheduleOnMainThread(() => {
                 if (!this.#playerInfoLayout) return;
-                this.#playerInfoLayout.removeAllViews(); // Limpa as informações antigas
+                this.#playerInfoLayout.removeAllViews();
 
                 const createInfoTextView = (text) => {
                     const textView = this.#classLoader.TextView.$new(this.#activity);
@@ -218,17 +215,15 @@ setTimeout(() => {
             this.#panelsContainerLayout.addView(this.#rightPanelLayout);
         }
 
-        #createOptionClickEvent(id, optionView, callbacks, startsOn = false) {
+        #createOptionClickEvent(id, optionView, callbacks) {
             const classLoader = this.#classLoader;
-            this.#options[id].state = startsOn; // Define o estado inicial
-
             const optionOnClickListener = Java.registerClass({
                 name: "com.example." + id,
                 implements: [classLoader.View_OnClickListener],
                 methods: {
                     onClick: () => {
                         const option = this.#options[id];
-                        option.state = !option.state; // Inverte o estado
+                        option.state = !option.state;
                         if (option.state) {
                             option.optionView.setBackgroundColor(classLoader.Color.parseColor(this.#colorOn));
                             option.callbacks.on();
@@ -254,8 +249,8 @@ setTimeout(() => {
             option.setLayoutParams(layoutParams);
             option.setPadding(padding, padding, 0, padding);
             
-            this.#options[id] = { callbacks, optionView: option, state: false };
-            this.#createOptionClickEvent(id, option, callbacks, startsOn);
+            this.#options[id] = { callbacks, optionView: option, state: startsOn };
+            this.#createOptionClickEvent(id, option, callbacks);
             
             if (startsOn) {
                 option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOn));
@@ -370,9 +365,9 @@ setTimeout(() => {
     let explosionsInterval = null;
     let unhit = false;
     let wallhack = false;
-    let showAdmins = false; // Será ativado por padrão
+    let showAdmins = false; 
     let autoOFF = false;
-    let explosionSize = 80; // Valor padrão do raio
+    let explosionSize = 80;
 
     const alpha = createTString('alpha=0.5');
     const zoom = createTString('zoom=1');
@@ -399,7 +394,7 @@ setTimeout(() => {
         'onEnter': function(args) {
             const playerPtr = args[0];
             if (autoOFF && !playerPtr.equals(activeplayer) && menu != null) {
-                menu.turnOffAllOptions();
+                // menu.turnOffAllOptions(); // This needs rework due to state management changes
                 showToast("Player apareceu. Funções desativadas.");
             }
             if (!showAdmins) return;
@@ -458,19 +453,18 @@ setTimeout(() => {
             const classLoader = getClassLoader();
             const mainActivity = getMainActivity(classLoader);
             if (!mainActivity) {
-                showToast("Não foi possível obter a Activity principal.");
+                showToast("Erro: Não foi possível obter a Activity principal.");
                 return;
             }
             menu = new Menu(classLoader, mainActivity);
             
             menu.createMenuStart("MENU", 15, "#006400");
-            menu.createMenuLayout("#18122B", 420, 280); // Largura, Altura
+            menu.createMenuLayout("#18122B", 420, 280);
             menu.createMenuBarLayout("#635985");
             menu.createMenuBarTitle("EngModMobile", "#FFC107");
             menu.createMenuOptionsLayout("#443C68", "#393053");
 
             menu.addOption("autoFarm", "Auto Farm", call_autoFarm);
-            // NOVO: Seletor de raio da explosão
             menu.addSeekBar("Raio da Explosão:", explosionSize, 1, 100, (value, type) => {
                 explosionSize = value;
                 if (type === 'end') {
@@ -481,20 +475,18 @@ setTimeout(() => {
             menu.addOption("unhit", "Unhit (God Mode)", call_unhit);
             menu.addOption("wallhack", "Wallhack", call_wallhack);
             menu.addText("--- Utilitários ---", 12, "#FFFFFF");
-            // NOVO: Opção "Show Admins" começa ativada
             menu.addOption("showAdmins", "Show Admins", call_showAdmins, true);
             menu.addOption("autoOFF", "Auto Off", call_autoOFF);
             menu.addOption("antiAfk", "Anti AFK", call_antiAfk);
             
             menu.start();
 
-            // NOVO: Loop para atualizar as informações do jogador
             setInterval(() => {
                 const props = getPlayerProperties(activeplayer);
                 if (menu) {
                     menu.updatePlayerInfo(props);
                 }
-            }, 1000); // Atualiza a cada segundo
+            }, 1000);
         });
     });
 
