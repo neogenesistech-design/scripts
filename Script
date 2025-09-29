@@ -5,7 +5,11 @@ var malloc = getFunc("libc.so", "malloc", "pointer", ["int"])
 // Variável para gerenciar toasts e evitar sobreposição
 let currentToast = null;
 
-// Função que carrega classes Android necessárias para criar interface de usuário e manipular eventos
+// Variáveis para o novo controle de explosão
+let explosionRadius = 40; // Raio padrão
+let explosionDirection = { x: 0, y: 0 }; // Padrão: no centro do jogador
+
+// Função que carrega classes Android
 function getClassLoader() {
     const classLoader = {
         Gravity: Java.use("android.view.Gravity"),
@@ -35,6 +39,362 @@ function pixelDensityToPixels(context, dp) {
 // Função para obter a Activity principal atual do aplicativo
 function getMainActivity(classLoader) {
     const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value
+    const mActivities = activityThread.mActivities.value
+    const activityClientRecord = Java.cast(mActivities.valueAt(0), classLoader.ActivityThread_ActivityClientRecord)
+    return activityClientRecord.activity.value
+}
+
+// Função para exibir um Toast
+function showToast(text, time = 1) {
+  Java.perform(() => {
+      Java.scheduleOnMainThread(function() {
+          if (currentToast) {
+              currentToast.cancel();
+          }
+          var toast = Java.use("android.widget.Toast");
+          var newToast = toast.makeText(Java.use("android.app.ActivityThread").currentApplication().getApplicationContext(),
+                       Java.use("java.lang.String").$new(text), time);
+          newToast.show();
+          currentToast = newToast;
+      });
+  });
+}
+
+// Classe Menu
+class Menu {
+    #classLoader
+    #activity
+    #MATCH_PARENT
+    #WRAP_CONTENT
+    #contentView
+    #mainLayout
+    #menuStart
+    #menuLayout
+    #menuBarLayout
+    #menuBarTitle
+    #options
+    #colorOn
+    #colorOff
+    #panelsContainerLayout
+    #leftPanelLayout
+    #rightPanelLayout
+    #menuScrollView
+    #menuScrollLayout
+    #infoScrollView
+    #infoLayout
+    #infoPlayerPositionTextView
+    #infoPlayerListLayout
+    #detectedPlayers = {};
+    #playerRefreshTimer = null;
+
+    constructor(classLoader, activity) {
+        this.#classLoader = classLoader
+        this.#activity = activity
+        this.#MATCH_PARENT = classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value
+        this.#WRAP_CONTENT = classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
+        this.#options = {}
+        this.#createContentView()
+        this.#createMainLayout()
+    }
+
+    #createContentView() {
+        this.#contentView = this.#classLoader.LinearLayout.$new(this.#activity)
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT)
+        this.#contentView.setLayoutParams(layoutParams)
+        this.#contentView.setGravity(this.#classLoader.Gravity.CENTER.value)
+        this.#contentView.setBackgroundColor(this.#classLoader.Color.TRANSPARENT.value)
+    }
+
+    #createMainLayout() {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
+        this.#mainLayout = this.#classLoader.LinearLayout.$new(this.#activity)
+        this.#mainLayout.setLayoutParams(layoutParams)
+    }
+
+    createMenuLayout(color, width, height) {
+        const widthPx = pixelDensityToPixels(this.#activity, width);
+        const heightPx = pixelDensityToPixels(this.#activity, height);
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(widthPx, heightPx);
+        this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#menuLayout.setLayoutParams(layoutParams);
+        this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color));
+        this.#menuLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+    }
+    
+    createMenuBarLayout(color) {
+        const padding = pixelDensityToPixels(this.#activity, 10)
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT)
+        this.#menuBarLayout = this.#classLoader.LinearLayout.$new(this.#activity)
+        this.#menuBarLayout.setLayoutParams(layoutParams)
+        this.#menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color))
+        this.#menuBarLayout.setPadding(padding, padding, 0, padding)
+    }
+
+    createMenuBarTitle(title, color) {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
+        this.#menuBarTitle = this.#classLoader.TextView.$new(this.#activity)
+        this.#menuBarTitle.setLayoutParams(layoutParams)
+        this.#menuBarTitle.setText(this.#classLoader.String.$new(title))
+        this.#menuBarTitle.setTextColor(this.#classLoader.Color.parseColor(color))
+    }
+
+    #createPanelsContainerLayout() {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
+        this.#panelsContainerLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#panelsContainerLayout.setLayoutParams(layoutParams);
+        this.#panelsContainerLayout.setOrientation(this.#classLoader.LinearLayout.HORIZONTAL.value);
+    }
+
+    #createLeftPanelLayout() {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 0.6);
+        this.#leftPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#leftPanelLayout.setLayoutParams(layoutParams);
+        this.#leftPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+    }
+
+    #createRightPanelLayout() {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 0.4);
+        const padding = pixelDensityToPixels(this.#activity, 8);
+        this.#rightPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#rightPanelLayout.setLayoutParams(layoutParams);
+        this.#rightPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+        this.#rightPanelLayout.setPadding(padding, padding, padding, padding);
+        this.#infoScrollView = this.#classLoader.ScrollView.$new(this.#activity);
+        this.#infoLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#infoLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+        const infoTitle = this.#classLoader.TextView.$new(this.#activity);
+        infoTitle.setText(this.#classLoader.String.$new("== Infos =="));
+        infoTitle.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
+        infoTitle.setGravity(this.#classLoader.Gravity.CENTER.value);
+        this.#infoLayout.addView(infoTitle);
+        this.#infoPlayerPositionTextView = this.#classLoader.TextView.$new(this.#activity);
+        this.#infoPlayerPositionTextView.setText(this.#classLoader.String.$new("Pos: \nX: --\nY: --"));
+        this.#infoPlayerPositionTextView.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
+        this.#infoPlayerPositionTextView.setTextSize(10);
+        this.#infoLayout.addView(this.#infoPlayerPositionTextView);
+        const playerListTitle = this.#classLoader.TextView.$new(this.#activity);
+        playerListTitle.setText(this.#classLoader.String.$new("\nJogadores:"));
+        playerListTitle.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
+        this.#infoLayout.addView(playerListTitle);
+        this.#infoPlayerListLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#infoPlayerListLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+        this.#infoLayout.addView(this.#infoPlayerListLayout);
+        this.#infoScrollView.addView(this.#infoLayout);
+        this.#rightPanelLayout.addView(this.#infoScrollView);
+    }
+    
+    #createMenuScrollView() {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
+        this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity);
+        const padding = pixelDensityToPixels(this.#activity, 8);
+        this.#menuScrollView.setLayoutParams(layoutParams);
+        this.#menuScrollView.setPadding(padding, padding, padding, padding);
+    }
+
+    #createMenuScrollLayout() {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+        this.#menuScrollLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#menuScrollLayout.setLayoutParams(layoutParams);
+        this.#menuScrollLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+    }
+    
+    createMenuOptionsLayout(colorOn, colorOff) {
+        this.#createMenuScrollView();
+        this.#createMenuScrollLayout();
+        this.#colorOn = colorOn;
+        this.#colorOff = colorOff;
+    }
+
+    createMenuStart(title, size, color) {
+        size = pixelDensityToPixels(this.#activity, size)
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
+        this.#menuStart = this.#classLoader.TextView.$new(this.#activity)
+        this.#menuStart.setLayoutParams(layoutParams)
+        this.#menuStart.setText(this.#classLoader.String.$new(title))
+        this.#menuStart.setTextSize(size)
+        this.#menuStart.setTextColor(this.#classLoader.Color.parseColor(color))
+        this.#menuStart.setBackgroundColor(this.#classLoader.Color.WHITE.value)
+    }
+
+    #drawContentView() { this.#activity.addContentView(this.#contentView, this.#contentView.getLayoutParams()) }
+    #drawMainLayout() { this.#contentView.addView(this.#mainLayout) }
+    #drawMenuStart() { this.#mainLayout.addView(this.#menuStart) }
+
+    #buildExpandedMenu() {
+        this.#menuBarLayout.addView(this.#menuBarTitle);
+        this.#menuLayout.addView(this.#menuBarLayout);
+        this.#createPanelsContainerLayout();
+        this.#menuLayout.addView(this.#panelsContainerLayout);
+        this.#createLeftPanelLayout();
+        this.#menuScrollView.addView(this.#menuScrollLayout);
+        this.#leftPanelLayout.addView(this.#menuScrollView);
+        this.#panelsContainerLayout.addView(this.#leftPanelLayout);
+        this.#createRightPanelLayout();
+        this.#panelsContainerLayout.addView(this.#rightPanelLayout);
+    }
+
+    #createOptionClickEvent(id, optionView, callbacks) {
+        const classLoader = this.#classLoader;
+        const colorOn = this.#colorOn;
+        const colorOff = this.#colorOff;
+        const self = this; 
+        const optionOnClickListener = Java.registerClass({
+            name: "com.example." + id + Date.now(),
+            implements: [classLoader.View_OnClickListener],
+            methods: {
+                onClick(p1) {
+                    if (!self.#options[id].state) {
+                        p1.setBackgroundColor(classLoader.Color.parseColor(colorOn));
+                        self.#options[id].state = true;
+                        callbacks.on();
+                    } else {
+                        p1.setBackgroundColor(classLoader.Color.parseColor(colorOff));
+                        self.#options[id].state = false;
+                        callbacks.off();
+                    }
+                }
+            }
+        });
+        optionView.setOnClickListener(optionOnClickListener.$new());
+    }
+
+    addOption(id, name, callbacks) {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+        const padding = pixelDensityToPixels(this.#activity, 5);
+        const option = this.#classLoader.TextView.$new(this.#activity);
+        const margin = pixelDensityToPixels(this.#activity, 10);
+        option.setText(this.#classLoader.String.$new(name));
+        option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+        option.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"));
+        layoutParams.setMargins(0, 0, 0, margin);
+        option.setLayoutParams(layoutParams);
+        option.setPadding(padding, padding, 0, padding);
+        this.#menuScrollLayout.addView(option);
+        this.#options[id] = { callbacks, optionView: option, state: false };
+        this.#createOptionClickEvent(id, option, callbacks);
+    }
+    
+    turnOffAllOptions() {
+        for (const id in this.#options) {
+            const optionData = this.#options[id];
+            if (optionData.state) { 
+                optionData.optionView.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+                optionData.state = false; 
+                optionData.callbacks.off();
+            }
+        }
+    }
+
+    addText(text, textSize, textColor) {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
+        const margin = pixelDensityToPixels(this.#activity, 5);
+        const textView = this.#classLoader.TextView.$new(this.#activity);
+        textView.setText(this.#classLoader.String.$new(text));
+        textView.setTextSize(textSize);
+        textView.setTextColor(this.#classLoader.Color.parseColor(textColor));
+        layoutParams.setMargins(0, 0, 0, margin);
+        textView.setLayoutParams(layoutParams);
+        this.#menuScrollLayout.addView(textView);
+    }
+    
+    addSeekBar(textValue,initialValue, minValue, maxValue, callback) {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+        const margin = pixelDensityToPixels(this.#activity,1);
+        const seekBar = this.#classLoader.SeekBar.$new(this.#activity, null, 0, Java.use("android.R$style").Widget_Holo_SeekBar.value);
+        const textView = this.#classLoader.TextView.$new(this.#activity);
+        seekBar.setMax(maxValue - minValue);
+        seekBar.setProgress(initialValue - minValue);
+        layoutParams.setMargins(0, 0, 0, margin);
+        seekBar.setLayoutParams(layoutParams);
+        const text = Java.use("java.lang.String").$new(textValue+ " "+ initialValue);
+        textView.setText(text);
+        textView.setTextColor(this.#classLoader.Color.parseColor("#EFEFEF"));
+        const SeekBarChangeListener = Java.use("android.widget.SeekBar$OnSeekBarChangeListener");
+        const SeekBarChangeListenerImplementation = Java.registerClass({
+            name: "com.example.SeekBarChangeListener" + Math.floor(Math.random() * 1000),
+            implements: [SeekBarChangeListener],
+            methods: {
+                onProgressChanged(seekBar, progress, fromUser) {
+                    const value = progress + minValue;
+                    const text = Java.use("java.lang.String").$new(textValue+" "+value);
+                    textView.setText(text);
+                    if(fromUser) callback(value,"move");
+                },
+                onStartTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "start"); },
+                onStopTrackingTouch(seekBar) { callback(seekBar.getProgress() + minValue, "end"); }
+            }
+        });
+        seekBar.setOnSeekBarChangeListener(SeekBarChangeListenerImplementation.$new());
+        this.#menuScrollLayout.addView(textView);
+        this.#menuScrollLayout.addView(seekBar);
+        textView.setLayoutParams(layoutParams);
+        textView.setGravity(this.#classLoader.Gravity.CENTER.value);
+    }
+    
+    addDirectionalButtons(title, onButtonClick) {
+        this.addText(title, 12, "#FFFFFF");
+        const buttonLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        buttonLayout.setOrientation(this.#classLoader.LinearLayout.HORIZONTAL.value);
+        buttonLayout.setGravity(this.#classLoader.Gravity.CENTER.value);
+
+        const directions = {"Cima": {x:0, y:-5}, "Baixo": {x:0, y:5}, "Esq": {x:-5, y:0}, "Dir": {x:5, y:0}};
+        for(const dirName in directions) {
+            const button = this.#classLoader.TextView.$new(this.#activity);
+            const btnLayoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
+            const margin = pixelDensityToPixels(this.#activity, 2);
+            btnLayoutParams.setMargins(margin, margin, margin, margin);
+            button.setLayoutParams(btnLayoutParams);
+            button.setText(this.#classLoader.String.$new(dirName));
+            button.setBackgroundColor(this.#classLoader.Color.parseColor("#443C68"));
+            button.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
+            const padding = pixelDensityToPixels(this.#activity, 5);
+            button.setPadding(padding, padding, padding, padding);
+            
+            const ClickListener = Java.registerClass({
+                name: "com.example.DirClick" + dirName,
+                implements: [this.#classLoader.View_OnClickListener],
+                methods: {
+                    onClick(v) { onButtonClick(directions[dirName]); }
+                }
+            });
+            button.setOnClickListener(ClickListener.$new());
+            buttonLayout.addView(button);
+        }
+        this.#menuScrollLayout.addView(buttonLayout);
+    }
+
+    updatePlayerPosition(x, y) {
+        Java.scheduleOnMainThread(() => {
+            if (this.#infoPlayerPositionTextView) {
+                const text = `Pos: \nX: ${x.toFixed(2)}\nY: ${y.toFixed(2)}`;
+                this.#infoPlayerPositionTextView.setText(this.#classLoader.String.$new(text));
+            }
+        });
+    }
+
+    #addPlayerToInfoPanel(playerData) {
+        if (this.#infoPlayerListLayout) {
+            const playerContainer = this.#classLoader.LinearLayout.$new(this.#activity);
+            playerContainer.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+            const p = pixelDensityToPixels(this.#activity, 3);
+            playerContainer.setPadding(p,p,p,p);
+            const nickTextView = this.#classLoader.TextView.$new(this.#activity);
+            let nickText = `- ${playerData.nick}`;
+            if (playerData.isAdmin) {
+                nickText += ` (ADMIN)`;
+                nickTextView.setTextColor(this.#classLoader.Color.parseColor("#FFD700"));
+            } else {
+                nickTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF"));
+            }
+            nickTextView.setText(this.#classLoader.String.$new(nickText));
+            nickTextView.setTextSize(12);
+            const accountTextView = this.#classLoader.TextView.$new(this.#activity);
+            accountTextView.setText(this.#classLoader.String.$new(`  ID: ${playerData.account || 'N/A'}`));
+            accountTextView.setTextColor(this.#classLoader.Color.parseColor("#CCCCCC"));
+            accountTextView.setTextSize(10);
+            const posTextView = this.#classLoader.TextView.$new(this.#activity);
+            const posText = `  Pos: ${playerData.x.toFixed(1)}, ${playerData.y.toFixed(1)}`;
+            posTextView.setText(this.#classLoader.String.$new(po    const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value
     const mActivities = activityThread.mActivities.value
     const activityClientRecord = Java.cast(mActivities.valueAt(0), classLoader.ActivityThread_ActivityClientRecord)
     return activityClientRecord.activity.value
@@ -623,3 +983,4 @@ function click() {
 }
 
 },5000)
+
