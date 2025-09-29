@@ -58,7 +58,8 @@ setTimeout(() => {
 
     // Classe Menu para facilitar criar e gerenciar um menu na interface usando widgets Android
     class Menu {
-        #classLoader; #activity; #MATCH_PARENT; #WRAP_CONTENT; #contentView; #mainLayout; #menuStart; #menuLayout; #menuBarLayout; #menuBarTitle; #options; #colorOn; #colorOff; #menuScrollView; #menuScrollLayout;
+        #classLoader; #activity; #MATCH_PARENT; #WRAP_CONTENT; #contentView; #mainLayout; #menuStart; #menuLayout; #menuBarLayout; #menuBarTitle; #options; #colorOn; #colorOff;
+        #panelsContainerLayout; #leftPanelLayout; #rightPanelLayout; #menuScrollView; #menuScrollLayout; #entityScrollView; #entityListLayout;
 
         constructor(classLoader, activity) {
             this.#classLoader = classLoader
@@ -111,6 +112,44 @@ setTimeout(() => {
             this.#menuBarTitle.setTextColor(this.#classLoader.Color.parseColor(color))
         }
 
+        #createPanelsContainerLayout() {
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
+            this.#panelsContainerLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#panelsContainerLayout.setLayoutParams(layoutParams);
+            this.#panelsContainerLayout.setOrientation(this.#classLoader.LinearLayout.HORIZONTAL.value);
+        }
+
+        #createLeftPanelLayout() {
+            // O peso 1.0 define a proporção do painel.
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.0);
+            this.#leftPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#leftPanelLayout.setLayoutParams(layoutParams);
+            this.#leftPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+        }
+
+        #createRightPanelLayout() {
+            // O peso 1.5 faz este painel ser 50% mais largo que o da esquerda.
+            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(0, this.#MATCH_PARENT, 1.5);
+            const padding = pixelDensityToPixels(this.#activity, 8);
+            this.#rightPanelLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#rightPanelLayout.setLayoutParams(layoutParams);
+            this.#rightPanelLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+            this.#rightPanelLayout.setPadding(padding, padding, padding, padding);
+
+            this.#entityScrollView = this.#classLoader.ScrollView.$new(this.#activity);
+            this.#entityListLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#entityListLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+            
+            const infoTitle = this.#classLoader.TextView.$new(this.#activity);
+            infoTitle.setText(this.#classLoader.String.$new("--- Entity Scanner ---"));
+            infoTitle.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
+            infoTitle.setGravity(this.#classLoader.Gravity.CENTER.value);
+
+            this.#entityListLayout.addView(infoTitle);
+            this.#entityScrollView.addView(this.#entityListLayout);
+            this.#rightPanelLayout.addView(this.#entityScrollView);
+        }
+        
         #createMenuScrollView() {
             const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
             this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity);
@@ -151,8 +190,44 @@ setTimeout(() => {
         #buildExpandedMenu() {
             this.#menuBarLayout.addView(this.#menuBarTitle);
             this.#menuLayout.addView(this.#menuBarLayout);
+            
+            this.#createPanelsContainerLayout();
+            this.#menuLayout.addView(this.#panelsContainerLayout);
+            
+            this.#createLeftPanelLayout();
             this.#menuScrollView.addView(this.#menuScrollLayout);
-            this.#menuLayout.addView(this.#menuScrollView);
+            this.#leftPanelLayout.addView(this.#menuScrollView);
+            this.#panelsContainerLayout.addView(this.#leftPanelLayout);
+
+            this.#createRightPanelLayout();
+            this.#panelsContainerLayout.addView(this.#rightPanelLayout);
+        }
+
+        #clearEntityListUI() {
+            if (this.#entityListLayout) {
+                // Guarda o título e remove todo o resto
+                const title = this.#entityListLayout.getChildAt(0);
+                this.#entityListLayout.removeAllViews();
+                this.#entityListLayout.addView(title);
+            }
+        }
+
+        #addEntityToUI(text) {
+            if (this.#entityListLayout) {
+                const entityTextView = this.#classLoader.TextView.$new(this.#activity);
+                entityTextView.setTextColor(this.#classLoader.Color.parseColor("#AED2FF"));
+                entityTextView.setText(this.#classLoader.String.$new(text));
+                this.#entityListLayout.addView(entityTextView);
+            }
+        }
+
+        updateEntityListUI(entityTexts) {
+            Java.scheduleOnMainThread(() => {
+                this.#clearEntityListUI();
+                entityTexts.forEach(text => {
+                    this.#addEntityToUI(text);
+                });
+            });
         }
 
         #createOptionClickEvent(id, optionView, callbacks) {
@@ -284,12 +359,12 @@ setTimeout(() => {
     
     // Variáveis de controle das funções
     let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false, autoOFF = false, showAdmins = false;
-    let explosionSize = 80; // Variável para controlar o tamanho da explosão, com valor padrão 80
+    let explosionSize = 80;
+    let entityScannerInterval = null;
 
     const alpha = createTString('alpha=0.5');
     const zoom = createTString('zoom=1');
-    var saveVarsToArray = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10sbidMalVNaEv"), "pointer", ["pointer"]);
-
+    
     function getPlayerProperties(p) {
         return {
             "alpha": Memory.readFloat(ptr(p.toInt32() + 356)), "zoom": Memory.readFloat(p.add(0x138)), "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)), "nick": readTString(ptr(p.toInt32() + 464)), "account": readTString(ptr(p.toInt32() + 696))
@@ -307,18 +382,14 @@ setTimeout(() => {
                 showToast("Jogador apareceu. Funções desativadas.");
             }
             if (!showAdmins) return;
-
             const playerPtr = args[0];
             const accRgx = /^(pc\:|graal\d+|guest.*)/;
             const props = getPlayerProperties(playerPtr);
-            
             if (props.alpha < 0.5) setVarValue(playerPtr, alpha);
             if (props.zoom < 1) setVarValue(playerPtr, zoom);
-            
             if (!props.account) return;
             const account = props.account.toLowerCase();
             if (account === '') return;
-            
             if (!accRgx.test(account)) {
                 showToast('Admin: ' + props.nick);
             }
@@ -350,6 +421,63 @@ setTimeout(() => {
         }
     });
 
+    // =========================================================================================
+    // == INÍCIO DA LÓGICA DO SCANNER DE ENTIDADES PARA TESTE ===================================
+    // =========================================================================================
+    
+    function scanEntities() {
+        // ---------------------------------------------------------------------------------
+        // ----> EDITE AS VARIÁVEIS ABAIXO PARA REALIZAR SEU TESTE <----
+        // ---------------------------------------------------------------------------------
+
+        // Endereço base de onde a lista de entidades começa.
+        // Exemplo: Module.findBaseAddress("libqplay.so").add(0xSEUOFFSET);
+        const baseAddress = activeplayer.add(0); // Mude aqui. Exemplo: Começar a ler do próprio player.
+
+        // Quantidade de "entidades" ou "slots" que você quer ler a partir do endereço base.
+        const entityCount = 20;
+
+        // O tamanho em bytes de cada "slot" na memória. 
+        // Se for uma lista de ponteiros, o tamanho é 4 (para 32-bit).
+        const entitySize = 4;
+
+        // ---------------------------------------------------------------------------------
+
+        let foundEntities = [];
+        try {
+            if (baseAddress.isNull()) {
+                foundEntities.push("Endereço base é nulo.");
+                if (menu) menu.updateEntityListUI(foundEntities);
+                return;
+            }
+
+            for (let i = 0; i < entityCount; i++) {
+                const currentAddress = baseAddress.add(i * entitySize);
+                
+                // ----> AQUI VOCÊ DECIDE O QUE LER <----
+                // Mude .readPointer() para .readInt(), .readFloat(), .readCString(), etc.
+                const value = currentAddress.readInt();
+                
+                // Formata o texto que será exibido.
+                const offset = "0x" + (i * entitySize).toString(16).toUpperCase();
+                const displayText = `[${offset}] -> ${value}`;
+                foundEntities.push(displayText);
+            }
+        } catch (e) {
+            foundEntities.push("Erro ao ler memória: " + e.message);
+        }
+        
+        // Atualiza a interface do menu com a lista de entidades encontradas
+        if (menu) {
+            menu.updateEntityListUI(foundEntities);
+        }
+    }
+    
+    // =========================================================================================
+    // == FIM DA LÓGICA DO SCANNER DE ENTIDADES ================================================
+    // =========================================================================================
+
+
     const call_autoFarm = {
         on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true }, 1000) },
         off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } }
@@ -364,12 +492,27 @@ setTimeout(() => {
     const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } };
     const call_showAdmins = { on() { showAdmins = true }, off() { showAdmins = false } };
 
+    const call_entityScanner = {
+        on() {
+            if (!entityScannerInterval) {
+                entityScannerInterval = setInterval(scanEntities, 1000); // Roda a cada 1 segundo
+            }
+        },
+        off() {
+            if (entityScannerInterval) {
+                clearInterval(entityScannerInterval);
+                entityScannerInterval = null;
+                if (menu) menu.updateEntityListUI([]); // Limpa a lista ao desativar
+            }
+        }
+    };
+
     Java.perform(function() {
         Java.scheduleOnMainThread(function() {
             const classLoader = getClassLoader(), mainActivity = getMainActivity(classLoader);
             menu = new Menu(classLoader, mainActivity)
             menu.createMenuStart("MENU", 15, "#006400")
-            menu.createMenuLayout("#18122B", 180, 250)
+            menu.createMenuLayout("#18122B", 420, 300) // Largura e Altura do menu
             menu.createMenuBarLayout("#635985")
             menu.createMenuBarTitle("EngModMobile", "#FFC107")
             menu.createMenuOptionsLayout("#443C68", "#393053")
@@ -389,6 +532,10 @@ setTimeout(() => {
             menu.addOption("showAdmins", "Show Admins", call_showAdmins)
             menu.addOption("autoOFF", "Auto Off", call_autoOFF)
             menu.addOption("antiAfk", "Anti AFK", call_antiAfk)
+            
+            menu.addText("--- Testes ---", 12, "#FFC107")
+            menu.addOption("entityScanner", "Test: Scan Entidades", call_entityScanner)
+
             menu.start()
         })
     })
