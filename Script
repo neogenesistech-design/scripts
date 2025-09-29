@@ -1,6 +1,8 @@
 setTimeout(()=>{
+// Função malloc para alocar memória nativa (libc)
 var malloc = getFunc("libc.so", "malloc", "pointer", ["int"])
 
+// Carrega classes Android necessárias para UI e eventos
 function getClassLoader() {
     return {
         Gravity: Java.use("android.view.Gravity"),
@@ -20,11 +22,13 @@ function getClassLoader() {
     };
 }
 
+// Converte dp para pixels
 function pixelDensityToPixels(context, dp) {
     const density = context.getResources().getDisplayMetrics().density.value;
     return parseInt(dp * density);
 }
 
+// Obtém Activity principal em execução
 function getMainActivity(classLoader) {
     const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
     const mActivities = activityThread.mActivities.value;
@@ -32,6 +36,7 @@ function getMainActivity(classLoader) {
     return activityClientRecord.activity.value;
 }
 
+// Exibe Toast na UI
 function showToast(text, time = 1) {
   Java.perform(() => {
     Java.scheduleOnMainThread(() => {
@@ -42,6 +47,7 @@ function showToast(text, time = 1) {
   });
 }
 
+// Classe Menu que cria menu completo
 class Menu {
   constructor(classLoader, activity) {
     this.classLoader = classLoader;
@@ -58,11 +64,9 @@ class Menu {
 
   createContentView() {
     this.contentView = this.classLoader.LinearLayout.$new(this.activity);
-    // Layout pai horizontal para o menu principal e secundário lado a lado
-    const params = this.classLoader.LinearLayout_LayoutParams.$new(this.MATCH_PARENT, this.MATCH_PARENT);
-    this.contentView.setLayoutParams(params);
+    this.contentView.setLayoutParams(this.classLoader.LinearLayout_LayoutParams.$new(this.MATCH_PARENT, this.MATCH_PARENT));
     this.contentView.setGravity(this.classLoader.Gravity.CENTER.value);
-    this.contentView.setOrientation(this.contentView.HORIZONTAL.value);
+    this.contentView.setOrientation(this.contentView.HORIZONTAL.value); // Agora horizontal para 2 menus lado a lado
     this.contentView.setBackgroundColor(this.classLoader.Color.TRANSPARENT.value);
   }
 
@@ -109,6 +113,15 @@ class Menu {
     this.menuStart.setTextSize(size);
     this.menuStart.setTextColor(this.classLoader.Color.parseColor(color));
     this.menuStart.setBackgroundColor(this.classLoader.Color.WHITE.value);
+  }
+
+  createMenuLayout(color, size) {
+    const sizePx = pixelDensityToPixels(this.activity, size);
+    const params = this.classLoader.LinearLayout_LayoutParams.$new(sizePx, sizePx);
+    this.menuLayout = this.classLoader.LinearLayout.$new(this.activity);
+    this.menuLayout.setLayoutParams(params);
+    this.menuLayout.setBackgroundColor(this.classLoader.Color.parseColor(color));
+    this.menuLayout.setOrientation(this.menuLayout.VERTICAL.value);
   }
 
   createMenuBarLayout(color) {
@@ -209,7 +222,7 @@ class Menu {
 
   turnOffAllOptions() {
     for (const id in this.options) {
-      const {callbacks, optionView} = this.options[id];
+      const { callbacks, optionView } = this.options[id];
       optionView.setBackgroundColor(this.classLoader.Color.parseColor(this.colorOff));
       callbacks.off();
     }
@@ -217,16 +230,14 @@ class Menu {
 
   createMainLayoutEvent() {
     const mainLayout = this.mainLayout;
+    const menuLayout = this.menuScrollLayout;
+    const menuStart = this.menuStart;
+    const classLoader = this.classLoader;
     let initialX = 0,
       initialY = 0,
       isMove = false,
       isMenuLayout = false,
       initialTouchTime = 0;
-
-    const classLoader = this.classLoader;
-    const menuLayout = this.menuScrollLayout;
-    const menuStart = this.menuStart;
-
     const MainLayoutOnTouchListener = Java.registerClass({
       name: "com.example.MainLayoutEvent",
       implements: [classLoader.View_OnTouchListener],
@@ -275,6 +286,16 @@ class Menu {
     this.mainLayout.setOnTouchListener(MainLayoutOnTouchListener.$new());
   }
 
+  showMenu() {
+    this.menuLayout.setVisibility(0); // Mostrar menu expandido
+    this.menuStart.setVisibility(8); // Esconder botão minimizado
+  }
+
+  hideMenu() {
+    this.menuLayout.setVisibility(8); // Esconder menu expandido
+    this.menuStart.setVisibility(0); // Mostrar botão minimizado
+  }
+
   start() {
     this.drawContentView();
     this.drawMainLayout();
@@ -284,131 +305,114 @@ class Menu {
     this.drawMenuBarTitle();
     this.drawMenuOptions();
     this.createMainLayoutEvent();
-  }
-
-  hideMenu() {
-    if (this.menuLayout !== null && this.menuStart !== null) {
-      this.menuLayout.setVisibility(8); // View.GONE
-      this.menuStart.setVisibility(0); // View.VISIBLE
-    }
-  }
-
-  showMenu() {
-    if (this.menuLayout !== null && this.menuStart !== null) {
-      this.menuLayout.setVisibility(0); // View.VISIBLE
-      this.menuStart.setVisibility(8); // View.GONE
-    }
+    this.hideMenu();
   }
 }
 
-// Menu adicional, idêntico mas vazio para aparecer ao lado e sincronizado
+// Classe para menu secundário, mesma estrutura base mas sem opções
 class SecondMenu {
-  constructor(classLoader, activity){
+  constructor(classLoader, activity) {
     this.classLoader = classLoader;
     this.activity = activity;
     this.MATCH_PARENT = classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value;
     this.WRAP_CONTENT = classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value;
-
     this.createContentView();
     this.createMainLayout();
   }
 
-  createContentView(){
+  createContentView() {
     this.contentView = this.classLoader.LinearLayout.$new(this.activity);
-    const params = this.classLoader.LinearLayout_LayoutParams.$new(this.MATCH_PARENT, this.MATCH_PARENT);
-    this.contentView.setLayoutParams(params);
+    this.contentView.setLayoutParams(this.classLoader.LinearLayout_LayoutParams.$new(this.MATCH_PARENT, this.MATCH_PARENT));
     this.contentView.setGravity(this.classLoader.Gravity.CENTER.value);
+    this.contentView.setOrientation(this.contentView.VERTICAL.value);
     this.contentView.setBackgroundColor(this.classLoader.Color.TRANSPARENT.value);
   }
 
-  createMainLayout(){
-    const params = this.classLoader.LinearLayout_LayoutParams.$new(this.WRAP_CONTENT, this.WRAP_CONTENT);
+  createMainLayout() {
     this.mainLayout = this.classLoader.LinearLayout.$new(this.activity);
-    this.mainLayout.setLayoutParams(params);
+    this.mainLayout.setLayoutParams(this.classLoader.LinearLayout_LayoutParams.$new(this.WRAP_CONTENT, this.WRAP_CONTENT));
+    this.mainLayout.setOrientation(this.mainLayout.VERTICAL.value);
   }
 
-  createMenuStart(title, size, color){
+  createMenuStart(title, size, color) {
     size = pixelDensityToPixels(this.activity, size);
-    const params = this.classLoader.LinearLayout_LayoutParams.$new(this.WRAP_CONTENT, this.WRAP_CONTENT);
     this.menuStart = this.classLoader.TextView.$new(this.activity);
-    this.menuStart.setLayoutParams(params);
+    this.menuStart.setLayoutParams(this.classLoader.LinearLayout_LayoutParams.$new(this.WRAP_CONTENT, this.WRAP_CONTENT));
     this.menuStart.setText(this.classLoader.String.$new(title));
     this.menuStart.setTextSize(size);
     this.menuStart.setTextColor(this.classLoader.Color.parseColor(color));
     this.menuStart.setBackgroundColor(this.classLoader.Color.WHITE.value);
   }
 
-  createMenuLayout(color, size){
+  createMenuLayout(color, size) {
     const sizePx = pixelDensityToPixels(this.activity, size);
-    const params = this.classLoader.LinearLayout_LayoutParams.$new(sizePx, sizePx);
     this.menuLayout = this.classLoader.LinearLayout.$new(this.activity);
-    this.menuLayout.setLayoutParams(params);
+    this.menuLayout.setLayoutParams(this.classLoader.LinearLayout_LayoutParams.$new(sizePx, sizePx));
     this.menuLayout.setBackgroundColor(this.classLoader.Color.parseColor(color));
     this.menuLayout.setOrientation(this.menuLayout.VERTICAL.value);
   }
 
-  createMenuBarLayout(color){
+  createMenuBarLayout(color) {
     const padding = pixelDensityToPixels(this.activity, 10);
-    const params = this.classLoader.LinearLayout_LayoutParams.$new(this.MATCH_PARENT, this.WRAP_CONTENT);
     this.menuBarLayout = this.classLoader.LinearLayout.$new(this.activity);
-    this.menuBarLayout.setLayoutParams(params);
+    this.menuBarLayout.setLayoutParams(this.classLoader.LinearLayout_LayoutParams.$new(this.MATCH_PARENT, this.WRAP_CONTENT));
     this.menuBarLayout.setBackgroundColor(this.classLoader.Color.parseColor(color));
     this.menuBarLayout.setPadding(padding, padding, 0, padding);
   }
 
-  createMenuBarTitle(title, color){
-    const params = this.classLoader.LinearLayout_LayoutParams.$new(this.WRAP_CONTENT, this.WRAP_CONTENT);
+  createMenuBarTitle(title, color) {
     this.menuBarTitle = this.classLoader.TextView.$new(this.activity);
-    this.menuBarTitle.setLayoutParams(params);
+    this.menuBarTitle.setLayoutParams(this.classLoader.LinearLayout_LayoutParams.$new(this.WRAP_CONTENT, this.WRAP_CONTENT));
     this.menuBarTitle.setText(this.classLoader.String.$new(title));
     this.menuBarTitle.setTextColor(this.classLoader.Color.parseColor(color));
   }
 
-  drawContentView(){
+  drawContentView() {
     this.activity.addContentView(this.contentView, this.contentView.getLayoutParams());
   }
-  drawMainLayout(){
+
+  drawMainLayout() {
     this.contentView.addView(this.mainLayout);
   }
-  drawMenuStart(){
+
+  drawMenuStart() {
     this.mainLayout.addView(this.menuStart);
   }
-  drawMenuLayout(){
+
+  drawMenuLayout() {
     this.mainLayout.addView(this.menuLayout);
   }
-  drawMenuBarLayout(){
+
+  drawMenuBarLayout() {
     this.menuLayout.addView(this.menuBarLayout);
   }
-  drawMenuBarTitle(){
+
+  drawMenuBarTitle() {
     this.menuBarLayout.addView(this.menuBarTitle);
   }
 
-  start(){
+  showMenu() {
+    this.menuLayout.setVisibility(0);
+    this.menuStart.setVisibility(8);
+  }
+
+  hideMenu() {
+    this.menuLayout.setVisibility(8);
+    this.menuStart.setVisibility(0);
+  }
+
+  start() {
     this.drawContentView();
     this.drawMainLayout();
     this.drawMenuStart();
+    this.drawMenuLayout();
     this.drawMenuBarLayout();
     this.drawMenuBarTitle();
-
-    // Inicialmente esconde o menu expandido e mostra botão minimizado
     this.hideMenu();
-  }
-
-  hideMenu(){
-    if(this.menuLayout && this.menuStart){
-      this.menuLayout.setVisibility(8); // GONE
-      this.menuStart.setVisibility(0);   // VISIBLE
-    }
-  }
-  showMenu(){
-    if(this.menuLayout && this.menuStart){
-      this.menuLayout.setVisibility(0); // VISIBLE
-      this.menuStart.setVisibility(8);  // GONE
-    }
   }
 }
 
-// Controlador que sincroniza a visibilidade dos dois menus
+// Controlador para abrir/fechar os dois menus sincronizados
 class DualMenuController {
   constructor(primaryMenu, secondaryMenu) {
     this.primaryMenu = primaryMenu;
@@ -418,7 +422,7 @@ class DualMenuController {
   }
 
   setupToggleOnMenuClick() {
-    const primaryMinimized = this.primaryMenu.menuStart; // botão do menu principal
+    const primaryMinimized = this.primaryMenu.menuStart;
     const self = this;
 
     const classLoader = this.primaryMenu.classLoader;
@@ -446,42 +450,107 @@ class DualMenuController {
   start() {
     this.primaryMenu.start();
     this.secondaryMenu.start();
-    this.secondaryMenu.hideMenu();
+    this.secondaryMenu.hideMenu(); // secundário começa minimizado
   }
 }
 
-// Instancia menus e controlador na UI thread
+let menuController = null;
+
+// Variáveis do jogo (mantenha suas definidas)
+
+// Chamar no início da thread principal para criar menus e controlar
 Java.perform(() => {
   Java.scheduleOnMainThread(() => {
-    const classLoader = getClassLoader()
-    const mainActivity = getMainActivity(classLoader)
+    const classLoader = getClassLoader();
+    const mainActivity = getMainActivity(classLoader);
 
-    // Menu principal com opções
-    const primaryMenu = new Menu(classLoader, mainActivity)
-    primaryMenu.createMenuStart("MENU", 15, "#006400")
-    primaryMenu.createMenuLayout("#18122B", 180)
-    primaryMenu.createMenuBarLayout("#635985")
-    primaryMenu.createMenuBarTitle("EngModMobile", "#FFC107")
-    primaryMenu.createMenuOptionsLayout("#443C68", "#393053")
-    primaryMenu.addOption("antiAfk","Anti AFK",call_antiAfk)
-    primaryMenu.addOption("autoOFF", "auto Off", call_autoOFF)
-    primaryMenu.addOption("showAdmins", "Show admins", call_showAdmins)
-    primaryMenu.addOption("autoFarm", "Auto Farm", call_autoFarm)
-    primaryMenu.addOption("unhit", "unhit", call_unhit)
-    primaryMenu.addOption("wallhack", "Wallhack", call_wallhack)
+    const primaryMenu = new Menu(classLoader, mainActivity);
+    primaryMenu.createMenuStart("MENU", 15, "#006400");
+    primaryMenu.createMenuLayout("#18122B", 180);
+    primaryMenu.createMenuBarLayout("#635985");
+    primaryMenu.createMenuBarTitle("EngModMobile", "#FFC107");
+    primaryMenu.createMenuOptionsLayout("#443C68", "#393053");
+    primaryMenu.addOption("antiAfk", "Anti AFK", call_antiAfk);
+    primaryMenu.addOption("autoOFF", "auto Off", call_autoOFF);
+    primaryMenu.addOption("showAdmins", "Show admins", call_showAdmins);
+    primaryMenu.addOption("autoFarm", "Auto Farm", call_autoFarm);
+    primaryMenu.addOption("unhit", "unhit", call_unhit);
+    primaryMenu.addOption("wallhack", "Wallhack", call_wallhack);
 
-    // Menu secundário vazio
-    const secondaryMenu = new SecondMenu(classLoader, mainActivity)
-    secondaryMenu.createMenuStart("MENU 2", 15, "#006400")
-    secondaryMenu.createMenuLayout("#18122B", 180)
-    secondaryMenu.createMenuBarLayout("#635985")
-    secondaryMenu.createMenuBarTitle("EngModMobile 2", "#FFC107")
+    const secondaryMenu = new SecondMenu(classLoader, mainActivity);
+    secondaryMenu.createMenuStart("MENU 2", 15, "#006400");
+    secondaryMenu.createMenuLayout("#18122B", 180);
+    secondaryMenu.createMenuBarLayout("#635985");
+    secondaryMenu.createMenuBarTitle("EngModMobile 2", "#FFC107");
 
-    // Controlador sincroniza visibilidade dos dois menus
-    const controller = new DualMenuController(primaryMenu, secondaryMenu)
-    controller.start()
-  })
-})
+    menuController = new DualMenuController(primaryMenu, secondaryMenu);
+    menuController.start();
+  });
+});
+
+// Callback originais
+const call_showAdmins = {
+  on() {
+    showAdmins = true;
+  },
+  off() {
+    showAdmins = false;
+  }
+};
+const call_autoFarm = {
+  on() {
+    if (!explosionsInterval) {
+      explosionsInterval = setInterval(() => {
+        canExplode = true;
+      }, 1000);
+    }
+  },
+  off() {
+    if (explosionsInterval != null) {
+      clearInterval(explosionsInterval);
+      explosionsInterval = null;
+      canExplode = false;
+    }
+  }
+};
+let afkInterval = null;
+const call_antiAfk = {
+  on() {
+    if (!afkInterval) {
+      afkInterval = setInterval(click, 240 * 1000);
+    }
+  },
+  off() {
+    if (afkInterval != null) {
+      clearInterval(afkInterval);
+      afkInterval = null;
+    }
+  }
+};
+const call_unhit = {
+  on() {
+    unhit = true;
+  },
+  off() {
+    unhit = false;
+  }
+};
+const call_autoOFF = {
+  on() {
+    autoOFF = true;
+  },
+  off() {
+    autoOFF = false;
+  }
+};
+const call_wallhack = {
+  on() {
+    wallhack = true;
+  },
+  off() {
+    wallhack = false;
+  }
+};
 
 Java.perform(function () {
     Java.scheduleOnMainThread(function () {
@@ -565,4 +634,4 @@ function click() {
     });
 }
 
-}, 5000)
+}, 5000);
