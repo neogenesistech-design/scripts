@@ -1,6 +1,6 @@
 setTimeout(() => {
     // ===================================================================================
-    // SCRIPT-MODELO v11 - LAYOUT RETRÁTIL SIMPLIFICADO E CORRIGIDO
+    // SCRIPT-MODELO v12 - Adicionado Bloqueio de Contagem de Itens
     // ===================================================================================
 
     function getClassLoader() {
@@ -14,7 +14,7 @@ setTimeout(() => {
             View_OnClickListener: Java.use("android.view.View$OnClickListener"),
             String: Java.use("java.lang.String"),
             ScrollView: Java.use("android.widget.ScrollView"),
-            View: Java.use("android.view.View"), // NOVO: Necessário para controlar visibilidade
+            View: Java.use("android.view.View"),
         };
     }
 
@@ -34,7 +34,7 @@ setTimeout(() => {
         #classLoader; #activity;
         #menuLayout; #controlContainer; #logContainer; #logScrollView;
         #colorOn; #colorOff;
-        #isExpanded = true; // NOVO: Controla o estado do menu
+        #isExpanded = true;
 
         constructor(classLoader, activity, title, width, bgColor) {
             this.#classLoader = classLoader;
@@ -44,7 +44,7 @@ setTimeout(() => {
 
         #createStaticLayout(title, width, bgColor) {
             const MATCH = -1;
-            const WRAP = -2; // Constante para WRAP_CONTENT
+            const WRAP = -2;
             const widthDp = pixelDensityToPixels(this.#activity, width);
 
             const rootView = this.#classLoader.LinearLayout.$new(this.#activity);
@@ -53,7 +53,6 @@ setTimeout(() => {
             this.rootView = rootView;
 
             this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            // ALTERADO: A altura agora é WRAP_CONTENT para permitir que o menu encolha
             const menuParams = this.#classLoader.LinearLayout_LayoutParams.$new(widthDp, WRAP);
             this.#menuLayout.setLayoutParams(menuParams);
             this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(bgColor));
@@ -62,7 +61,7 @@ setTimeout(() => {
             const menuBarLayout = this.#classLoader.TextView.$new(this.#activity);
             menuBarLayout.setText(this.#classLoader.String.$new(title));
             menuBarLayout.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
-            menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor("#B3635985")); // Cor semi-transparente
+            menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor("#B3635985"));
             menuBarLayout.setGravity(this.#classLoader.Gravity.CENTER.value);
             menuBarLayout.setPadding(10, 10, 10, 10);
             this.#menuLayout.addView(menuBarLayout);
@@ -73,15 +72,14 @@ setTimeout(() => {
             this.#menuLayout.addView(this.#controlContainer);
 
             this.#logScrollView = this.#classLoader.ScrollView.$new(this.#activity);
-            this.#logScrollView.setLayoutParams(this.#classLoader.LinearLayout_LayoutParams.$new(MATCH, pixelDensityToPixels(this.#activity, 300))); // Altura fixa para o scroll
+            this.#logScrollView.setLayoutParams(this.#classLoader.LinearLayout_LayoutParams.$new(MATCH, pixelDensityToPixels(this.#activity, 300)));
             this.#logContainer = this.#classLoader.LinearLayout.$new(this.#activity);
             this.#logContainer.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
             this.#logContainer.setPadding(8, 8, 8, 8);
             this.#logScrollView.addView(this.#logContainer);
             this.#menuLayout.addView(this.#logScrollView);
 
-            // NOVO: Listener de clique para recolher/expandir
-            const self = this; // Captura o 'this' da classe Menu
+            const self = this;
             const View = this.#classLoader.View;
             menuBarLayout.setOnClickListener(Java.registerClass({
                 name: "com.logger.ToggleClickListener" + Math.random().toString().replace(".", ""),
@@ -90,7 +88,6 @@ setTimeout(() => {
                     onClick(v) {
                         self.#isExpanded = !self.#isExpanded;
                         const visibility = self.#isExpanded ? View.VISIBLE.value : View.GONE.value;
-                        // Aplica a visibilidade aos containers de conteúdo
                         self.#controlContainer.setVisibility(visibility);
                         self.#logScrollView.setVisibility(visibility);
                     }
@@ -100,9 +97,9 @@ setTimeout(() => {
             this.rootView.addView(this.#menuLayout);
         }
 
-        // O restante dos métodos (addOption, addButton, etc.) permanece igual
         setOptionColors(colorOn, colorOff) { this.#colorOn = colorOn; this.#colorOff = colorOff; }
-        addOption(id, name, callbacks) { /* ...código inalterado... */ 
+
+        addOption(id, name, callbacks) {
             const option = this.#classLoader.TextView.$new(this.#activity);
             option.setText(this.#classLoader.String.$new(name));
             option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
@@ -126,7 +123,8 @@ setTimeout(() => {
             }).$new());
             this.#controlContainer.addView(option);
         }
-        addButton(text, callback) { /* ...código inalterado... */ 
+
+        addButton(text, callback) {
             const button = this.#classLoader.TextView.$new(this.#activity);
             button.setText(this.#classLoader.String.$new(text));
             button.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
@@ -143,59 +141,92 @@ setTimeout(() => {
             }).$new());
             this.#controlContainer.addView(button);
         }
-        addLog(text) { /* ...código inalterado... */ 
-            const logEntry = this.#classLoader.TextView.$new(this.#activity);
-            logEntry.setText(this.#classLoader.String.$new(text));
-            logEntry.setTextColor(this.#classLoader.Color.parseColor("#00FF00"));
-            this.#logContainer.addView(logEntry);
-            this.#logScrollView.post(Java.registerClass({
-                name: "com.logger.Scroll" + Math.random().toString().replace(".", ""),
-                implements: [Java.use("java.lang.Runnable")],
-                methods: { run: () => { this.#logScrollView.fullScroll(130); } }
-            }).$new());
+
+        addLog(text) {
+            Java.scheduleOnMainThread(() => {
+                const logEntry = this.#classLoader.TextView.$new(this.#activity);
+                logEntry.setText(this.#classLoader.String.$new(text));
+                logEntry.setTextColor(this.#classLoader.Color.parseColor("#00FF00")); // Verde para logs
+                this.#logContainer.addView(logEntry, 0); // Adiciona no topo
+                if (this.#logContainer.getChildCount() > 50) { // Limita o log a 50 entradas
+                    this.#logContainer.removeViewAt(50);
+                }
+            });
         }
+        
         clearLog() { this.#logContainer.removeAllViews(); }
         start() { this.#activity.addContentView(this.rootView, this.rootView.getLayoutParams()); }
     }
 
     let menu = null;
     let isHookEnabled = false;
+    let infiniteItems = false; // NOVO: Flag para controlar a nova função
 
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
-    const targetFunction = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw";
-    const argumentCount = 8;
+    const targetFunctionLog = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw"; // Função para logar (pode ser a mesma)
+    const targetFunctionBlock = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw"; // Função para bloquear (a do "contabilizador")
+    const argumentCount = 2; // Ajuste conforme necessário
     // ----------------------
 
+    // NOVO: Ponteiro para a função original do "contabilizador"
+    let originalItemCounterFunc = null;
+
     Java.perform(function () {
-        try { /* ...código de hook inalterado... */
-            const targetPointer = Module.findExportByName(targetLib, targetFunction);
-            if (targetPointer) {
-                Interceptor.attach(targetPointer, {
+        // Hook de Log (para observação)
+        try {
+            const targetPointerLog = Module.findExportByName(targetLib, targetFunctionLog);
+            if (targetPointerLog) {
+                Interceptor.attach(targetPointerLog, {
                     onEnter: function (args) {
                         if (!isHookEnabled || !menu) return;
-                        let logMessage = `[+] Chamada: ${targetFunction.slice(0, 20)}...\n`;
+                        let logMessage = `[+] Chamada: ${targetFunctionLog.slice(0, 20)}...\n`;
                         for (let i = 0; i < argumentCount; i++) { logMessage += `  -> Arg[${i}]: ${args[i]}\n`; }
-                        Java.scheduleOnMainThread(() => { menu.addLog(logMessage); });
+                        menu.addLog(logMessage);
                     }
                 });
-            } else { console.error(`[!] Erro: Função ${targetFunction} não encontrada em ${targetLib}.`); }
-        } catch (error) { console.error(`[!] Erro ao hookar função: ${error.message}`); }
+            } else { console.error(`[!] Erro de Log: Função ${targetFunctionLog} não encontrada.`); }
+        } catch (error) { console.error(`[!] Erro ao hookar função de log: ${error.message}`); }
+
+        // Hook de Bloqueio (para "Itens Infinitos")
+        try {
+            const targetPointerBlock = Module.findExportByName(targetLib, targetFunctionBlock);
+            if (targetPointerBlock) {
+                // Guarda a função original
+                originalItemCounterFunc = new NativeFunction(targetPointerBlock, 'void', ['pointer', 'pointer']);
+                
+                // Substitui a função
+                Interceptor.replace(targetPointerBlock, new NativeCallback((arg0, arg1) => {
+                    if (infiniteItems) {
+                        if (menu) menu.addLog("[!] Bloqueada contagem de item!");
+                        return; // Simplesmente retorna, impedindo a execução original
+                    }
+                    // Se a função estiver desativada, chama a lógica original do jogo
+                    originalItemCounterFunc(arg0, arg1);
+                }, 'void', ['pointer', 'pointer']));
+
+            } else { console.error(`[!] Erro de Bloqueio: Função ${targetFunctionBlock} não encontrada.`); }
+        } catch (error) { console.error(`[!] Erro ao hookar função de bloqueio: ${error.message}`); }
 
         Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
             const mainActivity = getMainActivity(classLoader);
             
-            // Usando cores semi-transparentes
-            menu = new Menu(classLoader, mainActivity, "Frida Logger", 280, "#B318122B"); 
+            menu = new Menu(classLoader, mainActivity, "Frida Logger", 280, "#B318122B");  
             menu.setOptionColors("#B3443C68", "#B3393053");
 
             const call_toggleHook = {
-                on() { isHookEnabled = true; menu.addLog("Hook ATIVADO."); },
-                off() { isHookEnabled = false; menu.addLog("Hook DESATIVADO."); }
+                on() { isHookEnabled = true; menu.addLog("Hook de Log ATIVADO."); },
+                off() { isHookEnabled = false; menu.addLog("Hook de Log DESATIVADO."); }
             };
 
-            menu.addOption("toggleHook", "Ligar/Desligar Hook", call_toggleHook);
+            const call_infiniteItems = { // NOVO
+                on() { infiniteItems = true; menu.addLog("Itens Infinitos ATIVADO."); },
+                off() { infiniteItems = false; menu.addLog("Itens Infinitos DESATIVADO."); }
+            };
+
+            menu.addOption("toggleHook", "Ligar/Desligar Log", call_toggleHook);
+            menu.addOption("infiniteItems", "Itens Infinitos", call_infiniteItems); // NOVO
             menu.addButton("Limpar Log", () => { menu.clearLog(); });
 
             menu.start();
