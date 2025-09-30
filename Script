@@ -123,7 +123,7 @@ setTimeout(() => {
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), { onEnter: function(args) { if (!canExplode) return; canExplode = false; makeExplosion(args[0], explosionRadius); } });
     function makeExplosion(level, radius) { if (!level) return; const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); const offset = Math.floor(radius / 2); for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } }
     const call_showAdmins = { on() { showAdmins = true; }, off() { showAdmins = false; } };
-    const call_explode = { on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 1000); }, off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } };
+    const call_explode = { on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 120); }, off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } };
     const call_antiAfk = { on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); }, off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } } };
     const call_unhit = { on() { unhit = true; }, off() { unhit = false; } };
     const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; }, off() { autoOFF = false; } };
@@ -293,6 +293,7 @@ setTimeout(() => {
     function readTString(str) { if (!str.isNull() && parseInt(str) != 0) { var pstr = str.readPointer(); if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } } return ""; }
     function click() { Java.perform(() => Java.scheduleOnMainThread(() => { let time = Java.use("android.os.SystemClock").uptimeMillis(); let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0); getMainActivity(getClassLoader()).dispatchTouchEvent(event); })); }
 }, 15000);
+
 
 
 
