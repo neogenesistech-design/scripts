@@ -2,8 +2,9 @@ setTimeout(() => {
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
     // ===================================================================================
-    // SCRIPT COMPLETO v12 - TRADUTOR MULTITIPO (INT, FLOAT, STRING)
-    // O layout fixo é mantido, mas a função de inspeção agora é muito mais poderosa.
+    // SCRIPT COMPLETO v17 - LAYOUT FIXO COM TRADUTOR INTELIGENTE
+    // Interface: Painel fixo no canto da tela, comprovadamente funcional.
+    // Lógica: "Tradução" dos argumentos da função para valores legíveis (Float, Int, Ptr).
     // ===================================================================================
 
     function getClassLoader() {
@@ -31,12 +32,10 @@ setTimeout(() => {
         return parseInt(dp * density);
     }
 
-    // --- Variáveis Globais ---
     let logContainer = null;
     let logScrollView = null;
     let isHookEnabled = false;
 
-    // --- Funções de Controle da UI ---
     function addLog(text) {
         Java.scheduleOnMainThread(() => {
             if (!logContainer) return;
@@ -64,47 +63,44 @@ setTimeout(() => {
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
     const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
+    const argumentCount = 6;
     // ----------------------
 
-    // --- FUNÇÃO DE INSPEÇÃO DE MEMÓRIA (VERSÃO MELHORADA) ---
-    function inspectPointer(basePtr) {
-        if (!basePtr || basePtr.isNull()) return "Ponteiro nulo.\n";
-
-        let result = `\n--- Inspecionando Ptr: ${basePtr} ---\n`;
-        try {
-            for (let i = 0; i < 256; i += 4) { // Inspeciona os primeiros 256 bytes
-                const currentPtr = basePtr.add(i);
-                let interpretations = [];
-
-                // Heurística 1: Tenta ler como Inteiro
-                const intVal = currentPtr.readInt();
-                if (Math.abs(intVal) > 0 && Math.abs(intVal) < 50000) { // É um número "razoável"?
-                    interpretations.push(`Int: ${intVal}`);
-                }
-
-                // Heurística 2: Tenta ler como Float
-                const floatVal = currentPtr.readFloat();
-                if (Math.abs(floatVal) > 0.01 && Math.abs(floatVal) < 50000) { // É um float "razoável"?
-                    interpretations.push(`Float: ${floatVal.toFixed(2)}`);
-                }
-
-                // Heurística 3: Tenta ler como Ponteiro para String
-                try {
-                    const str = currentPtr.readPointer().readCString(50);
-                    if (str && str.length > 2 && /^[a-zA-Z0-9\s_.-]+$/.test(str)) {
-                        interpretations.push(`Ptr -> String: "${str}"`);
-                    }
-                } catch (e) {}
-                
-                // Se encontrou alguma interpretação provável, mostra no log
-                if (interpretations.length > 0) {
-                    result += `  Offset +0x${i.toString(16)}: ${interpretations.join(' | ')}\n`;
-                }
-            }
-        } catch (e) {
-            result += `  [!] Falha ao ler memória em ${basePtr}\n`;
+    // --- FUNÇÃO DE TRADUÇÃO HÍBRIDA ---
+    function translateArgument(argPtr) {
+        if (argPtr.isNull()) {
+            return "Ponteiro Nulo (0x0)";
         }
-        return result + "--- Fim da Inspeção ---\n";
+    
+        try {
+            // Prioridade 1: É um ponteiro para uma String?
+            const str = argPtr.readCString(50);
+            if (str && str.length > 2 && /^[a-zA-Z0-9\s_.-]+$/.test(str)) {
+                return `String: "${str}"`;
+            }
+        } catch (e) {}
+
+        // Para ler como Float ou Int, precisamos do valor bruto, não do ponteiro para o ponteiro
+        const intVal = argPtr.toInt32();
+        
+        // Prioridade 2: É um Float "razoável"?
+        // Esta é uma heurística: checamos se o padrão de bits corresponde a um float comum.
+        const floatVal = argPtr.readFloat();
+        if (Math.abs(floatVal) > 0.001 && Math.abs(floatVal) < 100000) {
+            return `Float: ${floatVal.toFixed(4)}`;
+        }
+
+        // Prioridade 3: É um Inteiro "razoável"?
+        if (Math.abs(intVal) > 0 && Math.abs(intVal) < 100000) {
+            return `Inteiro: ${intVal}`;
+        }
+        
+        // Último Recurso: É um ponteiro para outro objeto
+        if (intVal !== 0) {
+             return `Ponteiro -> ${argPtr}`;
+        }
+
+        return "0"; // Se for 0
     }
 
     Java.perform(() => {
@@ -113,16 +109,15 @@ setTimeout(() => {
             Interceptor.attach(targetPointer, {
                 onEnter: function(args) {
                     if (!isHookEnabled) return;
-                    
-                    const attackerPtr = args[4];
 
-                    // Adiciona a informação básica primeiro
-                    addLog(`[+] Chamada Recebida\n  -> Player Ptr: ${args[0]}\n  -> Attacker Ptr: ${attackerPtr}`);
-                    
-                    // Inspeciona o ponteiro do atacante para "traduzir" seus dados
-                    if (attackerPtr && !attackerPtr.isNull()) {
-                        addLog(inspectPointer(attackerPtr));
+                    let logMessage = `[+] Chamada Recebida\n`;
+                    for (let i = 0; i < argumentCount; i++) {
+                        const originalValue = args[i];
+                        const translatedValue = translateArgument(originalValue);
+                        logMessage += `  Arg[${i}]: ${originalValue} => ${translatedValue}\n`;
                     }
+                    
+                    addLog(logMessage);
                 }
             });
         } catch (error) { console.error(`[!] Erro ao hookar: ${error.message}`); }
@@ -151,15 +146,9 @@ setTimeout(() => {
                 name: "com.logger.ToggleClick", implements: [classLoader.View_OnClickListener],
                 methods: { onClick(v) {
                     isHookEnabled = !isHookEnabled;
-                    if (isHookEnabled) {
-                        v.setText(classLoader.String.$new("Desligar Hook"));
-                        v.setBackgroundColor(classLoader.Color.parseColor("#80FF0000"));
-                        addLog("Hook ATIVADO.");
-                    } else {
-                        v.setText(classLoader.String.$new("Ligar Hook"));
-                        v.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
-                        addLog("Hook DESATIVADO.");
-                    }
+                    v.setText(classLoader.String.$new(isHookEnabled ? "Desligar Hook" : "Ligar Hook"));
+                    v.setBackgroundColor(classLoader.Color.parseColor(isHookEnabled ? "#80FF0000" : "#80555555"));
+                    addLog(`Hook ${isHookEnabled ? "ATIVADO" : "DESATIVADO"}.`);
                 }}
             }).$new());
             controlPanel.addView(toggleButton);
@@ -179,7 +168,7 @@ setTimeout(() => {
             controlPanel.addView(clearButton);
 
             logScrollView = classLoader.ScrollView.$new(mainActivity);
-            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 250), pixelDensityToPixels(mainActivity, 200));
+            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 300), pixelDensityToPixels(mainActivity, 200));
             scrollParams.setMargins(PADDING, 0, 0, 0);
             logScrollView.setLayoutParams(scrollParams);
             
