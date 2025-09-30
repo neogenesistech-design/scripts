@@ -1,19 +1,9 @@
 setTimeout(() => {
-    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
-
     // ===================================================================================
-    // SCRIPT COMPLETO v28 - LOGGER ESTÁTICO E CONFIÁVEL
-    // Retornamos ao formato mais simples e estável (painel fixo).
-    // A função a ser hookada é definida nas variáveis abaixo.
+    // SCRIPT-MODELO v7 - LAYOUT ESTÁTICO NA ESQUERDA
     // ===================================================================================
 
-    // --- ÁREA DE CONFIGURAÇÃO ---
-    // Altere as variáveis aqui para definir o que você quer hookar.
-    const TARGET_LIB = "libqplay.so";
-    const TARGET_FUNCTION = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
-    const ARGUMENT_COUNT = 6; // Quantos argumentos da função você quer exibir no log.
-    // --------------------------
-
+    // Funções auxiliares (inalteradas)
     function getClassLoader() {
         return {
             Gravity: Java.use("android.view.Gravity"),
@@ -22,16 +12,10 @@ setTimeout(() => {
             LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
             Color: Java.use("android.graphics.Color"),
             ActivityThread: Java.use("android.app.ActivityThread"),
+            View_OnClickListener: Java.use("android.view.View$OnClickListener"),
             String: Java.use("java.lang.String"),
             ScrollView: Java.use("android.widget.ScrollView"),
-            View_OnClickListener: Java.use("android.view.View$OnClickListener"),
         };
-    }
-
-    function getMainActivity() {
-        const activityThread = Java.use("android.app.ActivityThread").sCurrentActivityThread.value;
-        const mActivities = activityThread.mActivities.value;
-        return Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord")).activity.value;
     }
 
     function pixelDensityToPixels(context, dp) {
@@ -39,152 +23,219 @@ setTimeout(() => {
         return parseInt(dp * density);
     }
 
-    // --- Variáveis Globais ---
-    let logContainer = null;
-    let logScrollView = null;
-    let isHookEnabled = false;
-
-    // --- Funções de Controle da UI ---
-    function addLog(text) {
-        Java.scheduleOnMainThread(() => {
-            if (!logContainer) return;
-            const classLoader = getClassLoader();
-            const mainActivity = getMainActivity();
-            const logEntry = classLoader.TextView.$new(mainActivity);
-            logEntry.setText(classLoader.String.$new(text));
-            logEntry.setTextColor(classLoader.Color.parseColor("#00FF00"));
-            logEntry.setTextSize(12);
-            logContainer.addView(logEntry);
-            logScrollView.post(Java.registerClass({
-                name: "com.logger.Scroll" + Math.random().toString(36).substring(2),
-                implements: [Java.use("java.lang.Runnable")],
-                methods: { run: () => { logScrollView.fullScroll(130); } }
-            }).$new());
-        });
+    function getMainActivity(classLoader) {
+        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
+        const mActivities = activityThread.mActivities.value;
+        const activityClientRecord = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
+        return activityClientRecord.activity.value;
     }
 
-    function clearLog() {
-        Java.scheduleOnMainThread(() => {
-            if (logContainer) logContainer.removeAllViews();
-        });
-    }
+    class Menu {
+        #classLoader;
+        #activity;
+        #menuLayout;
+        #controlContainer;
+        #logContainer;
+        #logScrollView;
+        #colorOn;
+        #colorOff;
 
-    // --- LÓGICA PRINCIPAL ---
-    Java.perform(() => {
-        // O hook é preparado assim que o script é injetado.
-        try {
-            const targetPointer = Module.findExportByName(TARGET_LIB, TARGET_FUNCTION);
-            Interceptor.attach(targetPointer, {
-                onEnter: function(args) {
-                    // A variável 'isHookEnabled' controla se o log é exibido ou não.
-                    if (!isHookEnabled) return;
-
-                    let logMessage = `[+] Chamada para ${TARGET_FUNCTION.slice(0, 30)}...\n`;
-                    for (let i = 0; i < ARGUMENT_COUNT; i++) {
-                        try {
-                            if (args[i] === undefined) break;
-                            logMessage += `  -> Arg[${i}]: ${args[i]}\n`;
-                        } catch(e) { break; }
-                    }
-                    addLog(logMessage);
-                }
-            });
-        } catch (error) {
-            console.error(`[!] Erro ao preparar o hook para ${TARGET_FUNCTION}: ${error.message}`);
-            // Adiciona o erro ao log do menu também, para fácil visualização
-            Java.scheduleOnMainThread(() => {
-                addLog(`[!] Erro ao hookar ${TARGET_FUNCTION}. Verifique o nome e o console do Frida.`);
-            });
+        constructor(classLoader, activity, title, width, bgColor) {
+            this.#classLoader = classLoader;
+            this.#activity = activity;
+            this.#createStaticLayout(title, width, bgColor);
         }
 
-        // --- CONSTRUÇÃO DA INTERFACE GRÁFICA ---
-        Java.scheduleOnMainThread(() => {
-            try {
-                const classLoader = getClassLoader();
-                const mainActivity = getMainActivity();
-                const PADDING = pixelDensityToPixels(mainActivity, 8);
+        #createStaticLayout(title, width, bgColor) {
+            const MATCH = -1; // Constante para MATCH_PARENT
+            const widthDp = pixelDensityToPixels(this.#activity, width);
 
-                // 1. O painel principal (vertical)
-                const mainPanel = classLoader.LinearLayout.$new(mainActivity);
-                mainPanel.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-                mainPanel.setBackgroundColor(classLoader.Color.parseColor("#C0000000"));
-                mainPanel.setPadding(PADDING, PADDING, PADDING, PADDING);
+            // Container raiz que ocupa toda a tela e alinha o conteúdo à esquerda
+            const rootView = this.#classLoader.LinearLayout.$new(this.#activity);
+            rootView.setLayoutParams(this.#classLoader.LinearLayout_LayoutParams.$new(MATCH, MATCH));
+            rootView.setGravity(this.#classLoader.Gravity.LEFT.value);
+            this.rootView = rootView;
 
-                // Helper para criar botões
-                function createButton(text, onClickListener) {
-                    const button = classLoader.TextView.$new(mainActivity);
-                    button.setText(classLoader.String.$new(text));
-                    button.setTextColor(classLoader.Color.WHITE.value);
-                    button.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
-                    button.setGravity(classLoader.Gravity.CENTER.value);
-                    button.setPadding(PADDING, PADDING, PADDING, PADDING);
-                    const params = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
-                    params.setMargins(0, 0, 0, PADDING);
-                    button.setLayoutParams(params);
-                    button.setOnClickListener(onClickListener);
-                    return button;
-                }
+            // Layout principal do menu (o painel visível)
+            this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+            // Largura fixa e altura preenchendo a tela
+            const menuParams = this.#classLoader.LinearLayout_LayoutParams.$new(widthDp, MATCH);
+            this.#menuLayout.setLayoutParams(menuParams);
+            this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(bgColor));
+            this.#menuLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
 
-                // 2. Botões de Controle
-                const toggleButtonListener = Java.registerClass({
-                    name: "com.logger.ToggleClick" + Math.random().toString(36).substring(2),
-                    implements: [classLoader.View_OnClickListener],
-                    methods: {
-                        onClick(v) {
-                            isHookEnabled = !isHookEnabled;
-                            if (isHookEnabled) {
-                                v.setText(classLoader.String.$new("Desligar Hook"));
-                                v.setBackgroundColor(classLoader.Color.parseColor("#80FF0000"));
-                                addLog("Hook ATIVADO.");
-                            } else {
-                                v.setText(classLoader.String.$new("Ligar Hook"));
-                                v.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
-                                addLog("Hook DESATIVADO.");
-                            }
+            // Barra de título (agora estática)
+            const menuBarLayout = this.#classLoader.TextView.$new(this.#activity);
+            menuBarLayout.setText(this.#classLoader.String.$new(title));
+            menuBarLayout.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
+            menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor("#635985"));
+            menuBarLayout.setGravity(this.#classLoader.Gravity.CENTER.value);
+            menuBarLayout.setPadding(10, 10, 10, 10);
+            this.#menuLayout.addView(menuBarLayout);
+
+            // Container para os botões de controle (não rolável)
+            this.#controlContainer = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#controlContainer.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+            this.#controlContainer.setPadding(8, 8, 8, 8);
+            this.#menuLayout.addView(this.#controlContainer);
+
+            // Container para o LOG (rolável)
+            this.#logScrollView = this.#classLoader.ScrollView.$new(this.#activity);
+            const scrollParams = this.#classLoader.LinearLayout_LayoutParams.$new(MATCH, MATCH);
+            this.#logScrollView.setLayoutParams(scrollParams);
+            this.#logContainer = this.#classLoader.LinearLayout.$new(this.#activity);
+            this.#logContainer.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+            this.#logContainer.setPadding(8, 8, 8, 8);
+            this.#logScrollView.addView(this.#logContainer);
+            this.#menuLayout.addView(this.#logScrollView);
+            
+            // Adiciona o menu ao container raiz
+            this.rootView.addView(this.#menuLayout);
+        }
+
+        setOptionColors(colorOn, colorOff) {
+            this.#colorOn = colorOn;
+            this.#colorOff = colorOff;
+        }
+
+        addOption(id, name, callbacks) {
+            const option = this.#classLoader.TextView.$new(this.#activity);
+            option.setText(this.#classLoader.String.$new(name));
+            option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+            option.setTextColor(this.#classLoader.Color.WHITE.value);
+            option.setGravity(this.#classLoader.Gravity.CENTER.value);
+            const params = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2); // MATCH_PARENT, WRAP_CONTENT
+            params.setMargins(0, 5, 0, 5);
+            option.setLayoutParams(params);
+            option.setPadding(10, 10, 10, 10);
+
+            let state = false;
+            option.setOnClickListener(Java.registerClass({
+                name: "com.logger.OptionClick" + id,
+                implements: [this.#classLoader.View_OnClickListener],
+                methods: {
+                    onClick: (v) => {
+                        state = !state;
+                        if (state) {
+                            v.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOn));
+                            callbacks.on();
+                        } else {
+                            v.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+                            callbacks.off();
                         }
                     }
-                }).$new();
-                const toggleButton = createButton("Ligar Hook", toggleButtonListener);
-                mainPanel.addView(toggleButton);
+                }
+            }).$new());
+            this.#controlContainer.addView(option);
+        }
 
-                const clearButtonListener = Java.registerClass({
-                    name: "com.logger.ClearClick" + Math.random().toString(36).substring(2),
-                    implements: [classLoader.View_OnClickListener],
-                    methods: { onClick(v) { clearLog(); } }
-                }).$new();
-                const clearButton = createButton("Limpar Log", clearButtonListener);
-                mainPanel.addView(clearButton);
+        addButton(text, callback) {
+            const button = this.#classLoader.TextView.$new(this.#activity);
+            button.setText(this.#classLoader.String.$new(text));
+            button.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+            button.setTextColor(this.#classLoader.Color.WHITE.value);
+            button.setGravity(this.#classLoader.Gravity.CENTER.value);
+            const params = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2); // MATCH_PARENT, WRAP_CONTENT
+            params.setMargins(0, 5, 0, 5);
+            button.setLayoutParams(params);
+            button.setPadding(10, 10, 10, 10);
+            button.setOnClickListener(Java.registerClass({
+                name: "com.logger.ButtonClick" + text.replace(" ", ""),
+                implements: [this.#classLoader.View_OnClickListener],
+                methods: {
+                    onClick: (v) => callback()
+                }
+            }).$new());
+            this.#controlContainer.addView(button);
+        }
 
-                // 3. Área de Log rolável
-                logScrollView = classLoader.ScrollView.$new(mainActivity);
-                const scrollParams = classLoader.LinearLayout_LayoutParams.$new(-1, 0, 1.0);
-                logScrollView.setLayoutParams(scrollParams);
-                
-                logContainer = classLoader.LinearLayout.$new(mainActivity);
-                logContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-                logScrollView.addView(logContainer);
-                mainPanel.addView(logScrollView);
-                
-                // 4. Adiciona o painel à tela usando o método que funcionou
-                const panelParams = classLoader.LinearLayout_LayoutParams.$new(
-                    pixelDensityToPixels(mainActivity, 300),
-                    pixelDensityToPixels(mainActivity, 400)
-                );
-                mainPanel.setLayoutParams(panelParams);
-                mainActivity.addContentView(mainPanel, panelParams);
-                
-                // 5. Posiciona no canto superior esquerdo
-                mainPanel.setX(0);
-                mainPanel.setY(50);
+        addLog(text) {
+            const logEntry = this.#classLoader.TextView.$new(this.#activity);
+            logEntry.setText(this.#classLoader.String.$new(text));
+            logEntry.setTextColor(this.#classLoader.Color.parseColor("#00FF00"));
+            this.#logContainer.addView(logEntry);
 
-                addLog("Logger Estático Iniciado.");
-                addLog(`Pronto para hookar: ${TARGET_FUNCTION.slice(0,30)}...`);
+            // Rola para o final automaticamente
+            this.#logScrollView.post(Java.registerClass({
+                name: "com.logger.Scroll" + Math.random().toString().replace(".", ""),
+                implements: [Java.use("java.lang.Runnable")],
+                methods: {
+                    run: () => {
+                        this.#logScrollView.fullScroll(130); // 130 = View.FOCUS_DOWN
+                    }
+                }
+            }).$new());
+        }
 
-            } catch (e) {
-                console.error("[!] Erro CRÍTICO ao criar a UI:", e.stack);
+        clearLog() {
+            this.#logContainer.removeAllViews();
+        }
+
+        start() {
+            // Adiciona o layout raiz (que contém o menu) à tela da atividade.
+            this.#activity.addContentView(this.rootView, this.rootView.getLayoutParams());
+        }
+    }
+
+    let menu = null;
+    let isHookEnabled = false;
+
+    // --- ÁREA DE ESTUDO ---
+    const targetLib = "libqplay.so";
+    const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
+    const argumentCount = 6;
+    // ----------------------
+
+    Java.perform(function () {
+        try {
+            const targetPointer = Module.findExportByName(targetLib, targetFunction);
+            if (targetPointer) {
+                Interceptor.attach(targetPointer, {
+                    onEnter: function (args) {
+                        if (!isHookEnabled || !menu) return;
+                        let logMessage = `[+] Chamada: ${targetFunction.slice(0, 20)}...\n`;
+                        for (let i = 0; i < argumentCount; i++) {
+                            logMessage += `  -> Arg[${i}]: ${args[i]}\n`;
+                        }
+                        Java.scheduleOnMainThread(() => {
+                            menu.addLog(logMessage);
+                        });
+                    }
+                });
+            } else {
+                 console.error(`[!] Erro: Função ${targetFunction} não encontrada em ${targetLib}.`);
             }
+        } catch (error) {
+            console.error(`[!] Erro ao hookar função: ${error.message}`);
+        }
+
+        Java.scheduleOnMainThread(function () {
+            const classLoader = getClassLoader();
+            const mainActivity = getMainActivity(classLoader);
+            
+            // A criação do menu é simplificada para uma única chamada no construtor
+            menu = new Menu(classLoader, mainActivity, "Frida Logger", 280, "#18122B"); // (loader, activity, título, largura, cor)
+
+            menu.setOptionColors("#443C68", "#393053");
+
+            const call_toggleHook = {
+                on() {
+                    isHookEnabled = true;
+                    menu.addLog("Hook ATIVADO.");
+                },
+                off() {
+                    isHookEnabled = false;
+                    menu.addLog("Hook DESATIVADO.");
+                }
+            };
+
+            menu.addOption("toggleHook", "Ligar/Desligar Hook", call_toggleHook);
+            menu.addButton("Limpar Log", () => {
+                menu.clearLog();
+            });
+
+            menu.start();
         });
     });
 
-    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
 }, 5000);
