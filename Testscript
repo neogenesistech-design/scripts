@@ -163,8 +163,8 @@ setTimeout(() => {
 
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
-    const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
-    const argumentCount = 6;
+    const targetFunction = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw";
+    const argumentCount = 8;
     // ----------------------
 
     Java.perform(function () {
