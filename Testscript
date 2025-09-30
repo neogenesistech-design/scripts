@@ -1,6 +1,6 @@
 setTimeout(() => {
     // ===================================================================================
-    // SCRIPT-MODELO v7 - LAYOUT ESTÁTICO NA ESQUERDA
+    // SCRIPT-MODELO v8 - LAYOUT ESTÁTICO E SEMI-TRANSPARENTE
     // ===================================================================================
 
     // Funções auxiliares (inalteradas)
@@ -50,36 +50,31 @@ setTimeout(() => {
             const MATCH = -1; // Constante para MATCH_PARENT
             const widthDp = pixelDensityToPixels(this.#activity, width);
 
-            // Container raiz que ocupa toda a tela e alinha o conteúdo à esquerda
             const rootView = this.#classLoader.LinearLayout.$new(this.#activity);
             rootView.setLayoutParams(this.#classLoader.LinearLayout_LayoutParams.$new(MATCH, MATCH));
             rootView.setGravity(this.#classLoader.Gravity.LEFT.value);
             this.rootView = rootView;
 
-            // Layout principal do menu (o painel visível)
             this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            // Largura fixa e altura preenchendo a tela
             const menuParams = this.#classLoader.LinearLayout_LayoutParams.$new(widthDp, MATCH);
             this.#menuLayout.setLayoutParams(menuParams);
             this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(bgColor));
             this.#menuLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
 
-            // Barra de título (agora estática)
+            // Barra de título (agora com transparência)
             const menuBarLayout = this.#classLoader.TextView.$new(this.#activity);
             menuBarLayout.setText(this.#classLoader.String.$new(title));
             menuBarLayout.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
-            menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor("#635985"));
+            menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor("#B3635985")); // <-- COR MODIFICADA
             menuBarLayout.setGravity(this.#classLoader.Gravity.CENTER.value);
             menuBarLayout.setPadding(10, 10, 10, 10);
             this.#menuLayout.addView(menuBarLayout);
 
-            // Container para os botões de controle (não rolável)
             this.#controlContainer = this.#classLoader.LinearLayout.$new(this.#activity);
             this.#controlContainer.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
             this.#controlContainer.setPadding(8, 8, 8, 8);
             this.#menuLayout.addView(this.#controlContainer);
 
-            // Container para o LOG (rolável)
             this.#logScrollView = this.#classLoader.ScrollView.$new(this.#activity);
             const scrollParams = this.#classLoader.LinearLayout_LayoutParams.$new(MATCH, MATCH);
             this.#logScrollView.setLayoutParams(scrollParams);
@@ -88,8 +83,7 @@ setTimeout(() => {
             this.#logContainer.setPadding(8, 8, 8, 8);
             this.#logScrollView.addView(this.#logContainer);
             this.#menuLayout.addView(this.#logScrollView);
-            
-            // Adiciona o menu ao container raiz
+
             this.rootView.addView(this.#menuLayout);
         }
 
@@ -104,7 +98,7 @@ setTimeout(() => {
             option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
             option.setTextColor(this.#classLoader.Color.WHITE.value);
             option.setGravity(this.#classLoader.Gravity.CENTER.value);
-            const params = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2); // MATCH_PARENT, WRAP_CONTENT
+            const params = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2);
             params.setMargins(0, 5, 0, 5);
             option.setLayoutParams(params);
             option.setPadding(10, 10, 10, 10);
@@ -135,7 +129,7 @@ setTimeout(() => {
             button.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
             button.setTextColor(this.#classLoader.Color.WHITE.value);
             button.setGravity(this.#classLoader.Gravity.CENTER.value);
-            const params = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2); // MATCH_PARENT, WRAP_CONTENT
+            const params = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2);
             params.setMargins(0, 5, 0, 5);
             button.setLayoutParams(params);
             button.setPadding(10, 10, 10, 10);
@@ -155,13 +149,12 @@ setTimeout(() => {
             logEntry.setTextColor(this.#classLoader.Color.parseColor("#00FF00"));
             this.#logContainer.addView(logEntry);
 
-            // Rola para o final automaticamente
             this.#logScrollView.post(Java.registerClass({
                 name: "com.logger.Scroll" + Math.random().toString().replace(".", ""),
                 implements: [Java.use("java.lang.Runnable")],
                 methods: {
                     run: () => {
-                        this.#logScrollView.fullScroll(130); // 130 = View.FOCUS_DOWN
+                        this.#logScrollView.fullScroll(130);
                     }
                 }
             }).$new());
@@ -172,7 +165,6 @@ setTimeout(() => {
         }
 
         start() {
-            // Adiciona o layout raiz (que contém o menu) à tela da atividade.
             this.#activity.addContentView(this.rootView, this.rootView.getLayoutParams());
         }
     }
@@ -212,11 +204,12 @@ setTimeout(() => {
         Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
             const mainActivity = getMainActivity(classLoader);
-            
-            // A criação do menu é simplificada para uma única chamada no construtor
-            menu = new Menu(classLoader, mainActivity, "Frida Logger", 280, "#18122B"); // (loader, activity, título, largura, cor)
 
-            menu.setOptionColors("#443C68", "#393053");
+            // Cor de fundo principal com transparência
+            menu = new Menu(classLoader, mainActivity, "Frida Logger", 280, "#B318122B"); // <-- COR MODIFICADA
+
+            // Cores dos botões com transparência
+            menu.setOptionColors("#B3443C68", "#B3393053"); // <-- CORES MODIFICADAS
 
             const call_toggleHook = {
                 on() {
