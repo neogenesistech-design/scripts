@@ -1,273 +1,371 @@
-setTimeout(() => {
-    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
+setTimeout(()=>{
+var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
-    // ===================================================================================
-    // SCRIPT-MODELO v4 - CORREÇÃO DA LÓGICA DE ABERTURA DO MENU
-    // ===================================================================================
+// ===================================================================================
+// SCRIPT-MODELO v5 - FERRAMENTA DE ESTUDO USANDO O SEU FORMATO DE MENU ORIGINAL
+// ===================================================================================
 
-    function getClassLoader() {
-        return {
-            Gravity: Java.use("android.view.Gravity"),
-            TextView: Java.use("android.widget.TextView"),
-            LinearLayout: Java.use("android.widget.LinearLayout"),
-            ViewGroup_LayoutParams: Java.use("android.view.ViewGroup$LayoutParams"),
-            LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-            Color: Java.use("android.graphics.Color"),
-            ActivityThread: Java.use("android.app.ActivityThread"),
-            View: Java.use("android.view.View"),
-            View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
-            MotionEvent: Java.use("android.view.MotionEvent"),
-            String: Java.use("java.lang.String"),
-            ScrollView: Java.use("android.widget.ScrollView"),
-            View_OnClickListener: Java.use("android.view.View$OnClickListener"),
-        };
+function getClassLoader() {
+    const classLoader = {
+        Gravity: Java.use("android.view.Gravity"),
+        TextView: Java.use("android.widget.TextView"),
+        LinearLayout: Java.use("android.widget.LinearLayout"),
+        ViewGroup_LayoutParams: Java.use("android.view.ViewGroup$LayoutParams"),
+        LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
+        Color: Java.use("android.graphics.Color"),
+        ActivityThread: Java.use("android.app.ActivityThread"),
+        ActivityThread_ActivityClientRecord: Java.use("android.app.ActivityThread$ActivityClientRecord"),
+        View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
+        MotionEvent: Java.use("android.view.MotionEvent"),
+        String: Java.use("java.lang.String"),
+        ScrollView: Java.use("android.widget.ScrollView"),
+        View_OnClickListener: Java.use("android.view.View$OnClickListener"),
+    };
+    return classLoader;
+}
+
+function pixelDensityToPixels(context, dp) {
+    const density = context.getResources().getDisplayMetrics().density.value;
+    return parseInt(dp * density);
+}
+
+function getMainActivity(classLoader) {
+    const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
+    const mActivities = activityThread.mActivities.value;
+    const activityClientRecord = Java.cast(mActivities.valueAt(0), classLoader.ActivityThread_ActivityClientRecord);
+    return activityClientRecord.activity.value;
+}
+
+// A SUA CLASSE DE MENU ORIGINAL, ADAPTADA PARA O LOGGER
+class Menu {
+    #classLoader; #activity; #MATCH_PARENT; #mainLayout; #menuStart; #menuLayout;
+    #menuBarLayout; #menuBarTitle; #menuScrollView; #contentView;
+    #WRAP_CONTENT; #menuScrollLayout; #colorOn; #colorOff;
+
+    constructor(classLoader, activity) {
+        this.#classLoader = classLoader;
+        this.#activity = activity;
+        this.#MATCH_PARENT = classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value;
+        this.#WRAP_CONTENT = classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value;
+        this.#createContentView();
+        this.#createMainLayout();
+        this.#createMenuScroll();
     }
 
-    function pixelDensityToPixels(context, dp) {
-        const density = context.getResources().getDisplayMetrics().density.value;
-        return parseInt(dp * density);
+    #createContentView() {
+        this.#contentView = this.#classLoader.LinearLayout.$new(this.#activity);
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
+        this.#contentView.setLayoutParams(layoutParams);
+        this.#contentView.setGravity(this.#classLoader.Gravity.CENTER.value);
     }
 
-    function getMainActivity(classLoader) {
-        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-        const mActivities = activityThread.mActivities.value;
-        const activityClientRecord = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
-        return activityClientRecord.activity.value;
+    #createMainLayout() {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
+        this.#mainLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#mainLayout.setLayoutParams(layoutParams);
     }
 
-    class Menu {
-        #classLoader; #activity; #menuStart; #menuLayout; #menuScrollLayout; #menuScrollView;
-        #colorOn; #colorOff;
+    #createMenuScroll() {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+        this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity);
+        const padding = pixelDensityToPixels(this.#activity, 8);
+        this.#menuScrollView.setLayoutParams(layoutParams);
+        this.#menuScrollView.setPadding(padding, padding, padding, padding);
+    }
 
-        constructor(classLoader, activity) {
-            this.#classLoader = classLoader;
-            this.#activity = activity;
-        }
+    #createMenuScrollLayout() {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT);
+        this.#menuScrollLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#menuScrollLayout.setLayoutParams(layoutParams);
+        this.#menuScrollLayout.setOrientation(this.#menuScrollLayout.VERTICAL.value);
+    }
 
-        // --- MÉTODOS DE CRIAÇÃO DOS ELEMENTOS ---
-        createMenuStart(title, size, color) {
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(-2, -2); // WRAP_CONTENT
-            this.#menuStart = this.#classLoader.TextView.$new(this.#activity);
-            this.#menuStart.setLayoutParams(layoutParams);
-            this.#menuStart.setText(this.#classLoader.String.$new(title));
-            this.#menuStart.setTextSize(pixelDensityToPixels(this.#activity, size));
-            this.#menuStart.setTextColor(this.#classLoader.Color.parseColor(color));
-            this.#menuStart.setBackgroundColor(this.#classLoader.Color.WHITE.value);
-            this.#menuStart.setPadding(10, 10, 10, 10);
-        }
+    createMenuOptionsLayout(colorOn, colorOff) {
+        this.#createMenuScrollLayout();
+        this.#colorOn = colorOn;
+        this.#colorOff = colorOff;
+    }
 
-        createMenuLayout(bgColor, width, height) {
-            const widthDp = pixelDensityToPixels(this.#activity, width);
-            const heightDp = pixelDensityToPixels(this.#activity, height);
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(widthDp, heightDp);
-            this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            this.#menuLayout.setLayoutParams(layoutParams);
-            this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(bgColor));
-            this.#menuLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-        }
+    createMenuStart(title, size, color) {
+        size = pixelDensityToPixels(this.#activity, size);
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
+        this.#menuStart = this.#classLoader.TextView.$new(this.#activity);
+        this.#menuStart.setLayoutParams(layoutParams);
+        this.#menuStart.setText(this.#classLoader.String.$new(title));
+        this.#menuStart.setTextSize(size);
+        this.#menuStart.setTextColor(this.#classLoader.Color.parseColor(color));
+        this.#menuStart.setBackgroundColor(this.#classLoader.Color.WHITE.value);
+    }
 
-        createMenuBar(title) {
-            const menuBarLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor("#635985"));
+    createMenuLayout(color, size) {
+        const SIZE_DP = pixelDensityToPixels(this.#activity, size);
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(SIZE_DP, SIZE_DP * 1.5); // Um pouco mais alto que largo
+        this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#menuLayout.setLayoutParams(layoutParams);
+        this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color));
+        this.#menuLayout.setOrientation(this.#menuLayout.VERTICAL.value);
+    }
 
-            const menuBarTitle = this.#classLoader.TextView.$new(this.#activity);
-            menuBarTitle.setText(this.#classLoader.String.$new(title));
-            menuBarTitle.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
-            menuBarTitle.setGravity(this.#classLoader.Gravity.CENTER.value);
-            menuBarTitle.setPadding(10, 10, 10, 10);
-            
-            menuBarLayout.addView(menuBarTitle);
-            this.#menuLayout.addView(menuBarLayout);
-            return menuBarLayout; // Retorna a barra para adicionar eventos nela
-        }
+    createMenuBarLayout(color) {
+        const padding = pixelDensityToPixels(this.#activity, 10);
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+        this.#menuBarLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#menuBarLayout.setLayoutParams(layoutParams);
+        this.#menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color));
+        this.#menuBarLayout.setPadding(padding, padding, 0, padding);
+    }
 
-        createOptionsContainer(colorOn, colorOff) {
-            this.#colorOn = colorOn; this.#colorOff = colorOff;
-            this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity);
-            this.#menuScrollLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            this.#menuScrollLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-            this.#menuScrollLayout.setPadding(8,8,8,8);
-            this.#menuScrollView.addView(this.#menuScrollLayout);
-            this.#menuLayout.addView(this.#menuScrollView);
-        }
+    createMenuBarTitle(title, color) {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
+        this.#menuBarTitle = this.#classLoader.TextView.$new(this.#activity);
+        this.#menuBarTitle.setLayoutParams(layoutParams);
+        this.#menuBarTitle.setText(this.#classLoader.String.$new(title));
+        this.#menuBarTitle.setTextColor(this.#classLoader.Color.parseColor(color));
+    }
 
-        // --- MÉTODOS DE FUNCIONALIDADE ---
-        addLog(text) {
-            const textView = this.#classLoader.TextView.$new(this.#activity);
-            textView.setText(this.#classLoader.String.$new(text));
-            textView.setTextColor(this.#classLoader.Color.parseColor("#00FF00"));
-            this.#menuScrollLayout.addView(textView);
-            this.#menuScrollView.post(Java.registerClass({
-                name: "com.example.ScrollRunnable" + Math.random().toString(36).substring(2),
-                implements: [Java.use("java.lang.Runnable")],
-                methods: { run: () => { this.#menuScrollView.fullScroll(130); } }
-            }).$new());
-        }
+    #drawElements() {
+        this.#activity.addContentView(this.#contentView, this.#contentView.getLayoutParams());
+        this.#contentView.addView(this.#mainLayout);
+        this.#mainLayout.addView(this.#menuStart);
+        this.#menuLayout.addView(this.#menuBarLayout);
+        this.#menuBarLayout.addView(this.#menuBarTitle);
+        this.#menuLayout.addView(this.#menuScrollView);
+        this.#menuScrollView.addView(this.#menuScrollLayout);
+    }
 
-        clearLog() { this.#menuScrollLayout.removeAllViews(); }
+    addOption(id, name, callbacks) {
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+        const padding = pixelDensityToPixels(this.#activity, 5);
+        const option = this.#classLoader.TextView.$new(this.#activity);
+        const margin = pixelDensityToPixels(this.#activity, 10);
+        option.setText(this.#classLoader.String.$new(name));
+        option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+        option.setTextColor(this.#classLoader.Color.parseColor("#75757B"));
+        option.setGravity(this.#classLoader.Gravity.CENTER.value);
+        layoutParams.setMargins(0, 0, 0, margin);
+        option.setLayoutParams(layoutParams);
+        option.setPadding(padding, padding, padding, padding);
+
+        let optionState = false;
+        const optionOnClickListener = Java.registerClass({
+            name: "com.example." + id,
+            implements: [this.#classLoader.View_OnClickListener],
+            methods: {
+                onClick(p1) {
+                    optionState = !optionState;
+                    if (optionState) {
+                        p1.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOn));
+                        callbacks.on();
+                    } else {
+                        p1.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+                        callbacks.off();
+                    }
+                }
+            }
+        });
+        option.setOnClickListener(optionOnClickListener.$new());
+        this.#menuScrollLayout.addView(option);
+    }
+    
+    // --- MÉTODOS ADICIONADOS PARA O LOGGER ---
+    addLog(text) {
+        const textView = this.#classLoader.TextView.$new(this.#activity);
+        textView.setText(this.#classLoader.String.$new(text));
+        textView.setTextColor(this.#classLoader.Color.parseColor("#00FF00")); // Verde
+        this.#menuScrollLayout.addView(textView);
+        // Auto-scroll
+        this.#menuScrollView.post(Java.registerClass({
+            name: "com.logger.ScrollRunnable" + Math.random().toString(36).substring(2),
+            implements: [Java.use("java.lang.Runnable")],
+            methods: { run: () => { this.#menuScrollView.fullScroll(130); } }
+        }).$new());
+    }
+
+    clearLog() { this.#menuScrollLayout.removeAllViews(); }
+
+    addButton(text, callback) {
+        const button = this.#classLoader.TextView.$new(this.#activity);
+        button.setText(this.#classLoader.String.$new(text));
+        button.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
+        button.setTextColor(this.#classLoader.Color.parseColor("#75757B"));
+        button.setGravity(this.#classLoader.Gravity.CENTER.value);
+        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
+        const margin = pixelDensityToPixels(this.#activity, 10);
+        layoutParams.setMargins(0, 0, 0, margin);
+        button.setLayoutParams(layoutParams);
+        button.setPadding(5,5,5,5);
+        button.setOnClickListener(Java.registerClass({
+            name: "com.logger.ButtonListener" + Math.random().toString(36).substring(2),
+            implements: [this.#classLoader.View_OnClickListener],
+            methods: { onClick(v) { callback(); } }
+        }).$new());
+        this.#menuScrollLayout.addView(button);
+    }
+    // --- FIM DOS MÉTODOS ADICIONADOS ---
+
+    #createMainLayoutEvent() {
+        const mainLayout = this.#mainLayout;
+        const menuLayout = this.#menuLayout;
+        const menuStart = this.#menuStart;
+        let isMove = false;
+        let isMenuLayout = false;
+        const MainLayoutOnTouchListener = Java.registerClass({
+            name: "com.logger.MainLayoutEvent",
+            implements: [this.#classLoader.View_OnTouchListener],
+            methods: {
+                onTouch(view, event) {
+                    switch (event.getAction()) {
+                        case this.#classLoader.MotionEvent.ACTION_DOWN.value:
+                            isMove = false;
+                            return true; // Importante para receber ACTION_UP
+                        case this.#classLoader.MotionEvent.ACTION_UP.value:
+                            if (!isMove) {
+                                isMenuLayout = !isMenuLayout;
+                                if (isMenuLayout) {
+                                    mainLayout.removeView(menuStart);
+                                    mainLayout.addView(menuLayout);
+                                } else {
+                                    mainLayout.removeView(menuLayout);
+                                    mainLayout.addView(menuStart);
+                                }
+                            }
+                            return true;
+                        case this.#classLoader.MotionEvent.ACTION_MOVE.value:
+                            isMove = true;
+                            // A lógica de arrastar foi removida para simplificar e garantir o clique.
+                            // Se precisar, ela pode ser adicionada aqui.
+                            break;
+                    }
+                    return false;
+                }
+            }
+        });
+        // Simplificação: o clique é no próprio botão de start, não no container
+        this.#menuStart.setOnTouchListener(MainLayoutOnTouchListener.$new());
+        this.#menuBarLayout.setOnTouchListener(MainLayoutOnTouchListener.$new());
+    }
+
+    start() {
+        this.#drawElements();
+        // A lógica de arrastar foi simplificada para a de clique/toque.
+        // O evento de toque agora é para abrir/fechar.
+        let isMenuLayout = false;
         
-        addButton(text, callback) {
-            const button = this.#classLoader.TextView.$new(this.#activity);
-            // Estilo e configuração do botão...
-            button.setText(this.#classLoader.String.$new(text));
-            button.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-            button.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
-            button.setGravity(this.#classLoader.Gravity.CENTER.value);
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2); // MATCH_PARENT, WRAP_CONTENT
-            layoutParams.setMargins(0, 5, 0, 5);
-            button.setLayoutParams(layoutParams);
-            button.setPadding(10, 10, 10, 10);
+        const toggleMenu = () => {
+            isMenuLayout = !isMenuLayout;
+            if(isMenuLayout) {
+                this.#mainLayout.removeView(this.#menuStart);
+                this.#mainLayout.addView(this.#menuLayout);
+            } else {
+                this.#mainLayout.removeView(this.#menuLayout);
+                this.#mainLayout.addView(this.#menuStart);
+            }
+        };
 
-            button.setOnClickListener(Java.registerClass({
-                name: "com.example.ButtonListener" + Math.random().toString(36).substring(2),
-                implements: [this.#classLoader.View_OnClickListener],
-                methods: { onClick(v) { callback(); } }
-            }).$new());
-            this.#menuScrollLayout.addView(button);
-        }
-
-        addOption(id, text, callbacks) {
-            const option = this.#classLoader.TextView.$new(this.#activity);
-            // Estilo e configuração da opção...
-            option.setText(this.#classLoader.String.$new(text));
-            option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-            option.setTextColor(this.#classLoader.Color.parseColor("#FFFFFF"));
-            option.setGravity(this.#classLoader.Gravity.CENTER.value);
-            const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2); // MATCH_PARENT, WRAP_CONTENT
-            layoutParams.setMargins(0, 5, 0, 5);
-            option.setLayoutParams(layoutParams);
-            option.setPadding(10, 10, 10, 10);
-
-            let optionState = false;
-            option.setOnClickListener(Java.registerClass({
-                name: "com.example." + id,
-                implements: [this.#classLoader.View_OnClickListener],
-                methods: {
-                    onClick(v) {
-                        optionState = !optionState;
-                        if (optionState) {
-                            v.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOn)); callbacks.on();
-                        } else {
-                            v.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff)); callbacks.off();
-                        }
-                    }
-                }
-            }).$new());
-            this.#menuScrollLayout.addView(option);
-        }
-
-        // --- LÓGICA DE VISIBILIDADE E DRAG ---
-        #makeDraggable(view) {
-            let initialX = 0, initialY = 0, initialTouchX = 0, initialTouchY = 0;
-            view.setOnTouchListener(Java.registerClass({
-                name: "com.example.DragListener" + Math.random().toString(36).substring(2),
-                implements: [this.#classLoader.View_OnTouchListener],
-                methods: {
-                    onTouch(v, event) {
-                        switch (event.getAction()) {
-                            case this.#classLoader.MotionEvent.ACTION_DOWN.value:
-                                initialX = v.getX(); initialY = v.getY();
-                                initialTouchX = event.getRawX(); initialTouchY = event.getRawY();
-                                return true;
-                            case this.#classLoader.MotionEvent.ACTION_MOVE.value:
-                                v.setX(initialX + (event.getRawX() - initialTouchX));
-                                v.setY(initialY + (event.getRawY() - initialTouchY));
-                                return true;
-                        }
-                        return false;
-                    }
-                }
-            }).$new());
-        }
-
-        start() {
-            const rootLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-            rootLayout.setGravity(this.#classLoader.Gravity.CENTER.value);
-
-            // Adiciona ambos os menus ao layout raiz
-            rootLayout.addView(this.#menuLayout);
-            rootLayout.addView(this.#menuStart);
-
-            // Define a visibilidade inicial
-            this.#menuLayout.setVisibility(this.#classLoader.View.GONE.value);
-            this.#menuStart.setVisibility(this.#classLoader.View.VISIBLE.value);
-
-            // Lógica para abrir/fechar
-            this.#menuStart.setOnClickListener(Java.registerClass({
-                name: "com.example.OpenMenu", implements: [this.#classLoader.View_OnClickListener],
-                methods: { onClick: (v) => {
-                    this.#menuStart.setVisibility(this.#classLoader.View.GONE.value);
-                    this.#menuLayout.setVisibility(this.#classLoader.View.VISIBLE.value);
-                }}
-            }).$new());
-            
-            // O menuBar agora é o handle para arrastar e para fechar
-            const menuBar = this.#menuLayout.getChildAt(0);
-            this.#makeDraggable(this.#menuLayout); // Arrastar o layout inteiro
-            
-            menuBar.setOnClickListener(Java.registerClass({
-                name: "com.example.CloseMenu", implements: [this.#classLoader.View_OnClickListener],
-                methods: { onClick: (v) => {
-                    this.#menuStart.setVisibility(this.#classLoader.View.VISIBLE.value);
-                    this.#menuLayout.setVisibility(this.#classLoader.View.GONE.value);
-                }}
-            }).$new());
-
-            this.#activity.addContentView(rootLayout, rootLayout.getLayoutParams());
-        }
+        this.#menuStart.setOnClickListener(Java.registerClass({
+            name: "com.logger.MenuStartClick",
+            implements: [this.#classLoader.View_OnClickListener],
+            methods: { onClick(v) { toggleMenu(); } }
+        }).$new());
+        
+        this.#menuBarLayout.setOnClickListener(Java.registerClass({
+            name: "com.logger.MenuBarClick",
+            implements: [this.#classLoader.View_OnClickListener],
+            methods: { onClick(v) { toggleMenu(); } }
+        }).$new());
     }
+}
 
-    let menu = null;
-    let isHookEnabled = false;
+let menu = null;
+let isHookEnabled = false;
 
-    // --- ÁREA DE ESTUDO ---
-    const targetLib = "libqplay.so";
-    const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
-    const argumentCount = 6;
-    // ----------------------
+// ===============================================================================
+// --- ÁREA DE ESTUDO ---
+// Altere as variáveis abaixo para hookar a função desejada.
+// ===============================================================================
+const targetLib = "libqplay.so";
+const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
+const argumentCount = 6; // <-- MUDE AQUI o número de argumentos da função
+// ===============================================================================
 
-    Java.perform(function () {
-        try {
-            const targetPointer = Module.findExportByName(targetLib, targetFunction);
+Java.perform(function () {
+    try {
+        const targetPointer = Module.findExportByName(targetLib, targetFunction);
+        if (targetPointer) {
             Interceptor.attach(targetPointer, {
                 onEnter: function(args) {
                     if (!isHookEnabled || !menu) return;
-                    let logMessage = `[+] Chamada para ${targetFunction}\n`;
+                    
+                    let logMessage = `[+] Chamada para ${targetFunction.slice(0, 20)}...\n`;
                     for (let i = 0; i < argumentCount; i++) {
                         logMessage += `  -> Arg[${i}]: ${args[i]}\n`;
                     }
-                    Java.scheduleOnMainThread(() => { menu.addLog(logMessage); });
+
+                    Java.scheduleOnMainThread(() => {
+                        menu.addLog(logMessage);
+                    });
                 }
             });
-        } catch (error) { console.error(`[!] Erro ao hookar a função: ${targetFunction}`); }
+        } else {
+            console.log(`[!] Função não encontrada: ${targetFunction}`);
+        }
+    } catch (error) {
+        console.error(`[!] Erro ao hookar a função: ${targetFunction}`);
+    }
 
-        Java.scheduleOnMainThread(function () {
-            const classLoader = getClassLoader();
-            const mainActivity = getMainActivity(classLoader);
-            menu = new Menu(classLoader, mainActivity);
+    Java.scheduleOnMainThread(function () {
+        const classLoader = getClassLoader();
+        const mainActivity = getMainActivity(classLoader);
+        menu = new Menu(classLoader, mainActivity);
 
-            // 1. Cria o botão minimizado
-            menu.createMenuStart("LOGGER", 15, "#FF5722");
-            // 2. Cria a janela expandida
-            menu.createMenuLayout("#18122B", 280, 400); // (cor, largura, altura)
-            // 3. Adiciona a barra de título (que também servirá para fechar)
-            menu.createMenuBar("Logger de Funções (Clique para fechar)");
-            // 4. Cria a área rolável para as opções/log
-            menu.createOptionsContainer("#443C68", "#393053");
+        menu.createMenuStart("LOGGER", 15, "#006400");
+        menu.createMenuLayout("#18122B", 250); // Largura do menu
+        menu.createMenuBarLayout("#635985");
+        menu.createMenuBarTitle("Frida Logger", "#FFC107");
+        menu.createMenuOptionsLayout("#443C68", "#393053");
 
-            // 5. Adiciona os controles ao menu
-            const call_toggleHook = {
-                on() { isHookEnabled = true; menu.addLog("Hook LIGADO."); },
-                off() { isHookEnabled = false; menu.addLog("Hook DESLIGADO."); }
-            };
-            menu.addOption("toggleHook", "Ligar/Desligar Hook", call_toggleHook);
-            menu.addButton("Limpar Log", () => { menu.clearLog(); });
-            
-            // 6. Inicia e mostra o menu na tela
-            menu.start();
+        const call_toggleHook = {
+            on() { isHookEnabled = true; menu.addLog("Hook LIGADO."); },
+            off() { isHookEnabled = false; menu.addLog("Hook DESLIGADO."); }
+        };
+
+        menu.addOption("toggleHook", "Ligar/Desligar Hook", call_toggleHook);
+        menu.addButton("Limpar Log", () => {
+            menu.clearLog();
         });
+        
+        menu.start();
     });
+});
 
-    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
+function getFunc(lib, func, type, params) {
+  return new NativeFunction(Module.findExportByName(lib, func), type, params);
+}
+
+// Funções createTString e readTString não são necessárias para o logger, mas podem ser mantidas se precisar delas.
+function createTString(str) {
+  var str_pointer = malloc(4);
+  var str_struct = malloc(str.length + 8);
+  str_pointer.writePointer(str_struct);
+  str_struct.writeInt(str.length);
+  ptr(parseInt(str_struct) + 4).writeInt(1);
+  ptr(parseInt(str_struct) + 8).writeUtf8String(str);
+  return str_pointer;
+}
+
+function readTString(str) {
+  if (!str.isNull()) {
+      if (parseInt(str) != 0) {
+          var pstr = str.readPointer();
+          if (!pstr.isNull()) {
+              var strlen = pstr.readInt();
+              if (strlen > 0) {
+                  var strStart = parseInt(pstr) + 8;
+                  return ptr(strStart).readCString(strlen);
+              }
+          }
+      }
+  }
+}
 
 }, 5000);
