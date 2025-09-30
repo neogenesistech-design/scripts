@@ -1,0 +1,235 @@
+setTimeout(() => {
+// ===================================================================================
+// SCRIPT-MODELO PARA ESTUDO DE FUNÇÕES COM FRIDA
+// Objetivo: Criar um menu flutuante para monitorar chamadas de funções nativas,
+// exibindo seus argumentos em tempo real.
+// ===================================================================================
+
+var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
+
+// --- Classes e Funções de UI (Menu Flutuante) ---
+
+function getClassLoader() {
+    // Retorna as classes Java necessárias para construir a UI
+    return {
+        Gravity: Java.use("android.view.Gravity"),
+        TextView: Java.use("android.widget.TextView"),
+        LinearLayout: Java.use("android.widget.LinearLayout"),
+        LinearLayout_LayoutParams: Java.use("android.view.ViewGroup$LayoutParams"),
+        Color: Java.use("android.graphics.Color"),
+        ActivityThread: Java.use("android.app.ActivityThread"),
+        View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
+        MotionEvent: Java.use("android.view.MotionEvent"),
+        String: Java.use("java.lang.String"),
+        ScrollView: Java.use("android.widget.ScrollView"),
+        View_OnClickListener: Java.use("android.view.View$OnClickListener"),
+    };
+}
+
+function getMainActivity(classLoader) {
+    const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
+    const mActivities = activityThread.mActivities.value;
+    return Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord")).activity.value;
+}
+
+class LoggerMenu {
+    #classLoader;
+    #activity;
+    #mainLayout;
+    #logContainer;
+    #logScrollView;
+
+    constructor(classLoader, activity) {
+        this.#classLoader = classLoader;
+        this.#activity = activity;
+        this.#buildMenu();
+    }
+
+    #buildMenu() {
+        const Gravity = this.#classLoader.Gravity;
+        const Color = this.#classLoader.Color;
+
+        // Layout principal, flutuante e arrastável
+        this.#mainLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#mainLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+        this.#mainLayout.setBackgroundColor(Color.parseColor("#A0000000")); // Fundo escuro semi-transparente
+
+        // Barra de Título (para arrastar)
+        const titleBar = this.#classLoader.TextView.$new(this.#activity);
+        titleBar.setText(this.#classLoader.String.$new("Frida Logger - Arraste aqui"));
+        titleBar.setTextColor(Color.WHITE.value);
+        titleBar.setGravity(Gravity.CENTER.value);
+        titleBar.setBackgroundColor(Color.parseColor("#FF5722"));
+        this.#mainLayout.addView(titleBar);
+        this.#makeDraggable(titleBar, this.#mainLayout);
+
+        // Layout para os botões de controle
+        const controlLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        controlLayout.setOrientation(this.#classLoader.LinearLayout.HORIZONTAL.value);
+        controlLayout.setGravity(Gravity.CENTER.value);
+        this.#mainLayout.addView(controlLayout);
+        
+        // Botões de controle (são adicionados externamente)
+        this.controlLayout = controlLayout;
+
+        // ScrollView para o log
+        this.#logScrollView = this.#classLoader.ScrollView.$new(this.#activity);
+        const scrollParams = this.#classLoader.LinearLayout_LayoutParams.$new(350, 400); // Tamanho do log (largura, altura)
+        this.#logScrollView.setLayoutParams(scrollParams);
+        this.#mainLayout.addView(this.#logScrollView);
+
+        // Container dentro do ScrollView onde as linhas de log serão adicionadas
+        this.#logContainer = this.#classLoader.LinearLayout.$new(this.#activity);
+        this.#logContainer.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
+        this.#logScrollView.addView(this.#logContainer);
+
+        // Adiciona o menu inteiro à tela
+        const rootLayout = this.#classLoader.LinearLayout.$new(this.#activity);
+        rootLayout.setGravity(Gravity.CENTER.value);
+        rootLayout.addView(this.#mainLayout);
+        this.#activity.addContentView(rootLayout, rootLayout.getLayoutParams());
+    }
+    
+    // Método para adicionar uma linha de texto ao log
+    addLog(text) {
+        const logEntry = this.#classLoader.TextView.$new(this.#activity);
+        logEntry.setText(this.#classLoader.String.$new(text));
+        logEntry.setTextColor(this.#classLoader.Color.GREEN.value);
+        this.#logContainer.addView(logEntry);
+        // Rola para o final para mostrar a última mensagem
+        this.#logScrollView.post(Java.registerClass({
+            name: "com.example.ScrollRunnable",
+            implements: [Java.use("java.lang.Runnable")],
+            methods: { run: () => { this.#logScrollView.fullScroll(130); } } // 130 = View.FOCUS_DOWN
+        }).$new());
+    }
+    
+    // Método para limpar todas as mensagens do log
+    clearLog() {
+        this.#logContainer.removeAllViews();
+    }
+
+    #makeDraggable(touchView, moveView) {
+        let initialX = 0, initialY = 0;
+        let initialTouchX = 0, initialTouchY = 0;
+
+        touchView.setOnTouchListener(Java.registerClass({
+            name: "com.example.DragListener" + Math.random().toString(36).substring(2),
+            implements: [this.#classLoader.View_OnTouchListener],
+            methods: {
+                onTouch(v, event) {
+                    switch (event.getAction()) {
+                        case this.#classLoader.MotionEvent.ACTION_DOWN.value:
+                            initialX = moveView.getX();
+                            initialY = moveView.getY();
+                            initialTouchX = event.getRawX();
+                            initialTouchY = event.getRawY();
+                            return true;
+                        case this.#classLoader.MotionEvent.ACTION_MOVE.value:
+                            moveView.setX(initialX + (event.getRawX() - initialTouchX));
+                            moveView.setY(initialY + (event.getRawY() - initialTouchY));
+                            return true;
+                    }
+                    return false;
+                }
+            }
+        }).$new());
+    }
+}
+
+// --- LÓGICA PRINCIPAL ---
+
+let isHookEnabled = false; // Controla se o hook está ativo
+let menu = null;
+
+Java.perform(() => {
+    Java.scheduleOnMainThread(() => {
+        const classLoader = getClassLoader();
+        const mainActivity = getMainActivity(classLoader);
+        menu = new LoggerMenu(classLoader, mainActivity);
+
+        // Adiciona botões de controle ao menu
+        const hookToggle = classLoader.TextView.$new(mainActivity);
+        hookToggle.setText(classLoader.String.$new("Hook Desligado"));
+        hookToggle.setTextColor(classLoader.Color.WHITE.value);
+        hookToggle.setPadding(10, 10, 10, 10);
+        
+        hookToggle.setOnClickListener(Java.registerClass({
+            name: "com.example.HookToggleClick",
+            implements: [classLoader.View_OnClickListener],
+            methods: {
+                onClick(v) {
+                    isHookEnabled = !isHookEnabled;
+                    if (isHookEnabled) {
+                        v.setText(classLoader.String.$new("Hook Ligado"));
+                        v.setBackgroundColor(classLoader.Color.RED.value);
+                        menu.addLog("Hook ativado.");
+                    } else {
+                        v.setText(classLoader.String.$new("Hook Desligado"));
+                        v.setBackgroundColor(classLoader.Color.TRANSPARENT.value);
+                        menu.addLog("Hook desativado.");
+                    }
+                }
+            }
+        }).$new());
+        
+        const clearButton = classLoader.TextView.$new(mainActivity);
+        clearButton.setText(classLoader.String.$new("Limpar Log"));
+        clearButton.setTextColor(classLoader.Color.WHITE.value);
+        clearButton.setPadding(10, 10, 10, 10);
+        clearButton.setOnClickListener(Java.registerClass({
+            name: "com.example.ClearClick",
+            implements: [classLoader.View_OnClickListener],
+            methods: { onClick(v) { menu.clearLog(); } }
+        }).$new());
+
+        menu.controlLayout.addView(hookToggle);
+        menu.controlLayout.addView(clearButton);
+    });
+
+    // ===============================================================================
+    // --- ÁREA DE ESTUDO ---
+    // Altere as variáveis abaixo para hookar a função desejada.
+    // ===============================================================================
+    const targetLib = "libqplay.so";
+    const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
+
+    try {
+        const targetPointer = Module.findExportByName(targetLib, targetFunction);
+
+        Interceptor.attach(targetPointer, {
+            onEnter: function(args) {
+                // Só executa se o hook estiver ligado no menu
+                if (!isHookEnabled || !menu) return;
+                
+                // Constrói a mensagem de log
+                let logMessage = `[+] Chamada para ${targetFunction}\n`;
+                for (let i = 0; i < 6; i++) { // Altere o '6' para o número de argumentos da função
+                    logMessage += `  -> Arg[${i}]: ${args[i]}\n`;
+                }
+
+                // Envia a mensagem para a UI na thread principal
+                Java.scheduleOnMainThread(() => {
+                    menu.addLog(logMessage);
+                });
+            },
+            onLeave: function(retval) {
+                // Opcional: você pode logar o valor de retorno aqui também
+                // if (!isHookEnabled || !menu) return;
+                // Java.scheduleOnMainThread(() => {
+                //     menu.addLog(`[<] Retorno: ${retval}`);
+                // });
+            }
+        });
+
+    } catch (error) {
+        // Se a função não for encontrada, avisa no log do Frida
+        console.error(`[!] Erro ao hookar a função: ${targetFunction}`);
+        console.error(error.stack);
+    }
+});
+
+// --- Funções Utilitárias ---
+function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
+
+}, 6000);
