@@ -1,6 +1,6 @@
 setTimeout(() => {
     // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-    // SCRIPT DE ANÁLISE v18 - Hook no Message Handler com "Tradução" de Argumentos
+    // SCRIPT DE ANÁLISE v20 - Investigador de Estrutura de Mensagens
     // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
     function getClassLoader() {
@@ -15,6 +15,7 @@ setTimeout(() => {
             String: Java.use("java.lang.String"),
             ScrollView: Java.use("android.widget.ScrollView"),
             View: Java.use("android.view.View"),
+            Typeface: Java.use("android.graphics.Typeface"),
         };
     }
 
@@ -144,6 +145,7 @@ setTimeout(() => {
                 const logEntry = this.#classLoader.TextView.$new(this.#activity);
                 logEntry.setText(this.#classLoader.String.$new(text));
                 logEntry.setTextColor(this.#classLoader.Color.parseColor("#00FF00"));
+                logEntry.setTypeface(this.#classLoader.Typeface.MONOSPACE);
                 this.#logContainer.addView(logEntry, 0);
                 if (this.#logContainer.getChildCount() > 50) {
                     this.#logContainer.removeViewAt(50);
@@ -158,10 +160,8 @@ setTimeout(() => {
     let menu = null;
     let isHookEnabled = false;
 
-    // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
-    const functionToHook = "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"; // O "Message Handler"
-    // ----------------------
+    const functionToHook = "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF";
 
     Java.perform(function () {
         try {
@@ -171,32 +171,42 @@ setTimeout(() => {
                     onEnter: function (args) {
                         if (!isHookEnabled || !menu) return;
 
-                        // O 'this' da função é o primeiro argumento (MpGzgariDy *)
                         const this_ptr = args[0];
-                        // O pacote de mensagem é o segundo argumento (C8THgaTQxF *)
                         const message_packet_ptr = args[1];
+                        let logMessage = "";
 
-                        let messageId = "N/A";
-                        let messageContent = "Não foi possível ler.";
-                        
                         try {
-                            // Tenta "traduzir" a mensagem como no código descompilado.
-                            // C8THgaTQxF::operator[](pCVar5,1) -> acessa o segundo elemento (índice 1) do pacote
-                            // O descompilador indica que o pacote pode ser tratado como um array de bytes.
-                            const id_byte_ptr = message_packet_ptr.add(1); // Deslocamento de 1 byte
-                            const id_byte = id_byte_ptr.readU8();
-                            messageId = id_byte - 0x20; // O cálculo que vimos: uVar18 - 0x20
+                            const id_byte = message_packet_ptr.add(1).readU8();
+                            const messageId = id_byte - 0x20;
                             
-                            // Faz um hexdump do pacote para vermos o conteúdo bruto
-                            messageContent = hexdump(message_packet_ptr, { length: 32 });
-                        } catch(e) {
-                            messageId = "Erro";
-                            messageContent = e.message;
-                        }
+                            logMessage = `[MSG RECEBIDA] ID: ${messageId} (0x${messageId.toString(16)})\n`;
+                            logMessage += `  -> Ctx/This: ${this_ptr}\n`;
+                            logMessage += `  -> Pacote @ ${message_packet_ptr}:\n`;
+                            logMessage += `  --- Conteúdo do Pacote ---\n`;
 
-                        let logMessage = `[MSG RECEBIDA] ID: ${messageId} (0x${messageId.toString(16)})\n`;
-                        logMessage += `  -> This Ptr: ${this_ptr}\n`;
-                        logMessage += `  -> Pacote @ ${message_packet_ptr}:\n${messageContent}`;
+                            // ALTERADO: Lógica do "Investigador de Estrutura"
+                            for (let offset = 0; offset < 48; offset += 4) {
+                                const current_ptr = message_packet_ptr.add(offset);
+                                const offsetHex = `0x${offset.toString(16).padStart(2, '0')}`;
+                                
+                                logMessage += `  [Offset ${offsetHex}]:\n`;
+                                try {
+                                    const intVal = current_ptr.readS32();
+                                    const floatVal = current_ptr.readFloat();
+                                    const ptrVal = current_ptr.readPointer();
+                                    
+                                    logMessage += `     Int:   ${intVal}\n`;
+                                    logMessage += `     Float: ${floatVal.toFixed(4)}\n`;
+                                    logMessage += `     Ptr:   ${ptrVal}\n`;
+
+                                } catch(e) {
+                                    logMessage += `     (Erro ao ler memória neste offset)\n`;
+                                }
+                            }
+
+                        } catch(e) {
+                            logMessage = `[!] Erro ao processar mensagem: ${e.message}`;
+                        }
                         
                         menu.addLog(logMessage);
                     }
@@ -208,12 +218,12 @@ setTimeout(() => {
             const classLoader = getClassLoader();
             const mainActivity = getMainActivity(classLoader);
             
-            menu = new Menu(classLoader, mainActivity, "Message Logger", 320, "#B318122B");  
+            menu = new Menu(classLoader, mainActivity, "Message Inspector", 320, "#B318122B");  
             menu.setOptionColors("#B3443C68", "#B3393053");
 
             const call_toggleHook = {
-                on() { isHookEnabled = true; menu.addLog("Logger de Mensagens ATIVADO."); },
-                off() { isHookEnabled = false; menu.addLog("Logger de Mensagens DESATIVADO."); }
+                on() { isHookEnabled = true; menu.addLog("Inspetor de Mensagens ATIVADO."); },
+                off() { isHookEnabled = false; menu.addLog("Inspetor de Mensagens DESATIVADO."); }
             };
 
             menu.addOption("toggleHook", "Ligar/Desligar Log", call_toggleHook);
