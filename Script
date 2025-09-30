@@ -18,9 +18,6 @@ function getClassLoader() {
         View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
         MotionEvent: Java.use("android.view.MotionEvent"),
         String: Java.use("java.lang.String"),
-        ScrollView: Java.use("android.widget.ScrollView"),
-        View_OnClickListener: Java.use("android.view.View$OnClickListener"),
-        SeekBar: Java.use("android.widget.SeekBar")
     }
     return classLoader
 }
@@ -46,328 +43,8 @@ function showToast(text, time = 1) {
   });
 }
 
-class Menu {
-    #classLoader
-    #activity
-    #MATCH_PARENT
-    #mainLayout
-    #menuStart
-    #menuLayout
-    #menuBarLayout
-    #menuBarTitle
-    #menuScroll
-    #menuOptions
-    #options
-    #contentView
-    #WRAP_CONTENT
-    #menuScrollLayout
-    #menuScrollView
-    #colorOn
-    #colorOff
+// A CLASSE MENU FOI COMPLETAMENTE REMOVIDA PARA DAR LUGAR À NOVA INTERFACE
 
-
-    constructor(classLoader, activity) {
-        this.#classLoader = classLoader
-        this.#activity = activity
-        this.#MATCH_PARENT = classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value
-        this.#WRAP_CONTENT = classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
-        this.#options = {}
-        this.#createContentView()
-        this.#createMainLayout()
-        this.#createMenuScroll()
-    }
-
-    #createContentView() {
-        this.#contentView = this.#classLoader.LinearLayout.$new(this.#activity)
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#MATCH_PARENT)
-        this.#contentView.setLayoutParams(layoutParams)
-        this.#contentView.setGravity(this.#classLoader.Gravity.CENTER.value)
-        this.#contentView.setBackgroundColor(this.#classLoader.Color.TRANSPARENT.value)
-    }
-
-    #createMainLayout() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
-        this.#mainLayout = this.#classLoader.LinearLayout.$new(this.#activity)
-        this.#mainLayout.setLayoutParams(layoutParams)
-    }
-
-    #createMenuScroll() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT)
-        this.#menuScrollView = this.#classLoader.ScrollView.$new(this.#activity)
-        const padding = pixelDensityToPixels(this.#activity, 8)
-        this.#menuScrollView.setLayoutParams(layoutParams)
-        this.#menuScrollView.setPadding(padding, padding, padding, padding)
-        this.#menuScrollView.mFillViewport.value = true
-    }
-
-    #createMenuScrollLayout() {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT)
-        this.#menuScrollLayout = this.#classLoader.LinearLayout.$new(this.#activity)
-        this.#menuScrollLayout.setLayoutParams(layoutParams)
-        this.#menuScrollLayout.setOrientation(this.#menuScrollLayout.VERTICAL.value)
-    }
-
-    createMenuOptionsLayout(colorOn, colorOff) {
-        this.#createMenuScroll()
-        this.#createMenuScrollLayout()
-        this.#colorOn = colorOn
-        this.#colorOff = colorOff
-    }
-
-    createMenuStart(title, size, color) {
-        size = pixelDensityToPixels(this.#activity, size)
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
-        this.#menuStart = this.#classLoader.TextView.$new(this.#activity)
-        this.#menuStart.setLayoutParams(layoutParams)
-        this.#menuStart.setText(this.#classLoader.String.$new(title))
-        this.#menuStart.setTextSize(size)
-        this.#menuStart.setTextColor(this.#classLoader.Color.parseColor(color))
-        this.#menuStart.setBackgroundColor(this.#classLoader.Color.WHITE.value)
-    }
-
-    createMenuLayout(color, size) {
-        const SIZE_DP = pixelDensityToPixels(this.#activity, size)
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(SIZE_DP, this.#WRAP_CONTENT) // Alterado para WRAP_CONTENT para acomodar o seekbar
-        this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity)
-        this.#menuLayout.setLayoutParams(layoutParams)
-        this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color))
-        this.#menuLayout.setOrientation(this.#menuLayout.VERTICAL.value)
-    }
-
-    createMenuBarLayout(color) {
-        const padding = pixelDensityToPixels(this.#activity, 10)
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT)
-        this.#menuBarLayout = this.#classLoader.LinearLayout.$new(this.#activity)
-        this.#menuBarLayout.setLayoutParams(layoutParams)
-        this.#menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor(color))
-        this.#menuBarLayout.setPadding(padding, padding, 0, padding)
-    }
-
-    createMenuBarTitle(title, color) {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT)
-        this.#menuBarTitle = this.#classLoader.TextView.$new(this.#activity)
-        this.#menuBarTitle.setLayoutParams(layoutParams)
-        this.#menuBarTitle.setText(this.#classLoader.String.$new(title))
-        this.#menuBarTitle.setTextColor(this.#classLoader.Color.parseColor(color))
-    }
-
-    #drawContentView() {
-        this.#activity.addContentView(this.#contentView, this.#contentView.getLayoutParams())
-    }
-
-    #drawMainLayout() {
-        this.#contentView.addView(this.#mainLayout)
-    }
-
-    #drawMenuStart() {
-        this.#mainLayout.addView(this.#menuStart)
-    }
-
-    #drawMenuLayout() {
-        this.#mainLayout.addView(this.#menuLayout)
-    }
-
-    #drawMenuBarLayout() {
-        this.#menuLayout.addView(this.#menuBarLayout)
-    }
-
-    #drawMenuBarTitle() {
-        this.#menuBarLayout.addView(this.#menuBarTitle)
-    }
-
-    #drawMenuOptions() {
-        this.#menuLayout.addView(this.#menuScrollView)
-        this.#menuScrollView.addView(this.#menuScrollLayout)
-    }
-
-    #createOptionClickEvent(id, optionView, callbacks, startOn = false) { // Adicionado startOn
-        const classLoader = this.#classLoader
-        let optionState = startOn // Estado inicial baseado em startOn
-        const colorOn = this.#colorOn
-        const colorOff = this.#colorOff
-        const optionOnClickListener = Java.registerClass({
-            name: "com.example." + id,
-            implements: [classLoader.View_OnClickListener],
-            methods: {
-                onClick(p1) {
-                    if (!optionState) {
-                        p1.setBackgroundColor(classLoader.Color.parseColor(colorOn))
-                        optionState = true
-                        callbacks.on()
-                    } else {
-                        p1.setBackgroundColor(classLoader.Color.parseColor(colorOff))
-                        optionState = false
-                        callbacks.off()
-                    }
-                }
-            }
-        })
-        optionView.setOnClickListener(optionOnClickListener.$new())
-    }
-    
-    // Adicionado um parâmetro 'startOn' para definir o estado inicial
-    addOption(id, name, callbacks, startOn = false) {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
-        const padding = pixelDensityToPixels(this.#activity, 5);
-        const option = this.#classLoader.TextView.$new(this.#activity);
-        const margin = pixelDensityToPixels(this.#activity, 10);
-
-        option.setText(this.#classLoader.String.$new(name));
-        // Define a cor inicial baseada em 'startOn'
-        option.setBackgroundColor(this.#classLoader.Color.parseColor(startOn ? this.#colorOn : this.#colorOff));
-        option.setTextColor(this.#classLoader.Color.parseColor("#75757B"));
-        layoutParams.setMargins(0, 0, 0, margin);
-        option.setLayoutParams(layoutParams);
-        option.setPadding(padding, padding, 0, padding);
-
-        this.#menuScrollLayout.addView(option);
-        this.#createOptionClickEvent(id, option, callbacks, startOn); // Passa 'startOn' para o listener
-
-        this.#options[id] = { callbacks, optionView: option };
-    }
-
-
-    turnOffAllOptions() {
-        for (const id in this.#options) {
-            const { callbacks, optionView } = this.#options[id];
-            optionView.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-            callbacks.off();
-        }
-    }
-
-    
-    addText(text, textSize, textColor) {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#WRAP_CONTENT, this.#WRAP_CONTENT);
-        const margin = pixelDensityToPixels(this.#activity, 5);
-        const textView = this.#classLoader.TextView.$new(this.#activity);
-
-        textView.setText(this.#classLoader.String.$new(text));
-        textView.setTextSize(textSize);
-        textView.setTextColor(this.#classLoader.Color.parseColor(textColor));
-        layoutParams.setMargins(0, 0, 0, margin);
-        textView.setLayoutParams(layoutParams);
-
-        this.#menuScrollLayout.addView(textView);
-    }
-
-    addSeekBar(textValue,initialValue, minValue, maxValue, callback) {
-        const layoutParams = this.#classLoader.LinearLayout_LayoutParams.$new(this.#MATCH_PARENT, this.#WRAP_CONTENT);
-        const margin = pixelDensityToPixels(this.#activity,1);
-        const seekBar = this.#classLoader.SeekBar.$new(this.#activity, null, 0, Java.use("android.R$style").Widget_Holo_SeekBar.value);
-        const textView = this.#classLoader.TextView.$new(this.#activity);
-        seekBar.setMax(maxValue - minValue);
-        seekBar.setProgress(initialValue - minValue); // Ajustado para o valor inicial correto
-        layoutParams.setMargins(0, 0, 0, margin);
-        seekBar.setLayoutParams(layoutParams);
-        const text = Java.use("java.lang.String").$new(textValue+ " "+ initialValue);
-        textView.setText(text)
-        textView.setTextColor(this.#classLoader.Color.parseColor("#75757B"))
-
-        const SeekBarChangeListener = Java.use("android.widget.SeekBar$OnSeekBarChangeListener");
-        const SeekBarChangeListenerImplementation = Java.registerClass({
-            name: "com.example.SeekBarChangeListener" + Math.floor(Math.random() * 1000),
-            implements: [SeekBarChangeListener],
-            methods: {
-                onProgressChanged(seekBar, progress, fromUser) {
-                    const value = progress + minValue;
-                    const text = Java.use("java.lang.String").$new(textValue+" "+value);
-                    textView.setText(text);
-                    callback(value,"move");
-                },
-                onStartTrackingTouch(seekBar) {
-                    const progress = seekBar.getProgress()
-                    const value = progress + minValue;
-                    const text = Java.use("java.lang.String").$new(textValue+" "+value);
-                    textView.setText(text);
-                    callback(value,"start");
-                },
-                onStopTrackingTouch(seekBar) {
-                    const progress = seekBar.getProgress()
-                    const value = progress + minValue;
-                    const text = Java.use("java.lang.String").$new(textValue+" "+value);
-                    textView.setText(text);
-                    callback(value,"end");
-                }
-            }
-        });
-
-        seekBar.setOnSeekBarChangeListener(SeekBarChangeListenerImplementation.$new());
-        this.#menuScrollLayout.addView(textView);
-        this.#menuScrollLayout.addView(seekBar);
-
-        textView.setLayoutParams(layoutParams);
-        textView.setGravity(this.#classLoader.Gravity.CENTER.value);
-    }
-
-    #createMainLayoutEvent() {
-        const mainLayout = this.#mainLayout
-        const menuLayout = this.#menuLayout
-        const menuStart = this.#menuStart
-        const classLoader = this.#classLoader
-        let initialX = 0
-        let initialY = 0
-        let isMove = false
-        let isMenuLayout = false
-        let initialTouchTime = 0
-        const MainLayoutOnTouchListener = Java.registerClass({
-            name: "com.example.MainLayoutEvent",
-            implements: [classLoader.View_OnTouchListener],
-            methods: {
-                onTouch(view, event) {
-                const menuHeight = menuLayout.getHeight();
-                    switch (event.getAction()) {
-                        case classLoader.MotionEvent.ACTION_DOWN.value:
-                            initialX = view.getX() - event.getRawX();
-                            initialY = view.getY() - event.getRawY();
-                            isMove = false
-                            initialTouchTime = Date.now()
-                            break
-                        case classLoader.MotionEvent.ACTION_UP.value:
-                            if (!isMove) {
-                                if (!isMenuLayout) {
-                                    const currentY = mainLayout.getY();
-                                    const targetY = (currentY + menuHeight / 2) - menuStart.getHeight()/1.5;
-                                    mainLayout.removeView(menuStart)
-                                    mainLayout.addView(menuLayout)
-                                    mainLayout.setY(targetY)
-                                    isMenuLayout = true
-                                } else {
-                                     const currentY = mainLayout.getY();
-                                    const targetY = (currentY - menuHeight / 2) + menuStart.getHeight()/1.5;
-                                    mainLayout.removeView(menuLayout)
-                                    mainLayout.addView(menuStart)
-                                    mainLayout.setY(targetY)
-                                    isMenuLayout = false
-                                }
-                            }
-                            break
-                        case classLoader.MotionEvent.ACTION_MOVE.value:
-                            view.setX(event.getRawX() + initialX)
-                            view.setY(event.getRawY() + initialY)
-                            let deltaTime = Date.now() - initialTouchTime
-                            if (deltaTime > 200) isMove = true
-                            break
-                        default:
-                            return false
-                    }
-                    return true
-                }
-            }
-        })
-        this.#mainLayout.setOnTouchListener(MainLayoutOnTouchListener.$new())
-    }
-
-    start() {
-        this.#drawContentView()
-        this.#drawMainLayout()
-        this.#drawMenuStart()
-        this.#drawMenuBarLayout()
-        this.#drawMenuBarTitle()
-        this.#drawMenuOptions()
-        this.#createMainLayoutEvent()
-    }
-}
-let menu = null
 const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
 const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
 const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
@@ -376,18 +53,17 @@ let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN1
 const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
 
 let canExplode = false
-
 let explosionsInterval = null
 let unhit = false
 let wallhack = false
-let showAdmins = true // <-- MUDANÇA: Inicia como true
+let showAdmins = true 
 let autoOFF = false
+let afkInterval = null
 
 const alpha = createTString('alpha=0.5');
 const zoom = createTString('zoom=1')
 
 var saveVarsToArray = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10sbidMalVNaEv"), "pointer", ["pointer"]);
-
 
 function getPlayerProperties(p) {
       let props = {
@@ -400,6 +76,7 @@ function getPlayerProperties(p) {
       }
       return props
 }
+
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), {
   'onLeave': function(ret) {
       if (wallhack) {
@@ -408,32 +85,11 @@ Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7
   }
 });
 
-function getVars(varname, type) {
-  let arrayInstance = saveVarsToArray(varname)
-  let arrayLen = arrayInstance.add(0x8).readInt()
-  let obj = {}
-  if (arrayLen > 0) {
-      let arrayIterator = arrayInstance.add(0x4).readPointer()
-      let str = []
-      for (let i = 0; i < arrayLen; i++) {
-          str[i] = readTString(arrayIterator.add(i * 0x4).readPointer())
-          const [key, value] = str[i].split('=');
-          obj[key] = value;
-      }
-      if (type == "obj") {
-          return obj
-      } else {
-          return str
-      }
-  }
-  return null
-}
-
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
   'onEnter': function(args) {
-      if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && menu != null) {
-        menu.turnOffAllOptions()
-        showToast("Player appeared. All cheats have been turned off.")
+      if (autoOFF && args[0].toInt32() != activeplayer.toInt32()) {
+        // AINDA PRECISAMOS IMPLEMENTAR UMA FORMA DE DESATIVAR OS BOTÕES VISUALMENTE
+        showToast("Player apareceu. Cheats foram desativados.")
       }
       if (!showAdmins) return
       const accRgx = /^(pc\:|graal\d+|guest.*)/;
@@ -455,149 +111,201 @@ Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7
 });
 
 Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), new NativeCallback((a, b, c, d, e, f) => {
-          if (unhit) {
-        return 0;
-      }
-      hurtPlayer(a,b,c,d,e,f)
+    if (unhit) return 0;
+    hurtPlayer(a,b,c,d,e,f)
 }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]))
 
-// MUDANÇA: A função agora aceita o raio como um parâmetro
 function makeExplosion(level, radius){
-    if (!level) return console.log("TServerLevel não recebido")
-      const playerX = getlocalx(activeplayer);
-      const playerY = getlocaly(activeplayer);
-      const offset = Math.floor(radius / 2); // Centraliza a explosão
-      for (let i = 0; i < radius; i++){
-          for (let j = 0; j < radius; j++){
-              putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1)
-          }
-      }
+    if (!level) return
+    const playerX = getlocalx(activeplayer);
+    const playerY = getlocaly(activeplayer);
+    const offset = Math.floor(radius / 2);
+    for (let i = 0; i < radius; i++){
+        for (let j = 0; j < radius; j++){
+            putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1)
+        }
+    }
 }
 
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), {
   onEnter: function(args) {
-      if (!canExplode) return
-      canExplode = false;
-      // MUDANÇA: Passa o raio da explosão para a função
-      makeExplosion(args[0], explosionRadius) 
+    if (!canExplode) return
+    canExplode = false;
+    makeExplosion(args[0], explosionRadius) 
   }
 })
 
-const call_showAdmins = {
-    on() {
-        showAdmins = true
-    },
-    off() {
-        showAdmins = false
-    }
+// Callbacks para as funções
+const call_showAdmins = { on() { showAdmins = true }, off() { showAdmins = false } }
+const call_explode = { // Renomeado de call_autoFarm
+    on() {
+        if (!explosionsInterval) {
+            explosionsInterval = setInterval(() => { canExplode = true }, 1000)
+        }
+    },
+    off() {
+        if (explosionsInterval != null) {
+            clearInterval(explosionsInterval)
+            explosionsInterval = null
+            canExplode = false
+        }
+    }
 }
-
-const call_autoFarm = {
-    on() {
-        if (!explosionsInterval) {
-            explosionsInterval = setInterval(() => { canExplode = true },1000)
-        }
-    },
-    off() {
-        if (explosionsInterval != null) {
-            clearInterval(explosionsInterval)
-            explosionsInterval = null
-            canExplode = false
-        }
-    }
-}
-let afkInterval = null
 const call_antiAfk = {
-    on() {
-        if (!afkInterval) {
-            afkInterval = setInterval(click,240*1000)
-        }
-    },
-    off() {
-        if (afkInterval != null) {
-            clearInterval(afkInterval)
-            afkInterval = null
-        }
-    }
+    on() {
+        if (!afkInterval) {
+            afkInterval = setInterval(click, 240 * 1000)
+        }
+    },
+    off() {
+        if (afkInterval != null) {
+            clearInterval(afkInterval)
+            afkInterval = null
+        }
+    }
 }
-
-const call_unhit = {
-    on() {
-        unhit = true
-    },
-    off() {
-        unhit = false
-    }
-}
-
-const call_autoOFF = {
-    on() {
-        autoOFF = true
-    },
-    off() {
-        autoOFF = false
-    }
-}
-
-
-const call_wallhack = {
-    on() {
-        wallhack = true
-    },
-    off() {
-        wallhack = false
-    }
-}
+const call_unhit = { on() { unhit = true }, off() { unhit = false } }
+const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } }
+const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } }
 
 Java.perform(function () {
     Java.scheduleOnMainThread(function () {
-        const classLoader = getClassLoader()
-        const mainActivity = getMainActivity(classLoader)
-        menu = new Menu(classLoader, mainActivity)
-        menu.createMenuStart("MENU", 15, "#006400")
-        menu.createMenuLayout("#18122B", 180)
-        menu.createMenuBarLayout("#635985")
-        menu.createMenuBarTitle("EngModMobile", "#FFC107")
-        menu.createMenuOptionsLayout("#443C68", "#393053")
-        menu.addOption("antiAfk","Anti AFK",call_antiAfk)
-        menu.addOption("autoOFF", "auto Off", call_autoOFF)
-        // MUDANÇA: O último parâmetro 'true' faz com que a opção comece ativada
-        menu.addOption("showAdmins", "Show admins", call_showAdmins, true) 
-        menu.addOption("autoFarm", "Auto Farm", call_autoFarm)
-        menu.addOption("unhit", "unhit", call_unhit)
-        menu.addOption("wallhack", "Wallhack", call_wallhack)
+        const classLoader = getClassLoader();
+        const mainActivity = getMainActivity(classLoader);
+        const Gravity = classLoader.Gravity;
 
-        // NOVO: Adiciona o seletor de raio da explosão
-        menu.addSeekBar("Raio da Explosão", 80, 1, 100, (value, type) => {
-            explosionRadius = value;
-        });
-       
-        menu.start()
+        // Cores e Estilos
+        const COLOR_OFF = classLoader.Color.parseColor("#80000000"); // Preto semi-transparente
+        const COLOR_ON = classLoader.Color.parseColor("#80008000");  // Verde semi-transparente
+        const PADDING = pixelDensityToPixels(mainActivity, 8);
+        const MARGIN = pixelDensityToPixels(mainActivity, 2);
+
+        // --- FUNÇÕES HELPER PARA CRIAR BOTÕES ---
+
+        // Cria um botão de Ligar/Desligar
+        function createToggleButton(text, callbacks, startOn = false) {
+            const button = classLoader.TextView.$new(mainActivity);
+            let isOn = startOn;
+            
+            button.setText(classLoader.String.$new(text));
+            button.setTextColor(classLoader.Color.WHITE.value);
+            button.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
+            button.setPadding(PADDING, PADDING, PADDING, PADDING);
+            
+            const layoutParams = classLoader.LinearLayout_LayoutParams.$new(
+                classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value,
+                classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
+            );
+            layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
+            button.setLayoutParams(layoutParams);
+
+            button.setOnClickListener(Java.registerClass({
+                name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
+                implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        isOn = !isOn;
+                        if (isOn) {
+                            v.setBackgroundColor(COLOR_ON);
+                            callbacks.on();
+                        } else {
+                            v.setBackgroundColor(COLOR_OFF);
+                            callbacks.off();
+                        }
+                    }
+                }
+            }).$new());
+            return button;
+        }
+
+        // Cria um botão que acelera ao ser segurado
+        function createHoldButton(text, action) {
+            const button = classLoader.TextView.$new(mainActivity);
+            let holdInterval = null;
+
+            button.setText(classLoader.String.$new(text));
+            button.setTextColor(classLoader.Color.WHITE.value);
+            button.setBackgroundColor(COLOR_OFF);
+            button.setPadding(PADDING, PADDING, PADDING, PADDING);
+            const layoutParams = classLoader.LinearLayout_LayoutParams.$new(
+                classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value,
+                classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
+            );
+            layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
+            button.setLayoutParams(layoutParams);
+
+            button.setOnTouchListener(Java.registerClass({
+                name: "com.example.TouchListener" + Math.random().toString(36).substring(2),
+                implements: [classLoader.View_OnTouchListener],
+                methods: {
+                    onTouch(v, event) {
+                        switch (event.getAction()) {
+                            case classLoader.MotionEvent.ACTION_DOWN.value:
+                                action(); // Ação imediata no primeiro toque
+                                holdInterval = setInterval(action, 100); // Repete a cada 100ms
+                                return true;
+                            case classLoader.MotionEvent.ACTION_UP.value:
+                                if (holdInterval) clearInterval(holdInterval);
+                                holdInterval = null;
+                                return true;
+                        }
+                        return false;
+                    }
+                }
+            }).$new());
+            return button;
+        }
+
+        // --- MONTAGEM DA INTERFACE ---
+
+        // 1. Layout Principal (a barra inteira)
+        const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
+        mainBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+        mainBarLayout.setGravity(Gravity.CENTER.value);
+        mainBarLayout.setBackgroundColor(classLoader.Color.TRANSPARENT.value);
+        const barLayoutParams = classLoader.LinearLayout_LayoutParams.$new(
+            classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value,
+            classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
+        );
+        mainBarLayout.setLayoutParams(barLayoutParams);
 
 
-        // NOVO: Código para criar e exibir o painel de informações do jogador
+        // 2. Layout para centralizar a barra no rodapé
+        const rootLayout = classLoader.LinearLayout.$new(mainActivity);
+        const rootParams = classLoader.LinearLayout_LayoutParams.$new(
+            classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value,
+            classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value
+        );
+        rootLayout.setLayoutParams(rootParams);
+        rootLayout.setGravity(Gravity.CENTER_HORIZONTAL.value | Gravity.BOTTOM.value);
+        rootLayout.addView(mainBarLayout);
+
+        // 3. Adicionar os botões e paineis na ordem correta
+        // [Auto Off] [Wall Hack] [Anti Afk]
+        mainBarLayout.addView(createToggleButton("Auto Off", call_autoOFF));
+        mainBarLayout.addView(createToggleButton("Wall Hack", call_wallhack));
+        mainBarLayout.addView(createToggleButton("Anti Afk", call_antiAfk));
+
+        // [Layout de Infos]
         const playerInfoLayout = classLoader.LinearLayout.$new(mainActivity);
-        const layoutParams = classLoader.LinearLayout_LayoutParams.$new(classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value, classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value);
-        playerInfoLayout.setLayoutParams(layoutParams);
         playerInfoLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-        playerInfoLayout.setGravity(classLoader.Gravity.END.value | classLoader.Gravity.TOP.value);
-        playerInfoLayout.setBackgroundColor(classLoader.Color.parseColor("#80000000")); // Fundo preto semitransparente
-        const padding = pixelDensityToPixels(mainActivity, 5);
-        playerInfoLayout.setPadding(padding, padding, padding, padding);
-
-        const nameTextView = classLoader.TextView.$new(mainActivity);
-        nameTextView.setTextColor(classLoader.Color.WHITE.value);
+        playerInfoLayout.setBackgroundColor(COLOR_OFF);
+        playerInfoLayout.setPadding(PADDING, PADDING, PADDING, PADDING);
+        const infoLayoutParams = classLoader.LinearLayout_LayoutParams.$new(
+            classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value,
+            classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
+        );
+        infoLayoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
+        playerInfoLayout.setLayoutParams(infoLayoutParams);
+        
+        const nameTextView = classLoader.TextView.$new(mainActivity); nameTextView.setTextColor(classLoader.Color.WHITE.value);
+        const accountTextView = classLoader.TextView.$new(mainActivity); accountTextView.setTextColor(classLoader.Color.WHITE.value);
+        const posTextView = classLoader.TextView.$new(mainActivity); posTextView.setTextColor(classLoader.Color.WHITE.value);
+        
         playerInfoLayout.addView(nameTextView);
-
-        const accountTextView = classLoader.TextView.$new(mainActivity);
-        accountTextView.setTextColor(classLoader.Color.WHITE.value);
         playerInfoLayout.addView(accountTextView);
-
-        const posTextView = classLoader.TextView.$new(mainActivity);
-        posTextView.setTextColor(classLoader.Color.WHITE.value);
         playerInfoLayout.addView(posTextView);
-
-        mainActivity.addContentView(playerInfoLayout, layoutParams);
+        mainBarLayout.addView(playerInfoLayout);
 
         // Atualiza as informações a cada 500ms
         setInterval(() => {
@@ -608,6 +316,45 @@ Java.perform(function () {
                 posTextView.setText(classLoader.String.$new(`Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`));
             });
         }, 500);
+
+        // [Revelar ADM]
+        mainBarLayout.addView(createToggleButton("Revelar ADM", call_showAdmins, true));
+
+        // [Controle de Explosão: < | Texto | >]
+        const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
+        explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+        explosionControlLayout.setGravity(Gravity.CENTER.value);
+        
+        const explosionRadiusText = createToggleButton(`Explodir: ${explosionRadius}`, call_explode);
+        
+        const updateRadiusText = () => {
+            Java.scheduleOnMainThread(() => {
+                explosionRadiusText.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`));
+            });
+        };
+
+        const decreaseAction = () => {
+            explosionRadius = Math.max(1, explosionRadius - 1); // Não deixa ser menor que 1
+            updateRadiusText();
+        };
+        const increaseAction = () => {
+            explosionRadius = Math.min(100, explosionRadius + 1); // Não deixa ser maior que 100
+            updateRadiusText();
+        };
+        
+        const decreaseButton = createHoldButton("<", decreaseAction);
+        const increaseButton = createHoldButton(">", increaseAction);
+
+        explosionControlLayout.addView(decreaseButton);
+        explosionControlLayout.addView(explosionRadiusText);
+        explosionControlLayout.addView(increaseButton);
+        mainBarLayout.addView(explosionControlLayout);
+
+        // [Unhit]
+        mainBarLayout.addView(createToggleButton("Unhit", call_unhit));
+
+        // 4. Adiciona a interface inteira na tela
+        mainActivity.addContentView(rootLayout, rootParams);
     })
 })
 
@@ -641,9 +388,6 @@ function readTString(str) {
       }
   }
 }
-
-
-
 
 function click() {
     Java.perform(function () {
