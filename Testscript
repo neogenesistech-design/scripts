@@ -1,7 +1,7 @@
 setTimeout(() => {
-    // ===================================================================================
-    // SCRIPT-MODELO v16 - Sistema de Waypoint (Salvar/Retornar Posição)
-    // ===================================================================================
+    // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    // SCRIPT DE ANÁLISE v18 - Hook no Message Handler com "Tradução" de Argumentos
+    // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
     function getClassLoader() {
         return {
@@ -31,10 +31,7 @@ setTimeout(() => {
     }
 
     class Menu {
-        #classLoader; #activity;
-        #menuLayout; #controlContainer; #logContainer; #logScrollView;
-        #colorOn; #colorOff;
-        #isExpanded = true;
+        #classLoader; #activity; #menuLayout; #controlContainer; #logContainer; #logScrollView; #colorOn; #colorOff; #isExpanded = true;
 
         constructor(classLoader, activity, title, width, bgColor) {
             this.#classLoader = classLoader;
@@ -135,7 +132,7 @@ setTimeout(() => {
             button.setLayoutParams(params);
             button.setPadding(10, 10, 10, 10);
             button.setOnClickListener(Java.registerClass({
-                name: "com.logger.ButtonClick" + text.replace(" ", ""),
+                name: "com.logger.ButtonClick" + text.replace(/ /g, ""),
                 implements: [this.#classLoader.View_OnClickListener],
                 methods: { onClick: (v) => callback() }
             }).$new());
@@ -163,81 +160,63 @@ setTimeout(() => {
 
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
-    const functionToHook = "_ZN10zF9VgaBKxR10hzR0YamGkXEdd";
+    const functionToHook = "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"; // O "Message Handler"
     // ----------------------
-
-    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
-    const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
-    const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
-    
-    // --- Variáveis para o sistema de Waypoint ---
-    let worldInstance = null;
-    let teleportPlayer = null;
-    let savedPosition = { x: null, y: null };
-    // ------------------------------------------
 
     Java.perform(function () {
         try {
             const targetPointer = Module.findExportByName(targetLib, functionToHook);
             if (targetPointer) {
-                // Prepara a função para ser chamada manualmente
-                teleportPlayer = new NativeFunction(targetPointer, 'int', ['pointer', 'double', 'double']);
-
                 Interceptor.attach(targetPointer, {
                     onEnter: function (args) {
-                        // Captura os argumentos da última chamada oficial do jogo
-                        worldInstance = args[0];
-                        savedPosition.x = args[1].readDouble();
-                        savedPosition.y = args[2].readDouble();
-                        
-                        if (menu) {
-                            menu.addLog(`[+] Waypoint salvo: (${savedPosition.x.toFixed(2)}, ${savedPosition.y.toFixed(2)})`);
-                        }
-                        
-                        // Loga os argumentos se o hook estiver ativo
                         if (!isHookEnabled || !menu) return;
-                        let logMessage = `[+] Chamada: ${functionToHook.slice(0, 20)}...\n`;
-                        logMessage += `  -> Arg[0] (this): ${args[0]}\n`;
-                        logMessage += `  -> Arg[1] (x): ${args[1].readDouble().toFixed(2)}\n`;
-                        logMessage += `  -> Arg[2] (y): ${args[2].readDouble().toFixed(2)}\n`;
+
+                        // O 'this' da função é o primeiro argumento (MpGzgariDy *)
+                        const this_ptr = args[0];
+                        // O pacote de mensagem é o segundo argumento (C8THgaTQxF *)
+                        const message_packet_ptr = args[1];
+
+                        let messageId = "N/A";
+                        let messageContent = "Não foi possível ler.";
+                        
+                        try {
+                            // Tenta "traduzir" a mensagem como no código descompilado.
+                            // C8THgaTQxF::operator[](pCVar5,1) -> acessa o segundo elemento (índice 1) do pacote
+                            // O descompilador indica que o pacote pode ser tratado como um array de bytes.
+                            const id_byte_ptr = message_packet_ptr.add(1); // Deslocamento de 1 byte
+                            const id_byte = id_byte_ptr.readU8();
+                            messageId = id_byte - 0x20; // O cálculo que vimos: uVar18 - 0x20
+                            
+                            // Faz um hexdump do pacote para vermos o conteúdo bruto
+                            messageContent = hexdump(message_packet_ptr, { length: 32 });
+                        } catch(e) {
+                            messageId = "Erro";
+                            messageContent = e.message;
+                        }
+
+                        let logMessage = `[MSG RECEBIDA] ID: ${messageId} (0x${messageId.toString(16)})\n`;
+                        logMessage += `  -> This Ptr: ${this_ptr}\n`;
+                        logMessage += `  -> Pacote @ ${message_packet_ptr}:\n${messageContent}`;
+                        
                         menu.addLog(logMessage);
                     }
                 });
             } else { console.error(`[!] Erro: Função ${functionToHook} não encontrada.`); }
         } catch (error) { console.error(`[!] Erro ao hookar função: ${error.message}`); }
 
-
         Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
             const mainActivity = getMainActivity(classLoader);
             
-            menu = new Menu(classLoader, mainActivity, "Frida Tools", 280, "#B318122B");  
+            menu = new Menu(classLoader, mainActivity, "Message Logger", 320, "#B318122B");  
             menu.setOptionColors("#B3443C68", "#B3393053");
 
             const call_toggleHook = {
-                on() { isHookEnabled = true; menu.addLog("Hook de Log ATIVADO."); },
-                off() { isHookEnabled = false; menu.addLog("Hook de Log DESATIVADO."); }
-            };
-
-            const saveCurrentPosition = () => {
-                if (!activeplayer) return;
-                savedPosition.x = getlocalx(activeplayer);
-                savedPosition.y = getlocaly(activeplayer);
-                menu.addLog(`[*] Posição manual salva: (${savedPosition.x.toFixed(2)}, ${savedPosition.y.toFixed(2)})`);
-            };
-            
-            const returnToSavedPosition = () => {
-                if (!teleportPlayer || !worldInstance || savedPosition.x === null) {
-                    menu.addLog("[!] Posição não salva ou 'mundo' não capturado. Mude de sala primeiro.");
-                    return;
-                }
-                menu.addLog(`[*] Retornando para: (${savedPosition.x.toFixed(2)}, ${savedPosition.y.toFixed(2)})`);
-                teleportPlayer(worldInstance, savedPosition.x, savedPosition.y);
+                on() { isHookEnabled = true; menu.addLog("Logger de Mensagens ATIVADO."); },
+                off() { isHookEnabled = false; menu.addLog("Logger de Mensagens DESATIVADO."); }
             };
 
             menu.addOption("toggleHook", "Ligar/Desligar Log", call_toggleHook);
-            menu.addButton("Salvar Posição Atual", saveCurrentPosition);
-            menu.addButton("Retornar à Posição Salva", returnToSavedPosition);
             menu.addButton("Limpar Log", () => { menu.clearLog(); });
 
             menu.start();
