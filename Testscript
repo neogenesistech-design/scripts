@@ -2,8 +2,8 @@ setTimeout(() => {
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
     // ===================================================================================
-    // SCRIPT COMPLETO v11 - LAYOUT FIXO (SEM MENU FLUTUANTE)
-    // Abandona a ideia de menu flutuante para usar um painel fixo e semi-transparente.
+    // SCRIPT COMPLETO v12 - TRADUTOR MULTITIPO (INT, FLOAT, STRING)
+    // O layout fixo é mantido, mas a função de inspeção agora é muito mais poderosa.
     // ===================================================================================
 
     function getClassLoader() {
@@ -38,17 +38,15 @@ setTimeout(() => {
 
     // --- Funções de Controle da UI ---
     function addLog(text) {
-        // Garante que a UI seja modificada na thread correta
         Java.scheduleOnMainThread(() => {
             if (!logContainer) return;
             const classLoader = getClassLoader();
             const mainActivity = getMainActivity();
             const logEntry = classLoader.TextView.$new(mainActivity);
             logEntry.setText(classLoader.String.$new(text));
-            logEntry.setTextColor(classLoader.Color.parseColor("#00FF00")); // Verde
+            logEntry.setTextColor(classLoader.Color.parseColor("#00FF00"));
             logEntry.setTextSize(12);
             logContainer.addView(logEntry);
-            // Auto-scroll
             logScrollView.post(Java.registerClass({
                 name: "com.logger.Scroll" + Math.random(),
                 implements: [Java.use("java.lang.Runnable")],
@@ -66,26 +64,47 @@ setTimeout(() => {
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
     const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
-    const argumentCount = 6;
     // ----------------------
 
+    // --- FUNÇÃO DE INSPEÇÃO DE MEMÓRIA (VERSÃO MELHORADA) ---
     function inspectPointer(basePtr) {
         if (!basePtr || basePtr.isNull()) return "Ponteiro nulo.\n";
+
         let result = `\n--- Inspecionando Ptr: ${basePtr} ---\n`;
         try {
-            for (let i = 0; i < 512; i += 4) {
+            for (let i = 0; i < 256; i += 4) { // Inspeciona os primeiros 256 bytes
+                const currentPtr = basePtr.add(i);
+                let interpretations = [];
+
+                // Heurística 1: Tenta ler como Inteiro
+                const intVal = currentPtr.readInt();
+                if (Math.abs(intVal) > 0 && Math.abs(intVal) < 50000) { // É um número "razoável"?
+                    interpretations.push(`Int: ${intVal}`);
+                }
+
+                // Heurística 2: Tenta ler como Float
+                const floatVal = currentPtr.readFloat();
+                if (Math.abs(floatVal) > 0.01 && Math.abs(floatVal) < 50000) { // É um float "razoável"?
+                    interpretations.push(`Float: ${floatVal.toFixed(2)}`);
+                }
+
+                // Heurística 3: Tenta ler como Ponteiro para String
                 try {
-                    const innerPtr = basePtr.add(i).readPointer();
-                    if (!innerPtr.isNull()) {
-                        const str = innerPtr.readCString(50);
-                        if (str && str.length > 2 && /^[a-zA-Z0-9\s_]+$/.test(str)) {
-                            result += `  [+] Off +0x${i.toString(16)} -> Str: "${str}"\n`;
-                        }
+                    const str = currentPtr.readPointer().readCString(50);
+                    if (str && str.length > 2 && /^[a-zA-Z0-9\s_.-]+$/.test(str)) {
+                        interpretations.push(`Ptr -> String: "${str}"`);
                     }
-                } catch (e) { /* Ignora */ }
+                } catch (e) {}
+                
+                // Se encontrou alguma interpretação provável, mostra no log
+                if (interpretations.length > 0) {
+                    result += `  Offset +0x${i.toString(16)}: ${interpretations.join(' | ')}\n`;
+                }
             }
-        } catch (e) { result += `  [!] Falha ao ler memória\n`; }
-        return result + "--- Fim ---\n";
+        } catch (e) {
+            result += `  [!] Falha ao ler memória em ${basePtr}\n`;
+        }
+        return result + "--- Fim da Inspeção ---\n";
     }
 
     Java.perform(() => {
@@ -94,12 +113,13 @@ setTimeout(() => {
             Interceptor.attach(targetPointer, {
                 onEnter: function(args) {
                     if (!isHookEnabled) return;
-                    let logMessage = `[+] Chamada: ${targetFunction.slice(0, 20)}...\n`;
-                    const attackerPtr = args[4];
-                    logMessage += `  -> Player Ptr: ${args[0]}\n`;
-                    logMessage += `  -> Attacker Ptr: ${attackerPtr}\n`;
                     
-                    addLog(logMessage);
+                    const attackerPtr = args[4];
+
+                    // Adiciona a informação básica primeiro
+                    addLog(`[+] Chamada Recebida\n  -> Player Ptr: ${args[0]}\n  -> Attacker Ptr: ${attackerPtr}`);
+                    
+                    // Inspeciona o ponteiro do atacante para "traduzir" seus dados
                     if (attackerPtr && !attackerPtr.isNull()) {
                         addLog(inspectPointer(attackerPtr));
                     }
@@ -109,21 +129,18 @@ setTimeout(() => {
 
         Java.scheduleOnMainThread(() => {
             const classLoader = getClassLoader();
-            const mainActivity = getMainActivity(classLoader);
+            const mainActivity = getMainActivity();
             const PADDING = pixelDensityToPixels(mainActivity, 5);
 
-            // 1. O container principal, com orientação horizontal
             const rootLayout = classLoader.LinearLayout.$new(mainActivity);
             rootLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            rootLayout.setBackgroundColor(classLoader.Color.parseColor("#A0000000")); // Fundo semi-transparente
+            rootLayout.setBackgroundColor(classLoader.Color.parseColor("#A0000000"));
             rootLayout.setPadding(PADDING, PADDING, PADDING, PADDING);
 
-            // 2. O painel de controles à esquerda
             const controlPanel = classLoader.LinearLayout.$new(mainActivity);
             controlPanel.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             controlPanel.setGravity(classLoader.Gravity.TOP.value);
 
-            // Botão Ligar/Desligar
             const toggleButton = classLoader.TextView.$new(mainActivity);
             toggleButton.setText(classLoader.String.$new("Ligar Hook"));
             toggleButton.setTextColor(classLoader.Color.WHITE.value);
@@ -136,7 +153,7 @@ setTimeout(() => {
                     isHookEnabled = !isHookEnabled;
                     if (isHookEnabled) {
                         v.setText(classLoader.String.$new("Desligar Hook"));
-                        v.setBackgroundColor(classLoader.Color.parseColor("#80FF0000")); // Vermelho
+                        v.setBackgroundColor(classLoader.Color.parseColor("#80FF0000"));
                         addLog("Hook ATIVADO.");
                     } else {
                         v.setText(classLoader.String.$new("Ligar Hook"));
@@ -147,7 +164,6 @@ setTimeout(() => {
             }).$new());
             controlPanel.addView(toggleButton);
 
-            // Botão Limpar
             const clearButton = classLoader.TextView.$new(mainActivity);
             clearButton.setText(classLoader.String.$new("Limpar Log"));
             clearButton.setTextColor(classLoader.Color.WHITE.value);
@@ -162,9 +178,7 @@ setTimeout(() => {
             }).$new());
             controlPanel.addView(clearButton);
 
-            // 3. A área de log rolável à direita
             logScrollView = classLoader.ScrollView.$new(mainActivity);
-            // Define que a área de log ocupará o espaço restante
             const scrollParams = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 250), pixelDensityToPixels(mainActivity, 200));
             scrollParams.setMargins(PADDING, 0, 0, 0);
             logScrollView.setLayoutParams(scrollParams);
@@ -173,12 +187,10 @@ setTimeout(() => {
             logContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             logScrollView.addView(logContainer);
 
-            // 4. Adiciona os painéis de controle e de log ao layout principal
             rootLayout.addView(controlPanel);
             rootLayout.addView(logScrollView);
 
-            // 5. Adiciona o layout principal à tela no canto superior esquerdo
-            const mainLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); // WRAP_CONTENT
+            const mainLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
             mainActivity.addContentView(rootLayout, mainLayoutParams);
             rootLayout.setX(0); rootLayout.setY(0);
 
