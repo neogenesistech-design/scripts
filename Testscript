@@ -1,229 +1,54 @@
 setTimeout(() => {
-    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
     // ===================================================================================
-    // SCRIPT COMPLETO v24 - LOGGER DINÂMICO
-    // Permite alterar a função a ser hookada em tempo real através de um campo de texto.
-    // Inclui um botão para listar todas as funções exportadas da biblioteca.
+    // SCRIPT DE TESTE v25 - "TESTE DE FUMAÇA"
+    // Objetivo: Apenas exibir um TextView simples na tela para confirmar que a base
+    // da UI está funcionando. Este não é o menu final.
     // ===================================================================================
 
-    function getClassLoader() {
-        return {
-            Gravity: Java.use("android.view.Gravity"),
-            TextView: Java.use("android.widget.TextView"),
-            EditText: Java.use("android.widget.EditText"),
-            LinearLayout: Java.use("android.widget.LinearLayout"),
-            LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-            FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
-            FrameLayout: Java.use("android.widget.FrameLayout"),
-            Color: Java.use("android.graphics.Color"),
-            ActivityThread: Java.use("android.app.ActivityThread"),
-            String: Java.use("java.lang.String"),
-            ScrollView: Java.use("android.widget.ScrollView"),
-            View_OnClickListener: Java.use("android.view.View$OnClickListener"),
-        };
-    }
-
-    function getMainActivity() {
-        const activityThread = Java.use("android.app.ActivityThread").sCurrentActivityThread.value;
-        const mActivities = activityThread.mActivities.value;
-        return Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord")).activity.value;
-    }
-
-    function pixelDensityToPixels(context, dp) {
-        const density = context.getResources().getDisplayMetrics().density.value;
-        return parseInt(dp * density);
-    }
-
-    let logContainer = null;
-    let logScrollView = null;
-    let currentHookListener = null;
-    const targetLib = "libqplay.so";
-
-    function addLog(text) {
-        Java.scheduleOnMainThread(() => {
-            if (!logContainer) return;
-            const classLoader = getClassLoader();
-            const mainActivity = getMainActivity();
-            const logEntry = classLoader.TextView.$new(mainActivity);
-            logEntry.setText(classLoader.String.$new(text));
-            logEntry.setTextColor(classLoader.Color.parseColor("#00FF00"));
-            logEntry.setTextSize(12);
-            logContainer.addView(logEntry);
-            logScrollView.post(Java.registerClass({
-                name: "com.logger.Scroll" + Math.random().toString(36).substring(2),
-                implements: [Java.use("java.lang.Runnable")],
-                methods: { run: () => { logScrollView.fullScroll(130); } }
-            }).$new());
-        });
-    }
-
-    function clearLog() {
-        Java.scheduleOnMainThread(() => {
-            if (logContainer) logContainer.removeAllViews();
-        });
-    }
-
-    function applyHook(functionNameOrAddress) {
-        if (currentHookListener) {
-            currentHookListener.detach();
-            currentHookListener = null;
-            addLog("[+] Hook anterior desativado.");
-        }
-        if (!functionNameOrAddress || functionNameOrAddress.length === 0) {
-            addLog("[!] Nome da função não pode ser vazio.");
-            return;
-        }
-        try {
-            let targetPointer;
-            if (functionNameOrAddress.startsWith('0x')) {
-                targetPointer = ptr(functionNameOrAddress);
-                addLog(`[+] Tentando hookar endereço: ${targetPointer}`);
-            } else {
-                targetPointer = Module.findExportByName(targetLib, functionNameOrAddress);
-                addLog(`[+] Tentando hookar função: ${functionNameOrAddress}`);
-            }
-            if (!targetPointer || targetPointer.isNull()) {
-                throw new Error("Função ou endereço não encontrado.");
-            }
-            currentHookListener = Interceptor.attach(targetPointer, {
-                onEnter: function(args) {
-                    let logMessage = `[+] Chamada para ${functionNameOrAddress}\n`;
-                    for (let i = 0; i < 10; i++) { // Mostra até 10 argumentos
-                        try {
-                            if (args[i] === undefined) break;
-                            logMessage += `  -> Arg[${i}]: ${args[i]}\n`;
-                        } catch(e) { break; }
-                    }
-                    addLog(logMessage);
-                }
-            });
-            addLog(`[+] SUCESSO! Hook ativado para ${functionNameOrAddress}.`);
-        } catch (error) {
-            addLog(`[!] ERRO ao aplicar hook: ${error.message}`);
-            console.error(`[!] Erro ao aplicar hook: ${error.message}`);
-        }
-    }
-
-    function deactivateHook() {
-        if (currentHookListener) {
-            currentHookListener.detach();
-            currentHookListener = null;
-            addLog("[+] Hook desativado.");
-        } else {
-            addLog("[i] Nenhum hook estava ativo.");
-        }
-    }
-    
-    function listAllFunctions() {
-        clearLog();
-        addLog(`--- Funções em ${targetLib} ---`);
-        const exports = Module.enumerateExports(targetLib);
-        if (exports.length === 0) {
-            addLog("[!] Nenhuma função exportada encontrada.");
-            return;
-        }
-        exports.forEach(exp => {
-            if(exp.type === 'function') addLog(`${exp.name}`);
-        });
-        addLog(`--- Fim da lista (${exports.length} exports) ---`);
-    }
+    console.log("[+] Iniciando teste de UI...");
 
     Java.perform(() => {
         Java.scheduleOnMainThread(() => {
-            const classLoader = getClassLoader();
-            const mainActivity = getMainActivity();
-            const PADDING = pixelDensityToPixels(mainActivity, 5);
+            try {
+                // 1. Obter as classes mínimas necessárias
+                const ActivityThread = Java.use("android.app.ActivityThread");
+                const TextView = Java.use("android.widget.TextView");
+                const Color = Java.use("android.graphics.Color");
+                const FrameLayout_LayoutParams = Java.use("android.widget.FrameLayout$LayoutParams");
 
-            const mainPanel = classLoader.LinearLayout.$new(mainActivity);
-            mainPanel.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-            mainPanel.setBackgroundColor(classLoader.Color.parseColor("#C0000000"));
-            mainPanel.setPadding(PADDING, PADDING, PADDING, PADDING);
+                // 2. Obter a atividade principal do jogo
+                const mainActivity = Java.cast(ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord")).activity.value;
 
-            const functionInput = classLoader.EditText.$new(mainActivity);
-            functionInput.setHint(classLoader.String.$new("Nome ou endereço da função..."));
-            functionInput.setTextColor(classLoader.Color.WHITE.value);
-            functionInput.setHintTextColor(classLoader.Color.GRAY.value);
-            functionInput.setBackgroundColor(classLoader.Color.parseColor("#80000000"));
-            mainPanel.addView(functionInput);
+                if (!mainActivity) {
+                    console.error("[!] Não foi possível obter a Atividade Principal.");
+                    return;
+                }
+                
+                // 3. Criar o TextView de teste
+                const testView = TextView.$new(mainActivity);
+                testView.setText(Java.use("java.lang.String").$new("TESTE DE UI"));
+                testView.setTextColor(Color.WHITE.value);
+                testView.setBackgroundColor(Color.parseColor("#80FF0000")); // Vermelho, semi-transparente
+                testView.setPadding(30, 30, 30, 30);
+                
+                // Define um tamanho para garantir que não seja 0
+                const params = FrameLayout_LayoutParams.$new(-2, -2); // WRAP_CONTENT
+                
+                // 4. Adicionar o TextView à tela
+                mainActivity.addContentView(testView, params);
+                
+                // 5. Posicionar no canto superior esquerdo
+                testView.setX(0);
+                testView.setY(50); // Um pouco para baixo para não ficar sob a barra de status
 
-            function createButton(text, onClickListener, weight = 1.0) {
-                const button = classLoader.TextView.$new(mainActivity);
-                button.setText(classLoader.String.$new(text));
-                button.setTextColor(classLoader.Color.WHITE.value);
-                button.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
-                button.setGravity(classLoader.Gravity.CENTER.value);
-                button.setPadding(PADDING, PADDING, PADDING, PADDING);
-                const params = classLoader.LinearLayout_LayoutParams.$new(0, -2, weight);
-                params.setMargins(PADDING, PADDING, PADDING, PADDING);
-                button.setLayoutParams(params);
-                button.setOnClickListener(onClickListener);
-                return button;
+                console.log("[+] Teste de UI: TextView foi adicionado à tela. Por favor, verifique o canto superior esquerdo do seu jogo.");
+
+            } catch (e) {
+                // Se até isso falhar, o erro é sério.
+                console.error("[!] Erro CRÍTICO ao tentar criar a UI de teste:", e.stack);
             }
-
-            const buttonPanel1 = classLoader.LinearLayout.$new(mainActivity);
-            buttonPanel1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-
-            const applyButton = createButton("Aplicar Hook", Java.registerClass({
-                name: "com.logger.ApplyClick" + Math.random(),
-                implements: [classLoader.View_OnClickListener],
-                methods: { onClick(v) { 
-                    const functionName = functionInput.getText().toString();
-                    applyHook(functionName);
-                }}
-            }).$new());
-
-            const deactivateButton = createButton("Desativar", Java.registerClass({
-                name: "com.logger.DeactivateClick" + Math.random(),
-                implements: [classLoader.View_OnClickListener],
-                methods: { onClick(v) { deactivateHook(); }}
-            }).$new());
-            
-            buttonPanel1.addView(applyButton);
-            buttonPanel1.addView(deactivateButton);
-            mainPanel.addView(buttonPanel1);
-            
-            const buttonPanel2 = classLoader.LinearLayout.$new(mainActivity);
-            buttonPanel2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-
-            const listButton = createButton("Listar Funções", Java.registerClass({
-                name: "com.logger.ListClick" + Math.random(),
-                implements: [classLoader.View_OnClickListener],
-                methods: { onClick(v) { listAllFunctions(); }}
-            }).$new());
-            
-            const clearButton = createButton("Limpar Log", Java.registerClass({
-                name: "com.logger.ClearClick" + Math.random(),
-                implements: [classLoader.View_OnClickListener],
-                methods: { onClick(v) { clearLog(); }}
-            }).$new());
-            
-            buttonPanel2.addView(listButton);
-            buttonPanel2.addView(clearButton);
-            mainPanel.addView(buttonPanel2);
-
-            logScrollView = classLoader.ScrollView.$new(mainActivity);
-            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(-1, 0, 1.0);
-            logScrollView.setLayoutParams(scrollParams);
-            
-            logContainer = classLoader.LinearLayout.$new(mainActivity);
-            logContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-            logScrollView.addView(logContainer);
-            mainPanel.addView(logScrollView);
-            
-            const positionerLayout = classLoader.FrameLayout.$new(mainActivity);
-            const panelParams = classLoader.FrameLayout_LayoutParams.$new(
-                pixelDensityToPixels(mainActivity, 350), -2
-            );
-            panelParams.gravity = classLoader.Gravity.START.value | classLoader.Gravity.TOP.value;
-            mainPanel.setLayoutParams(panelParams);
-
-            positionerLayout.addView(mainPanel);
-            mainActivity.addContentView(positionerLayout, positionerLayout.getLayoutParams());
-            
-            addLog("Logger Dinâmico Iniciado.");
         });
     });
 
-    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
 }, 5000);
