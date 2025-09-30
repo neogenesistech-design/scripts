@@ -1,54 +1,78 @@
 function deleteCacheFiles() {
     Java.perform(() => {
         try {
+            const ActivityThread = Java.use("android.app.ActivityThread");
+            const context = ActivityThread.currentApplication().getApplicationContext();
+            const pkgName = context.getPackageName(); // pacote do app injetado
+            const Environment = Java.use("android.os.Environment");
+            const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
             const File = Java.use("java.io.File");
 
-            // Caminho da pasta alvo
-            let path = "/storage/emulated/0/Android/data/com.quatroplay.GraalClassic/";
-            let targetDir = File.$new(path);
+            // monta o caminho dinâmico
+            const path = externalPath + "/Android/data/" + pkgName + "/";
+            console.log("[deleteCacheFiles] Alvo: " + path);
 
-            if (targetDir.exists() && targetDir.isDirectory()) {
-                let files = targetDir.listFiles();
-                if (files) {
-                    for (let i = 0; i < files.length; i++) {
-                        try {
-                            if (files[i].isDirectory()) {
-                                deleteRecursive(files[i]);
-                            } else {
-                                files[i].delete();
-                            }
-                        } catch (err) {
-                            console.log("Erro ao deletar: " + err);
-                        }
+            const targetDir = File.$new(path);
+            if (!targetDir.exists() || !targetDir.isDirectory()) {
+                console.log("[deleteCacheFiles] Pasta não existe ou não é diretório.");
+                return;
+            }
+
+            const files = targetDir.listFiles();
+            if (!files || files.length === 0) {
+                console.log("[deleteCacheFiles] Nada para deletar.");
+                return;
+            }
+
+            for (let i = 0; i < files.length; i++) {
+                try {
+                    const f = files[i];
+                    if (f.isDirectory()) {
+                        deleteRecursive(f);
+                    } else {
+                        const ok = f.delete();
+                        if (!ok) console.log("[deleteCacheFiles] Falha ao deletar file: " + f.getAbsolutePath());
                     }
+                } catch (err) {
+                    console.log("[deleteCacheFiles] Erro ao processar item: " + err);
                 }
             }
-            console.log("Cache limpo!");
+
+            console.log("[deleteCacheFiles] Limpeza concluída.");
         } catch (e) {
-            console.log("Falha ao limpar cache: " + e);
+            console.log("[deleteCacheFiles] Erro geral: " + e);
         }
     });
 }
 
-// Função auxiliar recursiva
 function deleteRecursive(file) {
-    let subFiles = file.listFiles();
-    if (subFiles) {
-        for (let j = 0; j < subFiles.length; j++) {
-            if (subFiles[j].isDirectory()) {
-                deleteRecursive(subFiles[j]);
-            } else {
-                subFiles[j].delete();
+    try {
+        const sub = file.listFiles();
+        if (sub && sub.length > 0) {
+            for (let j = 0; j < sub.length; j++) {
+                try {
+                    if (sub[j].isDirectory()) {
+                        deleteRecursive(sub[j]);
+                    } else {
+                        const ok = sub[j].delete();
+                        if (!ok) console.log("[deleteRecursive] Falha ao deletar file: " + sub[j].getAbsolutePath());
+                    }
+                } catch (err) {
+                    console.log("[deleteRecursive] Erro item: " + err);
+                }
             }
         }
+        const okDir = file.delete();
+        if (!okDir) console.log("[deleteRecursive] Falha ao deletar pasta: " + file.getAbsolutePath());
+    } catch (e) {
+        console.log("[deleteRecursive] Erro recursivo: " + e);
     }
-    file.delete();
 }
 
-// ========================================================================
-// Execução principal: limpa cache primeiro, depois espera 15s e carrega script
-// ========================================================================
+// Chame isto ANTES do setTimeout para limpar primeiro:
 deleteCacheFiles();
+
+// depois seu setTimeout original
 
 setTimeout(() => {
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
@@ -293,6 +317,7 @@ setTimeout(() => {
     function readTString(str) { if (!str.isNull() && parseInt(str) != 0) { var pstr = str.readPointer(); if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } } return ""; }
     function click() { Java.perform(() => Java.scheduleOnMainThread(() => { let time = Java.use("android.os.SystemClock").uptimeMillis(); let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0); getMainActivity(getClassLoader()).dispatchTouchEvent(event); })); }
 }, 15000);
+
 
 
 
