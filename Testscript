@@ -1,6 +1,6 @@
 setTimeout(() => {
     // ===================================================================================
-    // SCRIPT-MODELO v12 - Adicionado Bloqueio de Contagem de Itens
+    // SCRIPT-MODELO v13 - Argumentos dinâmicos para a função de bloqueio
     // ===================================================================================
 
     function getClassLoader() {
@@ -146,9 +146,9 @@ setTimeout(() => {
             Java.scheduleOnMainThread(() => {
                 const logEntry = this.#classLoader.TextView.$new(this.#activity);
                 logEntry.setText(this.#classLoader.String.$new(text));
-                logEntry.setTextColor(this.#classLoader.Color.parseColor("#00FF00")); // Verde para logs
-                this.#logContainer.addView(logEntry, 0); // Adiciona no topo
-                if (this.#logContainer.getChildCount() > 50) { // Limita o log a 50 entradas
+                logEntry.setTextColor(this.#classLoader.Color.parseColor("#00FF00"));
+                this.#logContainer.addView(logEntry, 0);
+                if (this.#logContainer.getChildCount() > 50) {
                     this.#logContainer.removeViewAt(50);
                 }
             });
@@ -160,20 +160,18 @@ setTimeout(() => {
 
     let menu = null;
     let isHookEnabled = false;
-    let infiniteItems = false; // NOVO: Flag para controlar a nova função
+    let infiniteItems = false;
 
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
-    const targetFunctionLog = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw"; // Função para logar (pode ser a mesma)
-    const targetFunctionBlock = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw"; // Função para bloquear (a do "contabilizador")
+    const targetFunctionLog = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw";
+    const targetFunctionBlock = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw";
     const argumentCount = 10; // Ajuste conforme necessário
     // ----------------------
 
-    // NOVO: Ponteiro para a função original do "contabilizador"
     let originalItemCounterFunc = null;
 
     Java.perform(function () {
-        // Hook de Log (para observação)
         try {
             const targetPointerLog = Module.findExportByName(targetLib, targetFunctionLog);
             if (targetPointerLog) {
@@ -181,29 +179,41 @@ setTimeout(() => {
                     onEnter: function (args) {
                         if (!isHookEnabled || !menu) return;
                         let logMessage = `[+] Chamada: ${targetFunctionLog.slice(0, 20)}...\n`;
-                        for (let i = 0; i < argumentCount; i++) { logMessage += `  -> Arg[${i}]: ${args[i]}\n`; }
+                        for (let i = 0; i < argumentCount; i++) {
+                            try {
+                                logMessage += `  -> Arg[${i}]: ${args[i]}\n`;
+                            } catch(e) {
+                                break; // Para se o número de argumentos for menor que o esperado
+                            }
+                        }
                         menu.addLog(logMessage);
                     }
                 });
             } else { console.error(`[!] Erro de Log: Função ${targetFunctionLog} não encontrada.`); }
         } catch (error) { console.error(`[!] Erro ao hookar função de log: ${error.message}`); }
 
-        // Hook de Bloqueio (para "Itens Infinitos")
         try {
             const targetPointerBlock = Module.findExportByName(targetLib, targetFunctionBlock);
             if (targetPointerBlock) {
-                // Guarda a função original
-                originalItemCounterFunc = new NativeFunction(targetPointerBlock, 'void', ['pointer', 'pointer']);
                 
-                // Substitui a função
-                Interceptor.replace(targetPointerBlock, new NativeCallback((arg0, arg1) => {
+                // ALTERADO: Cria uma lista de tipos de argumento dinamicamente
+                const argTypes = [];
+                for (let i = 0; i < argumentCount; i++) {
+                    argTypes.push('pointer'); // Assume 'pointer' como tipo genérico para todos
+                }
+
+                // ALTERADO: Usa a lista de tipos dinâmica para definir a função original
+                originalItemCounterFunc = new NativeFunction(targetPointerBlock, 'void', argTypes);
+                
+                // ALTERADO: Usa a lista de tipos e a sintaxe '...args' para lidar com múltiplos argumentos
+                Interceptor.replace(targetPointerBlock, new NativeCallback((...args) => {
                     if (infiniteItems) {
                         if (menu) menu.addLog("[!] Bloqueada contagem de item!");
-                        return; // Simplesmente retorna, impedindo a execução original
+                        return; // Impede a execução da função original
                     }
-                    // Se a função estiver desativada, chama a lógica original do jogo
-                    originalItemCounterFunc(arg0, arg1);
-                }, 'void', ['pointer', 'pointer']));
+                    // Chama a função original passando todos os argumentos recebidos
+                    originalItemCounterFunc(...args);
+                }, 'void', argTypes));
 
             } else { console.error(`[!] Erro de Bloqueio: Função ${targetFunctionBlock} não encontrada.`); }
         } catch (error) { console.error(`[!] Erro ao hookar função de bloqueio: ${error.message}`); }
@@ -220,13 +230,13 @@ setTimeout(() => {
                 off() { isHookEnabled = false; menu.addLog("Hook de Log DESATIVADO."); }
             };
 
-            const call_infiniteItems = { // NOVO
+            const call_infiniteItems = {
                 on() { infiniteItems = true; menu.addLog("Itens Infinitos ATIVADO."); },
                 off() { infiniteItems = false; menu.addLog("Itens Infinitos DESATIVADO."); }
             };
 
             menu.addOption("toggleHook", "Ligar/Desligar Log", call_toggleHook);
-            menu.addOption("infiniteItems", "Itens Infinitos", call_infiniteItems); // NOVO
+            menu.addOption("infiniteItems", "Itens Infinitos", call_infiniteItems);
             menu.addButton("Limpar Log", () => { menu.clearLog(); });
 
             menu.start();
