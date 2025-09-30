@@ -1,6 +1,6 @@
 setTimeout(() => {
     // ===================================================================================
-    // SCRIPT-MODELO v14 - Invocação Múltipla da Função Alvo
+    // SCRIPT-MODELO v15 - Invocação manual de função com coordenadas do jogador
     // ===================================================================================
 
     function getClassLoader() {
@@ -160,64 +160,52 @@ setTimeout(() => {
 
     let menu = null;
     let isHookEnabled = false;
-    let invokeMultiple = false;
 
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
-    const targetFunctionLog = "_ZN10zF9VgaBKxR10hzR0YamGkXEdd";
-    const targetFunctionInvoke = "_ZN10zF9VgaBKxR10hzR0YamGkXEdd";
-    const argumentCount = 10;
+    const functionToLog = "_ZN10zF9VgaBKxR10hzR0YamGkXEdd";
+    const functionToInvoke = "_ZN10zF9VgaBKxR10hzR0YamGkXEdd";
+    const argumentCount = 2; // Apenas para o log, a chamada real usa 2 doubles.
     // ----------------------
 
-    let originalTargetFunc = null;
+    // --- NOVO: Variáveis para a nova funcionalidade ---
+    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
+    const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
+    
+    let worldInstance = null; // Para armazenar o ponteiro 'this' do mundo
+    let teleportPlayer = null; // Para armazenar nossa NativeFunction
 
     Java.perform(function () {
+        // Hook para LOGAR a função (opcional, mas útil)
         try {
-            const targetPointerLog = Module.findExportByName(targetLib, targetFunctionLog);
+            const targetPointerLog = Module.findExportByName(targetLib, functionToLog);
             if (targetPointerLog) {
                 Interceptor.attach(targetPointerLog, {
                     onEnter: function (args) {
+                        // NOVO: Captura a instância do 'mundo' (o ponteiro 'this')
+                        // Em arm64, o 'this' é geralmente o primeiro argumento (x0)
+                        worldInstance = args[0]; 
+                        
                         if (!isHookEnabled || !menu) return;
-                        let logMessage = `[+] Chamada: ${targetFunctionLog.slice(0, 20)}...\n`;
+                        let logMessage = `[+] Chamada: ${functionToLog.slice(0, 20)}...\n`;
                         for (let i = 0; i < argumentCount; i++) {
-                            try {
-                                logMessage += `  -> Arg[${i}]: ${args[i]}\n`;
-                            } catch(e) {
-                                break;
-                            }
+                            try { logMessage += `  -> Arg[${i}]: ${args[i]}\n`; } catch(e) { break; }
                         }
                         menu.addLog(logMessage);
                     }
                 });
-            } else { console.error(`[!] Erro de Log: Função ${targetFunctionLog} não encontrada.`); }
+            } else { console.error(`[!] Erro de Log: Função ${functionToLog} não encontrada.`); }
         } catch (error) { console.error(`[!] Erro ao hookar função de log: ${error.message}`); }
 
+        // NOVO: Prepara a função para ser chamada manualmente
         try {
-            const targetPointerInvoke = Module.findExportByName(targetLib, targetFunctionInvoke);
+            const targetPointerInvoke = Module.findExportByName(targetLib, functionToInvoke);
             if (targetPointerInvoke) {
-                
-                const argTypes = [];
-                for (let i = 0; i < argumentCount; i++) {
-                    argTypes.push('pointer');
-                }
-
-                originalTargetFunc = new NativeFunction(targetPointerInvoke, 'void', argTypes);
-                
-                Interceptor.replace(targetPointerInvoke, new NativeCallback((...args) => {
-                    if (invokeMultiple) {
-                        if (menu) menu.addLog("[!] Invocando função alvo 2x!");
-                        // Chama a função original duas vezes
-                        originalTargetFunc(...args);
-                        originalTargetFunc(...args);
-                        // Você pode adicionar mais chamadas aqui se quiser
-                        return;
-                    }
-                    // Se a função estiver desativada, chama a lógica original do jogo normalmente
-                    originalTargetFunc(...args);
-                }, 'void', argTypes));
-
-            } else { console.error(`[!] Erro de Invocação: Função ${targetFunctionInvoke} não encontrada.`); }
-        } catch (error) { console.error(`[!] Erro ao hookar função de invocação: ${error.message}`); }
+                // Assinatura: (this*, double, double) -> retorna um int (undefined4)
+                teleportPlayer = new NativeFunction(targetPointerInvoke, 'int', ['pointer', 'double', 'double']);
+            } else { console.error(`[!] Erro de Invocação: Função ${functionToInvoke} não encontrada.`); }
+        } catch (error) { console.error(`[!] Erro ao preparar função de invocação: ${error.message}`); }
 
         Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
@@ -231,13 +219,25 @@ setTimeout(() => {
                 off() { isHookEnabled = false; menu.addLog("Hook de Log DESATIVADO."); }
             };
 
-            const call_invokeMultiple = {
-                on() { invokeMultiple = true; menu.addLog("Invocação Múltipla ATIVADA."); },
-                off() { invokeMultiple = false; menu.addLog("Invocação Múltipla DESATIVADA."); }
+            // NOVO: Lógica do botão de invocação
+            const invokeTeleportFunction = () => {
+                if (!teleportPlayer) {
+                    menu.addLog("[!] Erro: Função de teleporte não está pronta.");
+                    return;
+                }
+                if (!worldInstance) {
+                    menu.addLog("[!] Aguardando instância do mundo. Mova-se um pouco.");
+                    return;
+                }
+                const playerX = getlocalx(activeplayer);
+                const playerY = getlocaly(activeplayer);
+                
+                menu.addLog(`[*] Invocando teleporte para: (${playerX.toFixed(2)}, ${playerY.toFixed(2)})`);
+                teleportPlayer(worldInstance, playerX, playerY);
             };
 
             menu.addOption("toggleHook", "Ligar/Desligar Log", call_toggleHook);
-            menu.addOption("invokeMultiple", "Invocar Função Alvo", call_invokeMultiple);
+            menu.addButton("Invocar Teleporte", invokeTeleportFunction); // NOVO BOTÃO
             menu.addButton("Limpar Log", () => { menu.clearLog(); });
 
             menu.start();
