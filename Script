@@ -43,8 +43,6 @@ function showToast(text, time = 1) {
   });
 }
 
-// A CLASSE MENU FOI COMPLETAMENTE REMOVIDA PARA DAR LUGAR À NOVA INTERFACE
-
 const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
 const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
 const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
@@ -52,6 +50,7 @@ const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "
 let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
 const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
 
+// --- Variáveis de Estado ---
 let canExplode = false
 let explosionsInterval = null
 let unhit = false
@@ -59,53 +58,54 @@ let wallhack = false
 let showAdmins = true 
 let autoOFF = false
 let afkInterval = null
+let autoOffHasTriggered = false; // Flag para controlar o spam do toast
+let autoOffButtons = []; // Array para guardar os botões que devem ser desativados
 
 const alpha = createTString('alpha=0.5');
 const zoom = createTString('zoom=1')
 
-var saveVarsToArray = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10sbidMalVNaEv"), "pointer", ["pointer"]);
-
 function getPlayerProperties(p) {
       let props = {
-              "alpha": Memory.readFloat(ptr(p.toInt32() + 356)),
-              "zoom": Memory.readFloat(p.add(0x138)),
-              "x": Memory.readDouble(p.add(0x238)),
-              "y": Memory.readDouble(p.add(0x240)),
-              "nick": readTString(ptr(p.toInt32() + 464)),
-              "account": readTString(ptr(p.toInt32() + 696))
+          "alpha": Memory.readFloat(ptr(p.toInt32() + 356)),
+          "zoom": Memory.readFloat(p.add(0x138)),
+          "x": Memory.readDouble(p.add(0x238)),
+          "y": Memory.readDouble(p.add(0x240)),
+          "nick": readTString(ptr(p.toInt32() + 464)),
+          "account": readTString(ptr(p.toInt32() + 696))
       }
       return props
 }
 
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), {
-  'onLeave': function(ret) {
-      if (wallhack) {
-          ret.replace(0);
-      }
-  }
+  'onLeave': function(ret) { if (wallhack) ret.replace(0); }
 });
 
 Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), {
   'onEnter': function(args) {
-      if (autoOFF && args[0].toInt32() != activeplayer.toInt32()) {
-        // AINDA PRECISAMOS IMPLEMENTAR UMA FORMA DE DESATIVAR OS BOTÕES VISUALMENTE
-        showToast("Player apareceu. Cheats foram desativados.")
+    // Lógica do Auto OFF
+      if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && !autoOffHasTriggered) {
+        autoOffHasTriggered = true; // Ativa a flag para não repetir
+        showToast("Outro player detectado. Desativando cheats.");
+        
+        // Desativa os botões visualmente e logicamente
+        Java.scheduleOnMainThread(() => {
+            for (const button of autoOffButtons) {
+                button.reset();
+            }
+        });
       }
+
+    // Lógica do Revelar ADM
       if (!showAdmins) return
       const accRgx = /^(pc\:|graal\d+|guest.*)/;
       const props = getPlayerProperties(args[0]);
-      
       if (props.alpha < 0.5) setVarValue(args[0],alpha)
       if (props.zoom < 1) setVarValue(args[0],zoom)
-     
       if (!props.account) return
       const account = props.account.toLowerCase()
       if (account == '') return
-      
       if (!accRgx.test(account)) {
-          if (showAdmins) {
-              showToast('Admin: '+ account)
-          }
+          if (showAdmins) showToast('Admin: '+ account);
       }
   }
 });
@@ -135,37 +135,21 @@ Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxU
   }
 })
 
-// Callbacks para as funções
+// --- Callbacks para as funções ---
 const call_showAdmins = { on() { showAdmins = true }, off() { showAdmins = false } }
-const call_explode = { // Renomeado de call_autoFarm
-    on() {
-        if (!explosionsInterval) {
-            explosionsInterval = setInterval(() => { canExplode = true }, 1000)
-        }
-    },
-    off() {
-        if (explosionsInterval != null) {
-            clearInterval(explosionsInterval)
-            explosionsInterval = null
-            canExplode = false
-        }
-    }
+const call_explode = {
+    on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true }, 1000) },
+    off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } }
 }
 const call_antiAfk = {
-    on() {
-        if (!afkInterval) {
-            afkInterval = setInterval(click, 240 * 1000)
-        }
-    },
-    off() {
-        if (afkInterval != null) {
-            clearInterval(afkInterval)
-            afkInterval = null
-        }
-    }
+    on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000) },
+    off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } }
 }
 const call_unhit = { on() { unhit = true }, off() { unhit = false } }
-const call_autoOFF = { on() { autoOFF = true }, off() { autoOFF = false } }
+const call_autoOFF = { 
+    on() { autoOFF = true; autoOffHasTriggered = false; }, // Reseta a flag ao ligar
+    off() { autoOFF = false; autoOffHasTriggered = false; } // Reseta a flag ao desligar
+}
 const call_wallhack = { on() { wallhack = true }, off() { wallhack = false } }
 
 Java.perform(function () {
@@ -174,7 +158,7 @@ Java.perform(function () {
         const mainActivity = getMainActivity(classLoader);
         const Gravity = classLoader.Gravity;
 
-        // Cores e Estilos
+        // --- Cores e Estilos ---
         const COLOR_OFF = classLoader.Color.parseColor("#80000000"); // Preto semi-transparente
         const COLOR_ON = classLoader.Color.parseColor("#80008000");  // Verde semi-transparente
         const PADDING = pixelDensityToPixels(mainActivity, 8);
@@ -182,10 +166,17 @@ Java.perform(function () {
 
         // --- FUNÇÕES HELPER PARA CRIAR BOTÕES ---
 
-        // Cria um botão de Ligar/Desligar
         function createToggleButton(text, callbacks, startOn = false) {
             const button = classLoader.TextView.$new(mainActivity);
             let isOn = startOn;
+            
+            const reset = () => {
+                if (isOn) {
+                    isOn = false;
+                    button.setBackgroundColor(COLOR_OFF);
+                    callbacks.off();
+                }
+            };
             
             button.setText(classLoader.String.$new(text));
             button.setTextColor(classLoader.Color.WHITE.value);
@@ -215,14 +206,13 @@ Java.perform(function () {
                     }
                 }
             }).$new());
-            return button;
+            
+            return { view: button, reset: reset };
         }
 
-        // Cria um botão que acelera ao ser segurado
         function createHoldButton(text, action) {
             const button = classLoader.TextView.$new(mainActivity);
             let holdInterval = null;
-
             button.setText(classLoader.String.$new(text));
             button.setTextColor(classLoader.Color.WHITE.value);
             button.setBackgroundColor(COLOR_OFF);
@@ -241,8 +231,8 @@ Java.perform(function () {
                     onTouch(v, event) {
                         switch (event.getAction()) {
                             case classLoader.MotionEvent.ACTION_DOWN.value:
-                                action(); // Ação imediata no primeiro toque
-                                holdInterval = setInterval(action, 100); // Repete a cada 100ms
+                                action();
+                                holdInterval = setInterval(action, 100);
                                 return true;
                             case classLoader.MotionEvent.ACTION_UP.value:
                                 if (holdInterval) clearInterval(holdInterval);
@@ -258,155 +248,108 @@ Java.perform(function () {
 
         // --- MONTAGEM DA INTERFACE ---
 
-        // 1. Layout Principal (a barra inteira)
-        const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
-        mainBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-        mainBarLayout.setGravity(Gravity.CENTER.value);
-        mainBarLayout.setBackgroundColor(classLoader.Color.TRANSPARENT.value);
-        const barLayoutParams = classLoader.LinearLayout_LayoutParams.$new(
-            classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value,
-            classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
-        );
-        mainBarLayout.setLayoutParams(barLayoutParams);
-
-
-        // 2. Layout para centralizar a barra no rodapé
-        const rootLayout = classLoader.LinearLayout.$new(mainActivity);
-        const rootParams = classLoader.LinearLayout_LayoutParams.$new(
+        // 1. Layout para o Texto de Informações (Topo)
+        const topInfoTextView = classLoader.TextView.$new(mainActivity);
+        topInfoTextView.setTextColor(classLoader.Color.WHITE.value);
+        topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value); // Sombra para legibilidade
+        
+        const topLayout = classLoader.LinearLayout.$new(mainActivity);
+        const topParams = classLoader.LinearLayout_LayoutParams.$new(
             classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value,
             classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value
         );
-        rootLayout.setLayoutParams(rootParams);
-        rootLayout.setGravity(Gravity.CENTER_HORIZONTAL.value | Gravity.BOTTOM.value);
-        rootLayout.addView(mainBarLayout);
+        topLayout.setLayoutParams(topParams);
+        topLayout.setGravity(Gravity.TOP.value | Gravity.CENTER_HORIZONTAL.value);
+        topLayout.addView(topInfoTextView);
 
-        // 3. Adicionar os botões e paineis na ordem correta
-        // [Auto Off] [Wall Hack] [Anti Afk]
-        mainBarLayout.addView(createToggleButton("Auto Off", call_autoOFF));
-        mainBarLayout.addView(createToggleButton("Wall Hack", call_wallhack));
-        mainBarLayout.addView(createToggleButton("Anti Afk", call_antiAfk));
-
-        // [Layout de Infos]
-        const playerInfoLayout = classLoader.LinearLayout.$new(mainActivity);
-        playerInfoLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-        playerInfoLayout.setBackgroundColor(COLOR_OFF);
-        playerInfoLayout.setPadding(PADDING, PADDING, PADDING, PADDING);
-        const infoLayoutParams = classLoader.LinearLayout_LayoutParams.$new(
-            classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value,
-            classLoader.LinearLayout_LayoutParams.WRAP_CONTENT.value
+        // 2. Layout Principal (Barra Inferior)
+        const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
+        mainBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+        mainBarLayout.setGravity(Gravity.CENTER.value);
+        
+        const bottomLayout = classLoader.LinearLayout.$new(mainActivity);
+        const bottomParams = classLoader.LinearLayout_LayoutParams.$new(
+            classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value,
+            classLoader.LinearLayout_LayoutParams.MATCH_PARENT.value
         );
-        infoLayoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
-        playerInfoLayout.setLayoutParams(infoLayoutParams);
+        bottomLayout.setLayoutParams(bottomParams);
+        bottomLayout.setGravity(Gravity.CENTER_HORIZONTAL.value | Gravity.BOTTOM.value);
+        bottomLayout.addView(mainBarLayout);
+
+        // 3. Adicionar Botões (e registrar para o Auto Off)
+        const addAutoOffButton = (text, callbacks, startOn = false) => {
+            const button = createToggleButton(text, callbacks, startOn);
+            mainBarLayout.addView(button.view);
+            autoOffButtons.push(button); // Adiciona na lista de botões a serem resetados
+        };
+
+        const addRegularButton = (text, callbacks, startOn = false) => {
+             const button = createToggleButton(text, callbacks, startOn);
+             mainBarLayout.addView(button.view);
+        };
         
-        const nameTextView = classLoader.TextView.$new(mainActivity); nameTextView.setTextColor(classLoader.Color.WHITE.value);
-        const accountTextView = classLoader.TextView.$new(mainActivity); accountTextView.setTextColor(classLoader.Color.WHITE.value);
-        const posTextView = classLoader.TextView.$new(mainActivity); posTextView.setTextColor(classLoader.Color.WHITE.value);
-        
-        playerInfoLayout.addView(nameTextView);
-        playerInfoLayout.addView(accountTextView);
-        playerInfoLayout.addView(posTextView);
-        mainBarLayout.addView(playerInfoLayout);
+        addRegularButton("Auto Off", call_autoOFF);
+        addAutoOffButton("Wall Hack", call_wallhack);
+        addAutoOffButton("Anti Afk", call_antiAfk);
+        addRegularButton("Revelar ADM", call_showAdmins, true);
 
-        // Atualiza as informações a cada 500ms
-        setInterval(() => {
-            const props = getPlayerProperties(activeplayer);
-            Java.scheduleOnMainThread(function() {
-                nameTextView.setText(classLoader.String.$new("Nome: " + props.nick));
-                accountTextView.setText(classLoader.String.$new("ID: " + props.account));
-                posTextView.setText(classLoader.String.$new(`Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`));
-            });
-        }, 500);
-
-        // [Revelar ADM]
-        mainBarLayout.addView(createToggleButton("Revelar ADM", call_showAdmins, true));
-
-        // [Controle de Explosão: < | Texto | >]
+        // Controle de Explosão
         const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
         explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
         explosionControlLayout.setGravity(Gravity.CENTER.value);
         
-        const explosionRadiusText = createToggleButton(`Explodir: ${explosionRadius}`, call_explode);
+        const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode);
+        autoOffButtons.push(explosionButton); // Explodir também desliga com Auto Off
         
-        const updateRadiusText = () => {
-            Java.scheduleOnMainThread(() => {
-                explosionRadiusText.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`));
-            });
-        };
-
-        const decreaseAction = () => {
-            explosionRadius = Math.max(1, explosionRadius - 1); // Não deixa ser menor que 1
-            updateRadiusText();
-        };
-        const increaseAction = () => {
-            explosionRadius = Math.min(100, explosionRadius + 1); // Não deixa ser maior que 100
-            updateRadiusText();
-        };
+        const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`)));
+        const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); };
+        const increaseAction = () => { explosionRadius = Math.min(100, explosionRadius + 1); updateRadiusText(); };
         
-        const decreaseButton = createHoldButton("<", decreaseAction);
-        const increaseButton = createHoldButton(">", increaseAction);
-
-        explosionControlLayout.addView(decreaseButton);
-        explosionControlLayout.addView(explosionRadiusText);
-        explosionControlLayout.addView(increaseButton);
+        explosionControlLayout.addView(createHoldButton("<", decreaseAction));
+        explosionControlLayout.addView(explosionButton.view);
+        explosionControlLayout.addView(createHoldButton(">", increaseAction));
         mainBarLayout.addView(explosionControlLayout);
 
-        // [Unhit]
-        mainBarLayout.addView(createToggleButton("Unhit", call_unhit));
+        addAutoOffButton("Unhit", call_unhit);
 
-        // 4. Adiciona a interface inteira na tela
-        mainActivity.addContentView(rootLayout, rootParams);
+        // 4. Adiciona tudo na tela
+        mainActivity.addContentView(topLayout, topParams);
+        mainActivity.addContentView(bottomLayout, bottomParams);
+
+        // --- LÓGICA DE ATUALIZAÇÃO ---
+        setInterval(() => {
+            const props = getPlayerProperties(activeplayer);
+            Java.scheduleOnMainThread(function() {
+                const infoText = `Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
+                topInfoTextView.setText(classLoader.String.$new(infoText));
+            });
+        }, 500);
     })
 })
 
 //Zunz functions:
-function getFunc(lib, func, type, params) {
-  return new NativeFunction(Module.findExportByName(lib, func), type, params);
-}
-
+function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
 function createTString(str) {
-  var str_pointer = malloc(4)
-  var str_struct = malloc(str.length + 8)
-  str_pointer.writePointer(str_struct)
-  str_struct.writeInt(str.length)
-  ptr(parseInt(str_struct) + 4).writeInt(1)
-  ptr(parseInt(str_struct) + 8).writeUtf8String(str)
+  var str_pointer = malloc(4); var str_struct = malloc(str.length + 8);
+  str_pointer.writePointer(str_struct); str_struct.writeInt(str.length);
+  ptr(parseInt(str_struct) + 4).writeInt(1); ptr(parseInt(str_struct) + 8).writeUtf8String(str);
   return str_pointer
-
 }
-
 function readTString(str) {
-  if (!str.isNull()) {
-      if (parseInt(str) != 0) {
-          var pstr = str.readPointer()
-          if (!pstr.isNull()) {
-              var strlen = pstr.readInt()
-              if (strlen > 0) {
-                  var strStart = parseInt(pstr) + 8
-                  return ptr(strStart).readCString(strlen)
-              }
-          }
-      }
+  if (!str.isNull() && parseInt(str) != 0) {
+    var pstr = str.readPointer();
+    if (!pstr.isNull()) {
+        var strlen = pstr.readInt();
+        if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen);
+    }
   }
 }
-
 function click() {
-    Java.perform(function () {
-        Java.scheduleOnMainThread(function () {
-            let timer7 = Java.use("android.os.SystemClock").uptimeMillis();
-            let motionEvent = Java.use("android.view.MotionEvent").obtain(
-                timer7,
-                (timer7 + 50),
-                Java.use("android.view.MotionEvent").ACTION_DOWN.value,
-                1915,
-                1945,
-                0
-            );
-            
-            getMainActivity(getClassLoader()).dispatchTouchEvent(motionEvent);
-            console.log("clicked")
-            
-        });
-    });
+    Java.perform(() => Java.scheduleOnMainThread(() => {
+        let time = Java.use("android.os.SystemClock").uptimeMillis();
+        let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0); // ACTION_DOWN
+        getMainActivity(getClassLoader()).dispatchTouchEvent(event);
+    }));
 }
 
 },5000)
