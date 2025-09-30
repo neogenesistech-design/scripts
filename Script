@@ -240,4 +240,5 @@ setTimeout(() => {
     function createTString(str) { var str_pointer = malloc(4); var str_struct = malloc(str.length + 8); str_pointer.writePointer(str_struct); str_struct.writeInt(str.length); ptr(parseInt(str_struct) + 4).writeInt(1); ptr(parseInt(str_struct) + 8).writeUtf8String(str); return str_pointer; }
     function readTString(str) { if (!str.isNull() && parseInt(str) != 0) { var pstr = str.readPointer(); if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } } return ""; }
     function click() { Java.perform(() => Java.scheduleOnMainThread(() => { let time = Java.use("android.os.SystemClock").uptimeMillis(); let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0); getMainActivity(getClassLoader()).dispatchTouchEvent(event); })); }
-}, 7000);
+}, 15000);
+
