@@ -4,7 +4,7 @@ function deleteCacheFiles() {
             const File = Java.use("java.io.File");
 
             // Caminho da pasta alvo
-            let path = "/storage/emulated/0/Android/data/com.quattroplay.GraalClassic/";
+            let path = "/storage/emulated/0/Android/data/com.quatroplay.GraalClassic/";
             let targetDir = File.$new(path);
 
             if (targetDir.exists() && targetDir.isDirectory()) {
@@ -293,5 +293,6 @@ setTimeout(() => {
     function readTString(str) { if (!str.isNull() && parseInt(str) != 0) { var pstr = str.readPointer(); if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } } return ""; }
     function click() { Java.perform(() => Java.scheduleOnMainThread(() => { let time = Java.use("android.os.SystemClock").uptimeMillis(); let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0); getMainActivity(getClassLoader()).dispatchTouchEvent(event); })); }
 }, 15000);
+
 
 
