@@ -2,8 +2,8 @@ setTimeout(() => {
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
     // ===================================================================================
-    // SCRIPT COMPLETO v18 - CORREÇÃO DO LISTENER DE CLIQUE DO BOTÃO "LIGAR HOOK"
-    // Garante que os nomes das classes de listener sejam sempre únicos para evitar conflitos.
+    // SCRIPT COMPLETO v19 - LAYOUT FIXO FUNCIONAL COM TRADUTOR
+    // Este é o formato de UI que funciona, com a lógica de tradução e um novo botão de teste.
     // ===================================================================================
 
     function getClassLoader() {
@@ -62,41 +62,78 @@ setTimeout(() => {
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
     const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
+    const argumentCount = 6;
+    let currentLevelPtr = null; // Variável global para guardar um ponteiro importante
     // ----------------------
 
-    function inspectPointer(basePtr) {
-        if (!basePtr || basePtr.isNull()) return "Ponteiro nulo.\n";
-        let result = `\n--- Inspecionando Ptr: ${basePtr} ---\n`;
+    function translateArgument(argPtr) {
+        if (argPtr.isNull()) return "Ponteiro Nulo (0x0)";
         try {
-            for (let i = 0; i < 256; i += 4) {
-                const currentPtr = basePtr.add(i);
-                let interpretations = [];
-                try {
-                    const str = currentPtr.readPointer().readCString(50);
-                    if (str && str.length > 2 && /^[a-zA-Z0-9\s_.-]+$/.test(str)) {
-                        interpretations.push(`Ptr -> String: "${str}"`);
-                    }
-                } catch (e) {}
-                
-                if (interpretations.length > 0) {
-                    result += `  Offset +0x${i.toString(16)}: ${interpretations.join(' | ')}\n`;
-                }
+            const str = argPtr.readCString(50);
+            if (str && str.length > 2 && /^[a-zA-Z0-9\s_.-]+$/.test(str)) {
+                return `String: "${str}"`;
             }
-        } catch (e) { result += `  [!] Falha ao ler memória em ${basePtr}\n`; }
-        return result + "--- Fim da Inspeção ---\n";
+        } catch (e) {}
+        const floatVal = argPtr.readFloat();
+        if (Math.abs(floatVal) > 0.001 && Math.abs(floatVal) < 100000) {
+            return `Float: ${floatVal.toFixed(4)}`;
+        }
+        const intVal = argPtr.toInt32();
+        if (intVal !== 0) return `Ponteiro/Int: ${argPtr}`;
+        return "0";
     }
 
+    // --- FUNÇÃO DE TESTE ---
+    function testarFuncaoPutExplosion() {
+        if (!currentLevelPtr) {
+            addLog("[!] Erro: Nenhum 'level pointer' capturado ainda. Interaja no jogo primeiro.");
+            return;
+        }
+        addLog("[+] Testando a função 'putExplosion'...");
+        try {
+            const putExplosionPtr = Module.findExportByName(targetLib, "_ZN10zF9VgaBKxR10tMaombuGXrEdddii");
+            const putExplosion = new NativeFunction(putExplosionPtr, 'void', ['pointer', 'double', 'double', 'double', 'int', 'int']);
+            
+            const activePlayerPtr = Module.findExportByName(targetLib, "dkCHgaGRiF").readPointer();
+            const getlocalx = new NativeFunction(Module.findExportByName(targetLib, "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
+            const getlocaly = new NativeFunction(Module.findExportByName(targetLib, "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
+
+            const playerX = getlocalx(activePlayerPtr);
+            const playerY = getlocaly(activePlayerPtr);
+
+            // Chama a função com os argumentos necessários
+            putExplosion(currentLevelPtr, playerX, playerY, 1, 0, 1);
+            addLog("-> 'putExplosion' chamada com sucesso na sua posição!");
+
+        } catch(e) {
+            addLog(`[!] Erro ao testar função: ${e.message}`);
+        }
+    }
+
+
     Java.perform(() => {
+        // Hook para capturar o ponteiro do "level", necessário para outras funções
+        try {
+            const levelFuncPtr = Module.findExportByName(targetLib, "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd");
+            Interceptor.attach(levelFuncPtr, {
+                onEnter: function(args) {
+                    currentLevelPtr = args[0]; // Guarda o ponteiro do level para uso futuro
+                }
+            });
+        } catch(e) { console.error("Erro ao hookar level pointer."); }
+
         try {
             const targetPointer = Module.findExportByName(targetLib, targetFunction);
             Interceptor.attach(targetPointer, {
                 onEnter: function(args) {
                     if (!isHookEnabled) return;
-                    const attackerPtr = args[4];
-                    addLog(`[+] Chamada Recebida\n  -> Player Ptr: ${args[0]}\n  -> Attacker Ptr: ${attackerPtr}`);
-                    if (attackerPtr && !attackerPtr.isNull()) {
-                        addLog(inspectPointer(attackerPtr));
+                    let logMessage = `[+] Chamada Recebida\n`;
+                    for (let i = 0; i < argumentCount; i++) {
+                        const originalValue = args[i];
+                        const translatedValue = translateArgument(originalValue);
+                        logMessage += `  Arg[${i}]: ${originalValue} => ${translatedValue}\n`;
                     }
+                    addLog(logMessage);
                 }
             });
         } catch (error) { console.error(`[!] Erro ao hookar: ${error.message}`); }
@@ -106,6 +143,7 @@ setTimeout(() => {
             const mainActivity = getMainActivity();
             const PADDING = pixelDensityToPixels(mainActivity, 5);
 
+            // Criação da UI fixa no canto
             const rootLayout = classLoader.LinearLayout.$new(mainActivity);
             rootLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             rootLayout.setBackgroundColor(classLoader.Color.parseColor("#A0000000"));
@@ -115,39 +153,26 @@ setTimeout(() => {
             controlPanel.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             controlPanel.setGravity(classLoader.Gravity.TOP.value);
 
+            // Botão Ligar/Desligar
             const toggleButton = classLoader.TextView.$new(mainActivity);
             toggleButton.setText(classLoader.String.$new("Ligar Hook"));
             toggleButton.setTextColor(classLoader.Color.WHITE.value);
             toggleButton.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
             toggleButton.setPadding(PADDING, PADDING, PADDING, PADDING);
-            
-            // *** CORREÇÃO APLICADA AQUI ***
-            // O nome da classe agora é sempre único, evitando conflitos.
             toggleButton.setOnClickListener(Java.registerClass({
-                name: "com.logger.ToggleClick" + Math.random().toString(36).substring(2),
-                implements: [classLoader.View_OnClickListener],
-                methods: { 
-                    onClick(v) {
-                        try {
-                            isHookEnabled = !isHookEnabled;
-                            if (isHookEnabled) {
-                                v.setText(classLoader.String.$new("Desligar Hook"));
-                                v.setBackgroundColor(classLoader.Color.parseColor("#80FF0000"));
-                                addLog("Hook ATIVADO.");
-                            } else {
-                                v.setText(classLoader.String.$new("Ligar Hook"));
-                                v.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
-                                addLog("Hook DESATIVADO.");
-                            }
-                        } catch (e) {
-                            console.error("[!] Erro no OnClick do ToggleButton:", e.stack);
-                        }
-                    }
-                }
+                name: "com.logger.ToggleClick" + Math.random(), implements: [classLoader.View_OnClickListener],
+                methods: { onClick(v) {
+                    isHookEnabled = !isHookEnabled;
+                    v.setText(classLoader.String.$new(isHookEnabled ? "Desligar Hook" : "Ligar Hook"));
+                    v.setBackgroundColor(classLoader.Color.parseColor(isHookEnabled ? "#80FF0000" : "#80555555"));
+                    addLog(`Hook ${isHookEnabled ? "ATIVADO" : "DESATIVADO"}.`);
+                }}
             }).$new());
             controlPanel.addView(toggleButton);
 
+            // Botão Limpar
             const clearButton = classLoader.TextView.$new(mainActivity);
+            // ... (estilo do botão)
             clearButton.setText(classLoader.String.$new("Limpar Log"));
             clearButton.setTextColor(classLoader.Color.WHITE.value);
             clearButton.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
@@ -155,24 +180,31 @@ setTimeout(() => {
             clearParams.setMargins(0, PADDING, 0, 0);
             clearButton.setLayoutParams(clearParams);
             clearButton.setPadding(PADDING, PADDING, PADDING, PADDING);
-
-            // *** CORREÇÃO APLICADA AQUI TAMBÉM ***
             clearButton.setOnClickListener(Java.registerClass({
-                name: "com.logger.ClearClick" + Math.random().toString(36).substring(2),
-                implements: [classLoader.View_OnClickListener],
-                methods: { 
-                    onClick(v) { 
-                        clearLog(); 
-                    }
-                }
+                name: "com.logger.ClearClick" + Math.random(), implements: [classLoader.View_OnClickListener],
+                methods: { onClick(v) { clearLog(); }}
             }).$new());
             controlPanel.addView(clearButton);
 
+            // NOVO BOTÃO DE TESTE
+            const testButton = classLoader.TextView.$new(mainActivity);
+            testButton.setText(classLoader.String.$new("Testar Função"));
+            testButton.setTextColor(classLoader.Color.WHITE.value);
+            testButton.setBackgroundColor(classLoader.Color.parseColor("#801E90FF")); // Azul
+            const testParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
+            testParams.setMargins(0, PADDING, 0, 0);
+            testButton.setLayoutParams(testParams);
+            testButton.setPadding(PADDING, PADDING, PADDING, PADDING);
+            testButton.setOnClickListener(Java.registerClass({
+                name: "com.logger.TestClick" + Math.random(), implements: [classLoader.View_OnClickListener],
+                methods: { onClick(v) { testarFuncaoPutExplosion(); }}
+            }).$new());
+            controlPanel.addView(testButton);
+
             logScrollView = classLoader.ScrollView.$new(mainActivity);
-            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 250), pixelDensityToPixels(mainActivity, 200));
+            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 300), pixelDensityToPixels(mainActivity, 200));
             scrollParams.setMargins(PADDING, 0, 0, 0);
             logScrollView.setLayoutParams(scrollParams);
-            
             logContainer = classLoader.LinearLayout.$new(mainActivity);
             logContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             logScrollView.addView(logContainer);
