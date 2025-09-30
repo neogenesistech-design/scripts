@@ -164,8 +164,8 @@ setTimeout(() => {
 
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
-    const targetFunctionLog = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw";
-    const targetFunctionBlock = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw";
+    const targetFunctionLog = "_ZN10zF9VgaBKxR10hzR0YamGkXEdd";
+    const targetFunctionBlock = "_ZN10zF9VgaBKxR10hzR0YamGkXEdd";
     const argumentCount = 10; // Ajuste conforme necessário
     // ----------------------
 
