@@ -2,9 +2,8 @@ setTimeout(() => {
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
     // ===================================================================================
-    // SCRIPT COMPLETO v17 - LAYOUT FIXO COM TRADUTOR INTELIGENTE
-    // Interface: Painel fixo no canto da tela, comprovadamente funcional.
-    // Lógica: "Tradução" dos argumentos da função para valores legíveis (Float, Int, Ptr).
+    // SCRIPT COMPLETO v18 - CORREÇÃO DO LISTENER DE CLIQUE DO BOTÃO "LIGAR HOOK"
+    // Garante que os nomes das classes de listener sejam sempre únicos para evitar conflitos.
     // ===================================================================================
 
     function getClassLoader() {
@@ -47,7 +46,7 @@ setTimeout(() => {
             logEntry.setTextSize(12);
             logContainer.addView(logEntry);
             logScrollView.post(Java.registerClass({
-                name: "com.logger.Scroll" + Math.random(),
+                name: "com.logger.Scroll" + Math.random().toString(36).substring(2),
                 implements: [Java.use("java.lang.Runnable")],
                 methods: { run: () => { logScrollView.fullScroll(130); } }
             }).$new());
@@ -63,44 +62,28 @@ setTimeout(() => {
     // --- ÁREA DE ESTUDO ---
     const targetLib = "libqplay.so";
     const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
-    const argumentCount = 6;
     // ----------------------
 
-    // --- FUNÇÃO DE TRADUÇÃO HÍBRIDA ---
-    function translateArgument(argPtr) {
-        if (argPtr.isNull()) {
-            return "Ponteiro Nulo (0x0)";
-        }
-    
+    function inspectPointer(basePtr) {
+        if (!basePtr || basePtr.isNull()) return "Ponteiro nulo.\n";
+        let result = `\n--- Inspecionando Ptr: ${basePtr} ---\n`;
         try {
-            // Prioridade 1: É um ponteiro para uma String?
-            const str = argPtr.readCString(50);
-            if (str && str.length > 2 && /^[a-zA-Z0-9\s_.-]+$/.test(str)) {
-                return `String: "${str}"`;
+            for (let i = 0; i < 256; i += 4) {
+                const currentPtr = basePtr.add(i);
+                let interpretations = [];
+                try {
+                    const str = currentPtr.readPointer().readCString(50);
+                    if (str && str.length > 2 && /^[a-zA-Z0-9\s_.-]+$/.test(str)) {
+                        interpretations.push(`Ptr -> String: "${str}"`);
+                    }
+                } catch (e) {}
+                
+                if (interpretations.length > 0) {
+                    result += `  Offset +0x${i.toString(16)}: ${interpretations.join(' | ')}\n`;
+                }
             }
-        } catch (e) {}
-
-        // Para ler como Float ou Int, precisamos do valor bruto, não do ponteiro para o ponteiro
-        const intVal = argPtr.toInt32();
-        
-        // Prioridade 2: É um Float "razoável"?
-        // Esta é uma heurística: checamos se o padrão de bits corresponde a um float comum.
-        const floatVal = argPtr.readFloat();
-        if (Math.abs(floatVal) > 0.001 && Math.abs(floatVal) < 100000) {
-            return `Float: ${floatVal.toFixed(4)}`;
-        }
-
-        // Prioridade 3: É um Inteiro "razoável"?
-        if (Math.abs(intVal) > 0 && Math.abs(intVal) < 100000) {
-            return `Inteiro: ${intVal}`;
-        }
-        
-        // Último Recurso: É um ponteiro para outro objeto
-        if (intVal !== 0) {
-             return `Ponteiro -> ${argPtr}`;
-        }
-
-        return "0"; // Se for 0
+        } catch (e) { result += `  [!] Falha ao ler memória em ${basePtr}\n`; }
+        return result + "--- Fim da Inspeção ---\n";
     }
 
     Java.perform(() => {
@@ -109,15 +92,11 @@ setTimeout(() => {
             Interceptor.attach(targetPointer, {
                 onEnter: function(args) {
                     if (!isHookEnabled) return;
-
-                    let logMessage = `[+] Chamada Recebida\n`;
-                    for (let i = 0; i < argumentCount; i++) {
-                        const originalValue = args[i];
-                        const translatedValue = translateArgument(originalValue);
-                        logMessage += `  Arg[${i}]: ${originalValue} => ${translatedValue}\n`;
+                    const attackerPtr = args[4];
+                    addLog(`[+] Chamada Recebida\n  -> Player Ptr: ${args[0]}\n  -> Attacker Ptr: ${attackerPtr}`);
+                    if (attackerPtr && !attackerPtr.isNull()) {
+                        addLog(inspectPointer(attackerPtr));
                     }
-                    
-                    addLog(logMessage);
                 }
             });
         } catch (error) { console.error(`[!] Erro ao hookar: ${error.message}`); }
@@ -142,14 +121,29 @@ setTimeout(() => {
             toggleButton.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
             toggleButton.setPadding(PADDING, PADDING, PADDING, PADDING);
             
+            // *** CORREÇÃO APLICADA AQUI ***
+            // O nome da classe agora é sempre único, evitando conflitos.
             toggleButton.setOnClickListener(Java.registerClass({
-                name: "com.logger.ToggleClick", implements: [classLoader.View_OnClickListener],
-                methods: { onClick(v) {
-                    isHookEnabled = !isHookEnabled;
-                    v.setText(classLoader.String.$new(isHookEnabled ? "Desligar Hook" : "Ligar Hook"));
-                    v.setBackgroundColor(classLoader.Color.parseColor(isHookEnabled ? "#80FF0000" : "#80555555"));
-                    addLog(`Hook ${isHookEnabled ? "ATIVADO" : "DESATIVADO"}.`);
-                }}
+                name: "com.logger.ToggleClick" + Math.random().toString(36).substring(2),
+                implements: [classLoader.View_OnClickListener],
+                methods: { 
+                    onClick(v) {
+                        try {
+                            isHookEnabled = !isHookEnabled;
+                            if (isHookEnabled) {
+                                v.setText(classLoader.String.$new("Desligar Hook"));
+                                v.setBackgroundColor(classLoader.Color.parseColor("#80FF0000"));
+                                addLog("Hook ATIVADO.");
+                            } else {
+                                v.setText(classLoader.String.$new("Ligar Hook"));
+                                v.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
+                                addLog("Hook DESATIVADO.");
+                            }
+                        } catch (e) {
+                            console.error("[!] Erro no OnClick do ToggleButton:", e.stack);
+                        }
+                    }
+                }
             }).$new());
             controlPanel.addView(toggleButton);
 
@@ -161,14 +155,21 @@ setTimeout(() => {
             clearParams.setMargins(0, PADDING, 0, 0);
             clearButton.setLayoutParams(clearParams);
             clearButton.setPadding(PADDING, PADDING, PADDING, PADDING);
+
+            // *** CORREÇÃO APLICADA AQUI TAMBÉM ***
             clearButton.setOnClickListener(Java.registerClass({
-                name: "com.logger.ClearClick", implements: [classLoader.View_OnClickListener],
-                methods: { onClick(v) { clearLog(); }}
+                name: "com.logger.ClearClick" + Math.random().toString(36).substring(2),
+                implements: [classLoader.View_OnClickListener],
+                methods: { 
+                    onClick(v) { 
+                        clearLog(); 
+                    }
+                }
             }).$new());
             controlPanel.addView(clearButton);
 
             logScrollView = classLoader.ScrollView.$new(mainActivity);
-            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 300), pixelDensityToPixels(mainActivity, 200));
+            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 250), pixelDensityToPixels(mainActivity, 200));
             scrollParams.setMargins(PADDING, 0, 0, 0);
             logScrollView.setLayoutParams(scrollParams);
             
