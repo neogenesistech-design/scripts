@@ -166,7 +166,7 @@ setTimeout(() => {
     const targetLib = "libqplay.so";
     const targetFunctionLog = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw"; // Função para logar (pode ser a mesma)
     const targetFunctionBlock = "_ZN10SsrLga3IwI10gdghIaQf8REP10G0gxgajWBw"; // Função para bloquear (a do "contabilizador")
-    const argumentCount = 2; // Ajuste conforme necessário
+    const argumentCount = 10; // Ajuste conforme necessário
     // ----------------------
 
     // NOVO: Ponteiro para a função original do "contabilizador"
