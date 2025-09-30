@@ -2,8 +2,8 @@ setTimeout(() => {
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
     // ===================================================================================
-    // SCRIPT COMPLETO v19 - LAYOUT FIXO FUNCIONAL COM TRADUTOR
-    // Este é o formato de UI que funciona, com a lógica de tradução e um novo botão de teste.
+    // SCRIPT COMPLETO v23 - SUA FERRAMENTA DE LOGGER NO LAYOUT FIXO À ESQUERDA
+    // Usa a lógica de logger do seu script v6, mas em um painel fixo que funciona.
     // ===================================================================================
 
     function getClassLoader() {
@@ -12,6 +12,8 @@ setTimeout(() => {
             TextView: Java.use("android.widget.TextView"),
             LinearLayout: Java.use("android.widget.LinearLayout"),
             LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
+            FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
+            FrameLayout: Java.use("android.widget.FrameLayout"),
             Color: Java.use("android.graphics.Color"),
             ActivityThread: Java.use("android.app.ActivityThread"),
             String: Java.use("java.lang.String"),
@@ -31,10 +33,12 @@ setTimeout(() => {
         return parseInt(dp * density);
     }
 
+    // --- Variáveis Globais ---
     let logContainer = null;
     let logScrollView = null;
     let isHookEnabled = false;
 
+    // --- Funções de Controle da UI ---
     function addLog(text) {
         Java.scheduleOnMainThread(() => {
             if (!logContainer) return;
@@ -59,164 +63,114 @@ setTimeout(() => {
         });
     }
 
-    // --- ÁREA DE ESTUDO ---
+    // --- ÁREA DE ESTUDO (DO SEU SCRIPT) ---
     const targetLib = "libqplay.so";
     const targetFunction = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
     const argumentCount = 6;
-    let currentLevelPtr = null; // Variável global para guardar um ponteiro importante
-    // ----------------------
+    // ------------------------------------
 
-    function translateArgument(argPtr) {
-        if (argPtr.isNull()) return "Ponteiro Nulo (0x0)";
-        try {
-            const str = argPtr.readCString(50);
-            if (str && str.length > 2 && /^[a-zA-Z0-9\s_.-]+$/.test(str)) {
-                return `String: "${str}"`;
-            }
-        } catch (e) {}
-        const floatVal = argPtr.readFloat();
-        if (Math.abs(floatVal) > 0.001 && Math.abs(floatVal) < 100000) {
-            return `Float: ${floatVal.toFixed(4)}`;
-        }
-        const intVal = argPtr.toInt32();
-        if (intVal !== 0) return `Ponteiro/Int: ${argPtr}`;
-        return "0";
-    }
-
-    // --- FUNÇÃO DE TESTE ---
-    function testarFuncaoPutExplosion() {
-        if (!currentLevelPtr) {
-            addLog("[!] Erro: Nenhum 'level pointer' capturado ainda. Interaja no jogo primeiro.");
-            return;
-        }
-        addLog("[+] Testando a função 'putExplosion'...");
-        try {
-            const putExplosionPtr = Module.findExportByName(targetLib, "_ZN10zF9VgaBKxR10tMaombuGXrEdddii");
-            const putExplosion = new NativeFunction(putExplosionPtr, 'void', ['pointer', 'double', 'double', 'double', 'int', 'int']);
-            
-            const activePlayerPtr = Module.findExportByName(targetLib, "dkCHgaGRiF").readPointer();
-            const getlocalx = new NativeFunction(Module.findExportByName(targetLib, "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
-            const getlocaly = new NativeFunction(Module.findExportByName(targetLib, "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
-
-            const playerX = getlocalx(activePlayerPtr);
-            const playerY = getlocaly(activePlayerPtr);
-
-            // Chama a função com os argumentos necessários
-            putExplosion(currentLevelPtr, playerX, playerY, 1, 0, 1);
-            addLog("-> 'putExplosion' chamada com sucesso na sua posição!");
-
-        } catch(e) {
-            addLog(`[!] Erro ao testar função: ${e.message}`);
-        }
-    }
-
-
-    Java.perform(() => {
-        // Hook para capturar o ponteiro do "level", necessário para outras funções
-        try {
-            const levelFuncPtr = Module.findExportByName(targetLib, "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd");
-            Interceptor.attach(levelFuncPtr, {
-                onEnter: function(args) {
-                    currentLevelPtr = args[0]; // Guarda o ponteiro do level para uso futuro
-                }
-            });
-        } catch(e) { console.error("Erro ao hookar level pointer."); }
-
+    Java.perform(function () {
+        // --- LÓGICA DE HOOK (DO SEU SCRIPT) ---
         try {
             const targetPointer = Module.findExportByName(targetLib, targetFunction);
             Interceptor.attach(targetPointer, {
                 onEnter: function(args) {
                     if (!isHookEnabled) return;
-                    let logMessage = `[+] Chamada Recebida\n`;
+                    let logMessage = `[+] Chamada: ${targetFunction.slice(0, 20)}...\n`;
                     for (let i = 0; i < argumentCount; i++) {
-                        const originalValue = args[i];
-                        const translatedValue = translateArgument(originalValue);
-                        logMessage += `  Arg[${i}]: ${originalValue} => ${translatedValue}\n`;
+                        logMessage += `  -> Arg[${i}]: ${args[i]}\n`;
                     }
                     addLog(logMessage);
                 }
             });
-        } catch (error) { console.error(`[!] Erro ao hookar: ${error.message}`); }
+        } catch (error) { console.error(`[!] Erro ao hookar função: ${error.message}`); }
 
-        Java.scheduleOnMainThread(() => {
+        // --- CONSTRUÇÃO DA INTERFACE GRÁFICA (LAYOUT FIXO À ESQUERDA) ---
+        Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
             const mainActivity = getMainActivity();
-            const PADDING = pixelDensityToPixels(mainActivity, 5);
+            const PADDING = pixelDensityToPixels(mainActivity, 8);
+            const COLOR_ON = "#80FF0000";  // Vermelho para "ligado"
+            const COLOR_OFF = "#80555555"; // Cinza para "desligado"
 
-            // Criação da UI fixa no canto
-            const rootLayout = classLoader.LinearLayout.$new(mainActivity);
-            rootLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            rootLayout.setBackgroundColor(classLoader.Color.parseColor("#A0000000"));
-            rootLayout.setPadding(PADDING, PADDING, PADDING, PADDING);
+            // Função helper para criar botões
+            function createButton(text, onClickListener) {
+                const button = classLoader.TextView.$new(mainActivity);
+                button.setText(classLoader.String.$new(text));
+                button.setTextColor(classLoader.Color.WHITE.value);
+                button.setBackgroundColor(classLoader.Color.parseColor(COLOR_OFF));
+                button.setGravity(classLoader.Gravity.CENTER.value);
+                button.setPadding(PADDING, PADDING, PADDING, PADDING);
+                const params = classLoader.LinearLayout_LayoutParams.$new(-1, -2); // MATCH_PARENT, WRAP_CONTENT
+                params.setMargins(0, 0, 0, PADDING);
+                button.setLayoutParams(params);
+                button.setOnClickListener(onClickListener);
+                return button;
+            }
 
-            const controlPanel = classLoader.LinearLayout.$new(mainActivity);
-            controlPanel.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-            controlPanel.setGravity(classLoader.Gravity.TOP.value);
+            // 1. O painel principal (vertical)
+            const mainPanel = classLoader.LinearLayout.$new(mainActivity);
+            mainPanel.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+            mainPanel.setBackgroundColor(classLoader.Color.parseColor("#A0000000"));
+            mainPanel.setPadding(PADDING, PADDING, PADDING, PADDING);
 
-            // Botão Ligar/Desligar
-            const toggleButton = classLoader.TextView.$new(mainActivity);
-            toggleButton.setText(classLoader.String.$new("Ligar Hook"));
-            toggleButton.setTextColor(classLoader.Color.WHITE.value);
-            toggleButton.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
-            toggleButton.setPadding(PADDING, PADDING, PADDING, PADDING);
-            toggleButton.setOnClickListener(Java.registerClass({
-                name: "com.logger.ToggleClick" + Math.random(), implements: [classLoader.View_OnClickListener],
-                methods: { onClick(v) {
-                    isHookEnabled = !isHookEnabled;
-                    v.setText(classLoader.String.$new(isHookEnabled ? "Desligar Hook" : "Ligar Hook"));
-                    v.setBackgroundColor(classLoader.Color.parseColor(isHookEnabled ? "#80FF0000" : "#80555555"));
-                    addLog(`Hook ${isHookEnabled ? "ATIVADO" : "DESATIVADO"}.`);
-                }}
-            }).$new());
-            controlPanel.addView(toggleButton);
+            // 2. Botões de Controle
+            
+            // Botão Ligar/Desligar Hook
+            const toggleButtonListener = Java.registerClass({
+                name: "com.logger.ToggleClick" + Math.random().toString(36).substring(2),
+                implements: [classLoader.View_OnClickListener],
+                methods: {
+                    onClick(v) {
+                        isHookEnabled = !isHookEnabled;
+                        if (isHookEnabled) {
+                            v.setText(classLoader.String.$new("Desligar Hook"));
+                            v.setBackgroundColor(classLoader.Color.parseColor(COLOR_ON));
+                            addLog("Hook ATIVADO.");
+                        } else {
+                            v.setText(classLoader.String.$new("Ligar Hook"));
+                            v.setBackgroundColor(classLoader.Color.parseColor(COLOR_OFF));
+                            addLog("Hook DESATIVADO.");
+                        }
+                    }
+                }
+            }).$new();
+            const toggleButton = createButton("Ligar Hook", toggleButtonListener);
+            mainPanel.addView(toggleButton);
 
-            // Botão Limpar
-            const clearButton = classLoader.TextView.$new(mainActivity);
-            // ... (estilo do botão)
-            clearButton.setText(classLoader.String.$new("Limpar Log"));
-            clearButton.setTextColor(classLoader.Color.WHITE.value);
-            clearButton.setBackgroundColor(classLoader.Color.parseColor("#80555555"));
-            const clearParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
-            clearParams.setMargins(0, PADDING, 0, 0);
-            clearButton.setLayoutParams(clearParams);
-            clearButton.setPadding(PADDING, PADDING, PADDING, PADDING);
-            clearButton.setOnClickListener(Java.registerClass({
-                name: "com.logger.ClearClick" + Math.random(), implements: [classLoader.View_OnClickListener],
-                methods: { onClick(v) { clearLog(); }}
-            }).$new());
-            controlPanel.addView(clearButton);
+            // Botão Limpar Log
+            const clearButtonListener = Java.registerClass({
+                name: "com.logger.ClearClick" + Math.random().toString(36).substring(2),
+                implements: [classLoader.View_OnClickListener],
+                methods: { onClick(v) { clearLog(); } }
+            }).$new();
+            const clearButton = createButton("Limpar Log", clearButtonListener);
+            mainPanel.addView(clearButton);
 
-            // NOVO BOTÃO DE TESTE
-            const testButton = classLoader.TextView.$new(mainActivity);
-            testButton.setText(classLoader.String.$new("Testar Função"));
-            testButton.setTextColor(classLoader.Color.WHITE.value);
-            testButton.setBackgroundColor(classLoader.Color.parseColor("#801E90FF")); // Azul
-            const testParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
-            testParams.setMargins(0, PADDING, 0, 0);
-            testButton.setLayoutParams(testParams);
-            testButton.setPadding(PADDING, PADDING, PADDING, PADDING);
-            testButton.setOnClickListener(Java.registerClass({
-                name: "com.logger.TestClick" + Math.random(), implements: [classLoader.View_OnClickListener],
-                methods: { onClick(v) { testarFuncaoPutExplosion(); }}
-            }).$new());
-            controlPanel.addView(testButton);
-
+            // 3. Área de Log rolável
             logScrollView = classLoader.ScrollView.$new(mainActivity);
-            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 300), pixelDensityToPixels(mainActivity, 200));
-            scrollParams.setMargins(PADDING, 0, 0, 0);
+            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(-1, 0, 1.0); // Ocupa o resto do espaço
             logScrollView.setLayoutParams(scrollParams);
+            
             logContainer = classLoader.LinearLayout.$new(mainActivity);
             logContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             logScrollView.addView(logContainer);
+            mainPanel.addView(logScrollView);
 
-            rootLayout.addView(controlPanel);
-            rootLayout.addView(logScrollView);
+            // 4. Container de posicionamento para colocar o painel à esquerda
+            const positionerLayout = classLoader.FrameLayout.$new(mainActivity);
+            const panelParams = classLoader.FrameLayout_LayoutParams.$new(
+                pixelDensityToPixels(mainActivity, 250), // Largura do painel
+                pixelDensityToPixels(mainActivity, 300)  // Altura do painel
+            );
+            panelParams.gravity = classLoader.Gravity.START.value | classLoader.Gravity.CENTER_VERTICAL.value; // START = Esquerda
+            mainPanel.setLayoutParams(panelParams);
 
-            const mainLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-            mainActivity.addContentView(rootLayout, mainLayoutParams);
-            rootLayout.setX(0); rootLayout.setY(0);
+            // 5. Adiciona tudo à tela
+            positionerLayout.addView(mainPanel);
+            mainActivity.addContentView(positionerLayout, positionerLayout.getLayoutParams());
 
-            addLog("Logger iniciado.");
+            addLog("Logger Fixo Iniciado.");
         });
     });
 
