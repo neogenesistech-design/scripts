@@ -78,8 +78,8 @@ setTimeout(() => {
     // Variável para controlar o raio da explosão, com valor padrão
     let explosionRadius = 90;
     
-    // Variáveis para controle de tempo da explosão
-    const EXPLOSION_TIMES = [100, 200, 500, 1000]; // em milissegundos
+    // CORRIGIDO: Tempos de explosão 100ms, 250ms, 500ms, 1000ms (1s)
+    const EXPLOSION_TIMES = [100, 250, 500, 1000]; 
     let currentExplosionTimeIndex = 0; // Começa em 100ms
     let currentExplosionTime = EXPLOSION_TIMES[currentExplosionTimeIndex];
 
@@ -174,7 +174,7 @@ setTimeout(() => {
     function makeExplosion(level, radius) { if (!level) return; const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); const offset = Math.floor(radius / 2); for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } }
     const call_showAdmins = { on() { showAdmins = true; }, off() { showAdmins = false; } };
     
-    // call_explode usa o tempo de explosão dinâmico
+    // MODIFICADO: call_explode usa o tempo de explosão dinâmico
     const call_explode = { 
         on() { 
             if (!explosionsInterval) 
@@ -254,6 +254,7 @@ setTimeout(() => {
                 button.setTextColor(classLoader.Color.WHITE.value);
                 
                 // Botões de ciclo (Time) e toggle desativados têm cor OFF
+                // A cor de um botão de ciclo é sempre OFF (cinza) por padrão
                 button.setBackgroundColor(isOn && !isCycleButton ? COLOR_ON : COLOR_OFF);
                 
                 button.setPadding(PADDING, PADDING, PADDING, PADDING);
@@ -262,7 +263,7 @@ setTimeout(() => {
                 layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
                 button.setLayoutParams(layoutParams);
 
-                // Lógica de ciclo ou toggle
+                // Lógica de ciclo (Pisca e Muda Rótulo)
                 if (isCycleButton) {
                     button.setOnClickListener(Java.registerClass({
                         name: "com.example.CycleListener" + Math.random().toString(36).substring(2),
@@ -281,6 +282,7 @@ setTimeout(() => {
                         }
                     }).$new());
                 } else {
+                    // Lógica de Toggle normal (Muda cor permanente)
                     button.setOnClickListener(Java.registerClass({
                         name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
                         implements: [Java.use("android.view.View$OnClickListener")],
@@ -308,7 +310,7 @@ setTimeout(() => {
             const explosionControlsVerticalLayout = classLoader.LinearLayout.$new(mainActivity);
             explosionControlsVerticalLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             explosionControlsVerticalLayout.setGravity(Gravity.CENTER_HORIZONTAL.value);
-            const explosionGroupVerticalParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
+            const explosionGroupVerticalParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); 
             explosionControlsVerticalLayout.setLayoutParams(explosionGroupVerticalParams);
             
             // Layout da Barra Inferior (será escondido/mostrado)
@@ -337,7 +339,7 @@ setTimeout(() => {
             topLayout.setGravity(Gravity.TOP.value | Gravity.CENTER_HORIZONTAL.value);
             topLayout.addView(topBarLayout); 
 
-            // MODIFICADO: Botão para Ocultar/Mostrar a barra de cheats (começa DESATIVADO/OCULTO)
+            // MODIFICADO: Botão para Ocultar/Mostrar a barra de cheats (inicia OCULTO)
             const call_hideCheats = {
                 on() { 
                     mainBarLayout.setVisibility(View.VISIBLE.value); 
@@ -346,7 +348,7 @@ setTimeout(() => {
                     mainBarLayout.setVisibility(View.GONE.value); 
                 }
             };
-            // MODIFICADO: Começa DESATIVADO (false) para que a barra inicie oculta.
+            // Inicia DESATIVADO (false)
             const hideCheatsButton = createToggleButton("[v]", call_hideCheats, false); 
             
             call_hideCheats.off(); // Inicia OCULTA
@@ -359,11 +361,11 @@ setTimeout(() => {
                     onClick(v) {
                         const isVisible = mainBarLayout.getVisibility() == View.VISIBLE.value;
                         if (isVisible) {
-                            call_hideCheats.off(); 
-                            v.setText(classLoader.String.$new("[v]")); // Mudar texto para "Mostrar"
+                            call_hideCheats.off(); 
+                            v.setText(classLoader.String.$new("[v]")); 
                         } else {
-                            call_hideCheats.on(); 
-                            v.setText(classLoader.String.$new("[^]")); // Mudar texto para "Ocultar"
+                            call_hideCheats.on(); 
+                            v.setText(classLoader.String.$new("[^]")); 
                         }
                     }
                 }
@@ -384,10 +386,11 @@ setTimeout(() => {
             };
             
             // Adiciona botões à barra inferior
-            addRegularButton("Revelar ADM", call_showAdmins, true); // ATIVADO
+            // ATIVADO POR PADRÃO
+            addRegularButton("Revelar ADM", call_showAdmins, true);
             
             // DESATIVADOS
-            addAutoOffButton("Anti Afk", call_antiAfk, false); 
+            addAutoOffButton("Anti Afk", call_antiAfk, false); 
             addAutoOffButton("Unhit", call_unhit, false);
             addAutoOffButton("Auto Off", call_autoOFF, false);
             addAutoOffButton("Wall Hack", call_wallhack, false);
@@ -486,4 +489,4 @@ setTimeout(() => {
         ); 
     }
     // FIM DA MODIFICAÇÃO DE click()
-}, 8000);
+}, 2000);
