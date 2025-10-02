@@ -78,7 +78,7 @@ setTimeout(() => {
     // Variável para controlar o raio da explosão, com valor padrão
     let explosionRadius = 90;
     
-    // Variáveis para controle de tempo da explosão
+    // NOVO: Variáveis para controle de tempo da explosão
     const EXPLOSION_TIMES = [100, 200, 500, 1000]; // em milissegundos
     let currentExplosionTimeIndex = 0; // Começa em 100ms
     let currentExplosionTime = EXPLOSION_TIMES[currentExplosionTimeIndex];
@@ -239,7 +239,7 @@ setTimeout(() => {
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
 
-            // CORRIGIDO: createToggleButton - Removida a lógica de listener desnecessária para botões de ciclo (isCycleButton)
+            // CORRIGIDO: createToggleButton para suportar botões de ciclo
             function createToggleButton(text, callbacks, startOn = false, isCycleButton = false) {
                 const button = classLoader.TextView.$new(mainActivity);
                 let isOn = startOn;
@@ -276,8 +276,8 @@ setTimeout(() => {
                             }
                         }
                     }).$new());
-                } 
-                // Se isCycleButton for true, o OnClickListener é adicionado separadamente mais abaixo (para o botão de tempo).
+                }
+                // Se for um botão de ciclo (Time), o listener é adicionado FORA desta função.
                 
                 if (startOn) {
                     if (callbacks.on) callbacks.on(); 
@@ -395,11 +395,12 @@ setTimeout(() => {
                     // Reinicia o intervalo com o novo tempo
                     clearInterval(explosionsInterval);
                     explosionsInterval = setInterval(() => { canExplode = true; }, currentExplosionTime);
+                    showToast(`Explosão ajustada: ${currentExplosionTime}ms`, 0); // Feedback
                 }
                 updateExplosionTimeButtonText(buttonView);
             };
             
-            // Cria o botão de controle de tempo como um botão de ciclo
+            // 1. Cria o botão de controle de tempo como um botão de ciclo.
             const explosionTimeButton = createToggleButton(
                 `[Time: ${EXPLOSION_TIMES[currentExplosionTimeIndex]}ms]`, 
                 { /* Não precisa de on/off */ }, 
@@ -407,20 +408,20 @@ setTimeout(() => {
                 true // isCycleButton = true
             );
 
-            // CORRIGIDO: Aplica o OnClickListener que garante que a cor não mude e chama o ciclo.
+            // 2. Aplica o OnClickListener que CONTÉM A LÓGICA DE CICLO e corrige a cor.
             explosionTimeButton.view.setOnClickListener(Java.registerClass({
                 name: "com.example.CycleListener" + Math.random().toString(36).substring(2),
                 implements: [Java.use("android.view.View$OnClickListener")],
                 methods: {
                     onClick(v) {
-                        // Força a cor OFF para um botão de ciclo, impedindo o bug da cor verde
+                        // Força a cor OFF para um botão de ciclo (previne o bug da cor verde)
                         v.setBackgroundColor(COLOR_OFF); 
                         cycleExplosionTime(v);
                     }
                 }
             }).$new());
             
-            // Adiciona o botão de tempo no topo do layout vertical de explosão
+            // 3. Adiciona o botão ao layout.
             explosionControlsVerticalLayout.addView(explosionTimeButton.view);
             // ========================================================================
 
@@ -486,4 +487,4 @@ setTimeout(() => {
         ); 
     }
     // FIM DA MODIFICAÇÃO DE click()
-}, 8000);
+}, 2000);
