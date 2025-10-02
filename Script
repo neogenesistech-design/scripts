@@ -76,7 +76,7 @@ setTimeout(() => {
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
     // Variável para controlar o raio da explosão, com valor padrão
-    let explosionRadius = 90;
+    let explosionRadius = 1;
     
     // NOVO: Variável para controle de tempo da explosão (em milissegundos)
     let explosionTime = 100; // Padrão: 100ms
@@ -401,7 +401,7 @@ setTimeout(() => {
             const updateExplosionTimeText = (buttonView) => {
                 const ms = explosionTime;
                 const text = ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`;
-                Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`[Time: ${text}]`)));
+                Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`Time: ${text}`)));
                 
                 // Se Explodir estiver ativo, reinicia o intervalo com o novo tempo
                 if (explosionsInterval) {
@@ -524,3 +524,4 @@ setTimeout(() => {
     }
     // FIM DA MODIFICAÇÃO DE click()
 }, 2000);
+
