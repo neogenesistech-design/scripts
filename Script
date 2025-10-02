@@ -413,6 +413,11 @@ setTimeout(() => {
             // TextView para mostrar o tempo atual
             const explosionTimeTextView = classLoader.TextView.$new(mainActivity);
             explosionTimeTextView.setTextColor(classLoader.Color.WHITE.value);
+            // -> CORREÇÃO APLICADA AQUI: Adiciona fundo e padding para imitar o estilo dos botões.
+            explosionTimeTextView.setBackgroundColor(COLOR_OFF);
+            explosionTimeTextView.setPadding(PADDING, PADDING, PADDING, PADDING);
+            // <- FIM DA CORREÇÃO
+            
             const timeParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
             timeParams.setMargins(MARGIN, PADDING, MARGIN, PADDING);
             explosionTimeTextView.setLayoutParams(timeParams);
