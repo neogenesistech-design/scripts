@@ -78,8 +78,11 @@ setTimeout(() => {
     // Variável para controlar o raio da explosão, com valor padrão
     let explosionRadius = 90;
     
-    // NOVO: Variável para controle de tempo da explosão (em milissegundos)
+    // Variável para controle de tempo da explosão (em milissegundos)
     let explosionTime = 100; // Padrão: 100ms
+    // Valores de referência do maior texto possível para calcular o tamanho fixo
+    const MAX_RADIUS_TEXT = "Explodir: 90"; 
+    const MAX_TIME_TEXT = "Time: 2000ms"; 
 
     // ========================================================================
     // Funções Utilitárias
@@ -128,6 +131,16 @@ setTimeout(() => {
         return parseInt(dp * density);
     }
 
+    // FUNÇÃO CORRIGIDA para obter a largura de um TextView
+    // Necessário para calcular o tamanho fixo (fix-size) do botão
+    function measureTextWidth(context, text) {
+        const Paint = Java.use("android.graphics.Paint");
+        const paint = Paint.$new();
+        paint.setTextSize(context.getResources().getDisplayMetrics().density.value * 14); // Tamanho da fonte padrão (aprox.)
+        return paint.measureText(classLoader.String.$new(text));
+    }
+
+
     function getMainActivity(classLoader) {
         const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
         const mActivities = activityThread.mActivities.value;
@@ -172,7 +185,7 @@ setTimeout(() => {
     function makeExplosion(level, radius) { if (!level) return; const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); const offset = Math.floor(radius / 2); for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } }
     const call_showAdmins = { on() { showAdmins = true; }, off() { showAdmins = false; } };
     
-    // MODIFICADO: call_explode usa a variável explosionTime
+    // call_explode usa a variável explosionTime
     const call_explode = { 
         on() { 
             if (!explosionsInterval) 
@@ -237,9 +250,12 @@ setTimeout(() => {
             const COLOR_ON = classLoader.Color.parseColor("#80008000");
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
-
+            
+            // Variável de tamanho fixo para botões de texto (Explodir e Time)
+            const FIXED_BUTTON_WIDTH = Math.round(measureTextWidth(mainActivity, MAX_TIME_TEXT)) + (2 * PADDING) + (2 * MARGIN);
+            
             // MODIFICADO: createToggleButton com lógica para botões de ciclo
-            function createToggleButton(text, callbacks, startOn = false, isCycleButton = false) {
+            function createToggleButton(text, callbacks, startOn = false, isExplosionButton = false) {
                 const button = classLoader.TextView.$new(mainActivity);
                 let isOn = startOn;
                 
@@ -253,48 +269,34 @@ setTimeout(() => {
                 button.setTextColor(classLoader.Color.WHITE.value);
                 
                 // Botões de ciclo (Time) e toggle desativados têm cor OFF
-                button.setBackgroundColor(isOn && !isCycleButton ? COLOR_ON : COLOR_OFF);
+                button.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
                 
                 button.setPadding(PADDING, PADDING, PADDING, PADDING);
                 
-                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
+                // Se for um botão de explosão (Explodir), usa largura fixa
+                let width = -2;
+                if (isExplosionButton) {
+                    width = FIXED_BUTTON_WIDTH - (2 * MARGIN);
+                }
+                
+                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(width, -2);
                 layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
                 button.setLayoutParams(layoutParams);
 
-                // Lógica de ciclo (Pisca e Muda Rótulo)
-                if (isCycleButton) {
-                    button.setOnClickListener(Java.registerClass({
-                        name: "com.example.CycleListener" + Math.random().toString(36).substring(2),
-                        implements: [Java.use("android.view.View$OnClickListener")],
-                        methods: {
-                            onClick(v) {
-                                // 1. Pisca o botão
-                                v.setBackgroundColor(COLOR_ON);
-                                Java.scheduleOnMainThread(() => {
-                                    v.setBackgroundColor(COLOR_OFF);
-                                }, 100); // Pisca por 100ms
-                                
-                                // 2. Executa a lógica de ciclo
-                                if (callbacks.cycle) callbacks.cycle(v);
-                            }
-                        }
-                    }).$new());
-                } else {
-                    // Lógica de Toggle normal (Muda cor permanente)
-                    button.setOnClickListener(Java.registerClass({
-                        name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
-                        implements: [Java.use("android.view.View$OnClickListener")],
-                        methods: {
-                            onClick(v) {
-                                isOn = !isOn;
-                                v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
-                                if (isOn) { if (callbacks.on) callbacks.on(); }
-                                else { if (callbacks.off) callbacks.off(); }
-                            }
+                // Lógica de clique normal (toggle)
+                button.setOnClickListener(Java.registerClass({
+                    name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
+                    implements: [Java.use("android.view.View$OnClickListener")],
+                    methods: {
+                        onClick(v) {
+                            isOn = !isOn;
+                            v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
+                            if (isOn) { if (callbacks.on) callbacks.on(); }
+                            else { if (callbacks.off) callbacks.off(); }
                         }
-                    }).$new());
-                }
-                
+                    }
+                }).$new());
+                
                 if (startOn) {
                     if (callbacks.on) callbacks.on(); 
                 }
@@ -349,7 +351,7 @@ setTimeout(() => {
                     mainBarLayout.setVisibility(View.GONE.value); 
                 }
             };
-            // Inicia DESATIVADO (false)
+            // Inicia DESATIVADO (false) e OCULTO (call_hideCheats.off() já foi chamada)
             const hideCheatsButton = createToggleButton("[v]", call_hideCheats, false); 
             
             hideCheatsButton.view.setText(classLoader.String.$new("[v]")); // Próxima ação é MOSTRAR
@@ -395,46 +397,54 @@ setTimeout(() => {
             addAutoOffButton("Wall Hack", call_wallhack, false);
 
             // ========================================================================
-            // Controle de Tempo de Explosão (Botão de Tempo Configurado)
+            // Controle de Tempo de Explosão (Configurável por Botões)
             // ========================================================================
             
             const updateExplosionTimeText = (buttonView) => {
                 const ms = explosionTime;
                 const text = ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`;
-                Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`[Time: ${text}]`)));
-                
-                // Se Explodir estiver ativo, reinicia o intervalo com o novo tempo
-                if (explosionsInterval) {
-                    clearInterval(explosionsInterval);
-                    explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime);
-                }
+                Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`Time: ${text}`)));
+                
+                // Se Explodir estiver ativo, reinicia o intervalo com o novo tempo
+                if (explosionsInterval) {
+                    clearInterval(explosionsInterval);
+                    explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime);
+                }
             };
 
-            // TextView para mostrar o tempo atual
+            // TextView para mostrar o tempo atual (agora com cor de fundo)
             const explosionTimeTextView = classLoader.TextView.$new(mainActivity);
             explosionTimeTextView.setTextColor(classLoader.Color.WHITE.value);
-            const timeParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-            timeParams.setMargins(MARGIN, PADDING, MARGIN, PADDING);
-            explosionTimeTextView.setLayoutParams(timeParams);
+            explosionTimeTextView.setBackgroundColor(COLOR_OFF); // Fundo cinza escuro
+            explosionTimeTextView.setGravity(Gravity.CENTER.value); // Centraliza o texto
             
-            // Lógica de incremento/decremento
-            const TIME_OPTIONS = [100, 250, 500, 1000, 2000];
-            const changeExplosionTime = (direction) => {
-                let currentMs = explosionTime;
-                let newMs = currentMs;
+            // LayoutParams para forçar a largura fixa
+            const timeTextViewParams = classLoader.LinearLayout_LayoutParams.$new(FIXED_BUTTON_WIDTH - (2 * MARGIN), -2);
+            timeTextViewParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
+            explosionTimeTextView.setLayoutParams(timeTextViewParams);
+            
+            // Lógica de incremento/decremento (corrigido para ser mais simples)
+            const TIME_STEP = 100; // Passo base de 100ms
+            const changeExplosionTime = (direction, v) => {
+                const isIncreasing = direction === 1;
+                let newMs = explosionTime;
 
-                if (direction === 1) { // Aumentar
-                    // Encontra o próximo valor maior na lista
-                    const nextTime = TIME_OPTIONS.find(t => t > currentMs);
-                    newMs = nextTime !== undefined ? nextTime : TIME_OPTIONS[0]; // Volta ao primeiro se for o último
-                } else if (direction === -1) { // Diminuir
-                    // Encontra o valor anterior na lista
-                    const prevTime = TIME_OPTIONS.slice().reverse().find(t => t < currentMs);
-                    newMs = prevTime !== undefined ? prevTime : TIME_OPTIONS[TIME_OPTIONS.length - 1]; // Volta ao último se for o primeiro
+                if (isIncreasing) {
+                    newMs += TIME_STEP;
+                    if (newMs > 2000) newMs = 100; // Ciclo para 100ms se passar de 2s
+                } else {
+                    newMs -= TIME_STEP;
+                    if (newMs < 100) newMs = 2000; // Ciclo para 2s se for menor que 100ms
                 }
-
+                
                 explosionTime = newMs;
                 updateExplosionTimeText(explosionTimeTextView);
+                
+                // Pisca o botão
+                v.setBackgroundColor(COLOR_ON);
+                Java.scheduleOnMainThread(() => {
+                    v.setBackgroundColor(COLOR_OFF);
+                }, 100); 
             };
 
             // CRIAÇÃO DA BARRA DE CONTROLE DE TEMPO (HORIZONTAL)
@@ -444,26 +454,30 @@ setTimeout(() => {
             timeControlLayout.setLayoutParams(timeControlLayoutParams);
             timeControlLayout.setGravity(Gravity.CENTER.value);
 
+            // Botões de controle de tempo (com lógica de piscada)
+            const timeDecreaseButton = createHoldButton("<", (v) => changeExplosionTime(-1, v));
+            const timeIncreaseButton = createHoldButton(">", (v) => changeExplosionTime(1, v));
+
             // Adiciona botões e rótulo
-            timeControlLayout.addView(createHoldButton("<", () => changeExplosionTime(-1)));
+            timeControlLayout.addView(timeDecreaseButton);
             timeControlLayout.addView(explosionTimeTextView);
-            timeControlLayout.addView(createHoldButton(">", () => changeExplosionTime(1)));
+            timeControlLayout.addView(timeIncreaseButton);
             
             // Inicializa o texto
             updateExplosionTimeText(explosionTimeTextView);
             
-            // Adiciona o controle de tempo (vertical)
+            // Adiciona o controle de tempo no topo do layout vertical de explosão
             explosionControlsVerticalLayout.addView(timeControlLayout);
             // ========================================================================
-            
-            // CRIAÇÃO DA BARRA DE CONTROLE DE RAIO (HORIZONTAL)
+
             const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
             explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             const explosionControlLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
             explosionControlLayout.setLayoutParams(explosionControlLayoutParams);
             explosionControlLayout.setGravity(Gravity.CENTER.value);
             
-            const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode, false); // Começa DESATIVADO
+            // CRIAÇÃO DO BOTÃO EXPLODIR (agora com largura fixa)
+            const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode, false, true); 
             autoOffButtons.push(explosionButton);
             const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`)));
             const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); };
