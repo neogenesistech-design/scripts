@@ -172,22 +172,22 @@ setTimeout(() => {
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), { onEnter: function(args) { if (!canExplode) return; canExplode = false; makeExplosion(args[0], explosionRadius); } });
     function makeExplosion(level, radius) { if (!level) return; const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); const offset = Math.floor(radius / 2); for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } }
     const call_showAdmins = { on() { showAdmins = true; }, off() { showAdmins = false; } };
-    
-    // MODIFICADO: call_explode usa a variável explosionTime
-    const call_explode = { 
-        on() { 
-            if (!explosionsInterval) 
-                explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime); 
-        }, 
-        off() { 
-            if (explosionsInterval) { 
-                clearInterval(explosionsInterval); 
-                explosionsInterval = null; 
-                canExplode = false; 
-            } 
-        } 
-    };
-    
+    
+    // MODIFICADO: call_explode usa a variável explosionTime
+    const call_explode = { 
+        on() { 
+            if (!explosionsInterval) 
+                explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime); 
+        }, 
+        off() { 
+            if (explosionsInterval) { 
+                clearInterval(explosionsInterval); 
+                explosionsInterval = null; 
+                canExplode = false; 
+            } 
+        } 
+    };
+    
     // MODIFICADO: call_antiAfk para usar setTimeout recursivo e aleatoriedade no tempo
     const BASE_INTERVAL = 240 * 1000; // 4 minutos (240 segundos) em ms
     const RANDOM_RANGE = 3 * 1000; // 3 segundos em ms
@@ -325,7 +325,7 @@ setTimeout(() => {
                     mainBarLayout.setVisibility(View.GONE.value); 
                 }
             };
-            // Inicia DESATIVADO (false)
+            // Inicia DESATIVADO (false)
             const hideCheatsButton = createToggleButton("[v]", call_hideCheats, false); 
             
             hideCheatsButton.view.setText(classLoader.String.$new("[v]")); // Próxima ação é MOSTRAR
@@ -371,7 +371,7 @@ setTimeout(() => {
             addAutoOffButton("Wall Hack", call_wallhack, false);
 
             // ========================================================================
-            // Controle de Tempo de Explosão (Corrigido para estilo)
+            // Controle de Tempo de Explosão (Botão de Tempo Configurado)
             // ========================================================================
             
             const updateExplosionTimeText = (buttonView) => {
@@ -380,6 +380,7 @@ setTimeout(() => {
                 // CORRIGIDO: Formato sem colchetes
                 Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`Time: ${text}`)));
                 
+                // Se Explodir estiver ativo, reinicia o intervalo com o novo tempo
                 if (explosionsInterval) {
                     clearInterval(explosionsInterval);
                     explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime);
@@ -429,6 +430,7 @@ setTimeout(() => {
             timeControlLayout.setGravity(Gravity.CENTER.value);
 
             // Botões de controle de tempo (com lógica de piscada)
+            // Os botões de seta agora chamam a função changeExplosionTime e passam a si mesmos para piscar
             const timeDecreaseButton = createHoldButton("<", (v) => changeExplosionTime(-1, v));
             const timeIncreaseButton = createHoldButton(">", (v) => changeExplosionTime(1, v));
             
@@ -443,8 +445,7 @@ setTimeout(() => {
             // Adiciona o controle de tempo no topo do layout vertical de explosão
             explosionControlsVerticalLayout.addView(timeControlLayout);
             // ========================================================================
-            
-            // CRIAÇÃO DA BARRA DE CONTROLE DE RAIO (HORIZONTAL)
+
             const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
             explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             const explosionControlLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
