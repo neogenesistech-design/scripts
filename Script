@@ -489,4 +489,5 @@ setTimeout(() => {
         ); 
     }
     // FIM DA MODIFICAÇÃO DE click()
-}, 8000);
+}, 2000);
+
