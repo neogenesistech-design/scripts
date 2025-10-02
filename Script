@@ -178,7 +178,6 @@ setTimeout(() => {
     const call_explode = { 
         on() { 
             if (!explosionsInterval) 
-                // Usa currentExplosionTime
                 explosionsInterval = setInterval(() => { canExplode = true; }, currentExplosionTime); 
         }, 
         off() { 
@@ -263,7 +262,7 @@ setTimeout(() => {
                 
                 button.setPadding(PADDING, PADDING, PADDING, PADDING);
                 
-                // CORRIGIDO: Define LayoutParams com largura WRAP_CONTENT para evitar quebra de layout
+                // LayoutParams com largura WRAP_CONTENT
                 const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
                 layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
                 button.setLayoutParams(layoutParams);
@@ -299,9 +298,8 @@ setTimeout(() => {
 
                 return { view: button, reset: reset };
             }
-            // FIM DA MODIFICAÇÃO createToggleButton
             
-            // NOVO: Container Vertical ÚNICO para agrupar TODOS os botões de cheat (Horizontal)
+            // NOVO: Container Vertical ÚNICO para agrupar TODOS os botões de cheat
             const allCheatsVerticalLayout = classLoader.LinearLayout.$new(mainActivity);
             allCheatsVerticalLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             allCheatsVerticalLayout.setGravity(Gravity.CENTER_HORIZONTAL.value);
@@ -322,11 +320,10 @@ setTimeout(() => {
             bottomLayout.setLayoutParams(bottomParams);
             bottomLayout.setGravity(Gravity.CENTER_HORIZONTAL.value | Gravity.BOTTOM.value);
 
-            // ANTES: bottomLayout.addView(mainBarLayout);
-            // AGORA: Adiciona o contêiner vertical principal que contém TUDO
+            // Adiciona o contêiner vertical principal que contém TUDO
             bottomLayout.addView(allCheatsVerticalLayout); 
 
-            // Layout da Barra Superior
+            // Layout da Barra Superior (Inalterado)
             const topInfoTextView = classLoader.TextView.$new(mainActivity);
             topInfoTextView.setTextColor(classLoader.Color.WHITE.value);
             topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
@@ -378,12 +375,12 @@ setTimeout(() => {
             // Funções para adicionar botões
             const addAutoOffButton = (text, callbacks, startOn = false) => {
                 const button = createToggleButton(text, callbacks, startOn);
-                regularCheatsHorizontalLayout.addView(button.view); // Adiciona ao contêiner Horizontal
+                regularCheatsHorizontalLayout.addView(button.view); 
                 autoOffButtons.push(button);
             };
             const addRegularButton = (text, callbacks, startOn = false) => {
                  const button = createToggleButton(text, callbacks, startOn);
-                 regularCheatsHorizontalLayout.addView(button.view); // Adiciona ao contêiner Horizontal
+                 regularCheatsHorizontalLayout.addView(button.view); 
             };
             
             // Adiciona botões à barra inferior (Container Horizontal)
@@ -393,7 +390,7 @@ setTimeout(() => {
             addAutoOffButton("Auto Off", call_autoOFF, false);
             addAutoOffButton("Wall Hack", call_wallhack, false);
             
-            // Adiciona o contêiner horizontal de cheats ao contêiner vertical principal
+            // 1. Adiciona o contêiner horizontal de cheats ao contêiner vertical principal
             allCheatsVerticalLayout.addView(regularCheatsHorizontalLayout);
             
             // ========================================================================
@@ -403,6 +400,7 @@ setTimeout(() => {
             const updateExplosionTimeButtonText = (buttonView) => {
                 const ms = currentExplosionTime;
                 const text = ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`;
+                // CORRIGIDO: Adiciona mais margem ao texto para evitar quebra no botão
                 Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`[Time: ${text}]`)));
             };
 
@@ -431,7 +429,7 @@ setTimeout(() => {
 
             const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
             explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            // CORRIGIDO: LayoutParams para garantir que o contêiner não quebre
+            // LayoutParams para garantir que o contêiner não quebre
             const explosionControlLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); // WRAP_CONTENT, WRAP_CONTENT
             explosionControlLayout.setLayoutParams(explosionControlLayoutParams);
             explosionControlLayout.setGravity(Gravity.CENTER.value);
@@ -445,10 +443,10 @@ setTimeout(() => {
             explosionControlLayout.addView(explosionButton.view);
             explosionControlLayout.addView(createHoldButton(">", increaseAction));
             
-            // ADICIONA O CONTROLE DE RAIO ABAIXO DO CONTROLE DE TEMPO NO LAYOUT VERTICAL
+            // 2. Adiciona o controle de raio ABRAÇADO pelo contêiner vertical de explosão
             explosionControlsVerticalLayout.addView(explosionControlLayout);
             
-            // Adiciona o grupo de explosão vertical (tempo + raio) ao contêiner vertical principal
+            // 3. Adiciona o grupo de explosão vertical ao contêiner vertical principal
             allCheatsVerticalLayout.addView(explosionControlsVerticalLayout);
 
             // Adiciona os layouts principais na tela
