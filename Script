@@ -77,9 +77,9 @@ setTimeout(() => {
 
     // Variável para controlar o raio da explosão, com valor padrão
     let explosionRadius = 90;
-    
-    // Variável para controle de tempo da explosão (em milissegundos)
-    let explosionTime = 100; // Padrão: 100ms
+    
+    // Variável para controle de tempo da explosão (em milissegundos)
+    let explosionTime = 100; // Padrão: 100ms
     const TIME_OPTIONS = [100, 250, 500, 1000, 2000];
 
     // ========================================================================
@@ -371,7 +371,7 @@ setTimeout(() => {
             addAutoOffButton("Wall Hack", call_wallhack, false);
 
             // ========================================================================
-            // Controle de Tempo de Explosão (Corrigido para estilo e layout)
+            // Controle de Tempo de Explosão (Corrigido para estilo)
             // ========================================================================
             
             const updateExplosionTimeText = (buttonView) => {
@@ -380,7 +380,6 @@ setTimeout(() => {
                 // CORRIGIDO: Formato sem colchetes
                 Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`Time: ${text}`)));
                 
-                // Se Explodir estiver ativo, reinicia o intervalo com o novo tempo
                 if (explosionsInterval) {
                     clearInterval(explosionsInterval);
                     explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime);
@@ -394,8 +393,7 @@ setTimeout(() => {
             explosionTimeTextView.setGravity(Gravity.CENTER.value);
             explosionTimeTextView.setPadding(PADDING, PADDING, PADDING, PADDING);
             
-            // LayoutParams para forçar a largura fixa (MATCH_PARENT do contêiner, forçando o mesmo tamanho)
-            // Usamos 0 com peso 1 para forçar o preenchimento da largura disponível
+            // LayoutParams que permite o ajuste (WRAP_CONTENT)
             const timeTextViewParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
             timeTextViewParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
             explosionTimeTextView.setLayoutParams(timeTextViewParams);
@@ -445,14 +443,15 @@ setTimeout(() => {
             // Adiciona o controle de tempo no topo do layout vertical de explosão
             explosionControlsVerticalLayout.addView(timeControlLayout);
             // ========================================================================
-
+            
+            // CRIAÇÃO DA BARRA DE CONTROLE DE RAIO (HORIZONTAL)
             const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
             explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             const explosionControlLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
             explosionControlLayout.setLayoutParams(explosionControlLayoutParams);
             explosionControlLayout.setGravity(Gravity.CENTER.value);
             
-            const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode, false); 
+            const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode, false); // Começa DESATIVADO
             autoOffButtons.push(explosionButton);
             const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`)));
             const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); };
