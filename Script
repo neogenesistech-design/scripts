@@ -253,7 +253,7 @@ setTimeout(() => {
                 button.setText(classLoader.String.$new(text));
                 button.setTextColor(classLoader.Color.WHITE.value);
                 
-                // CORRIGIDO: Botões de ciclo (Time) devem ter cor OFF, não ficam ON/OFF
+                // CORRIGIDO: Botões de ciclo (Time) devem ter cor OFF
                 if (isCycleButton) {
                     button.setBackgroundColor(COLOR_OFF);
                 } else {
@@ -316,7 +316,10 @@ setTimeout(() => {
             
             // Layout da Barra Inferior (será escondido/mostrado)
             const bottomLayout = classLoader.LinearLayout.$new(mainActivity);
-            const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
+            
+            // CORRIGIDO: O layout principal deve ser MATCH_PARENT (largura) e WRAP_CONTENT (altura)
+            const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
+            
             bottomLayout.setLayoutParams(bottomParams);
             bottomLayout.setGravity(Gravity.CENTER_HORIZONTAL.value | Gravity.BOTTOM.value);
 
@@ -400,7 +403,7 @@ setTimeout(() => {
             const updateExplosionTimeButtonText = (buttonView) => {
                 const ms = currentExplosionTime;
                 const text = ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`;
-                // CORRIGIDO: Adiciona mais margem ao texto para evitar quebra no botão
+                // Não precisa de margem extra, o padding do botão é suficiente
                 Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`[Time: ${text}]`)));
             };
 
@@ -450,6 +453,8 @@ setTimeout(() => {
             allCheatsVerticalLayout.addView(explosionControlsVerticalLayout);
 
             // Adiciona os layouts principais na tela
+            // O topLayout usa MATCH_PARENT (largura e altura)
+            // O bottomLayout usa MATCH_PARENT (largura) e WRAP_CONTENT (altura), mas está alinhado ao BOTTOM
             mainActivity.addContentView(topLayout, topParams);
             mainActivity.addContentView(bottomLayout, bottomParams);
 
