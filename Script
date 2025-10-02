@@ -78,7 +78,7 @@ setTimeout(() => {
     // Variável para controlar o raio da explosão, com valor padrão
     let explosionRadius = 90;
     
-    // CORRIGIDO: Tempos de explosão 100ms, 250ms, 500ms, 1000ms (1s)
+    // CORRIGIDO: Tempos de explosão corretos
     const EXPLOSION_TIMES = [100, 250, 500, 1000]; 
     let currentExplosionTimeIndex = 0; // Começa em 100ms
     let currentExplosionTime = EXPLOSION_TIMES[currentExplosionTimeIndex];
@@ -174,7 +174,7 @@ setTimeout(() => {
     function makeExplosion(level, radius) { if (!level) return; const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); const offset = Math.floor(radius / 2); for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } }
     const call_showAdmins = { on() { showAdmins = true; }, off() { showAdmins = false; } };
     
-    // MODIFICADO: call_explode usa o tempo de explosão dinâmico
+    // call_explode usa o tempo de explosão dinâmico
     const call_explode = { 
         on() { 
             if (!explosionsInterval) 
@@ -254,7 +254,6 @@ setTimeout(() => {
                 button.setTextColor(classLoader.Color.WHITE.value);
                 
                 // Botões de ciclo (Time) e toggle desativados têm cor OFF
-                // A cor de um botão de ciclo é sempre OFF (cinza) por padrão
                 button.setBackgroundColor(isOn && !isCycleButton ? COLOR_ON : COLOR_OFF);
                 
                 button.setPadding(PADDING, PADDING, PADDING, PADDING);
@@ -270,7 +269,7 @@ setTimeout(() => {
                         implements: [Java.use("android.view.View$OnClickListener")],
                         methods: {
                             onClick(v) {
-                                // 1. Pisca o botão
+                                // 1. Pisca o botão (verde -> cinza)
                                 v.setBackgroundColor(COLOR_ON);
                                 Java.scheduleOnMainThread(() => {
                                     v.setBackgroundColor(COLOR_OFF);
@@ -306,7 +305,7 @@ setTimeout(() => {
 
             function createHoldButton(text, action) { /*...*/ const button = classLoader.TextView.$new(mainActivity); let holdInterval = null; button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value); button.setBackgroundColor(COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING); const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); button.setLayoutParams(layoutParams); button.setOnTouchListener(Java.registerClass({ name: "com.example.TouchListener" + Math.random().toString(36).substring(2), implements: [classLoader.View_OnTouchListener], methods: { onTouch(v, event) { switch (event.getAction()) { case classLoader.MotionEvent.ACTION_DOWN.value: action(); holdInterval = setInterval(action, 100); return true; case classLoader.MotionEvent.ACTION_UP.value: if (holdInterval) clearInterval(holdInterval); holdInterval = null; return true; } return false; } } }).$new()); return button; }
 
-            // NOVO: Container Vertical SÓ para os controles de EXPLOSÃO (Tempo e Raio)
+            // Container Vertical SÓ para os controles de EXPLOSÃO (Tempo e Raio)
             const explosionControlsVerticalLayout = classLoader.LinearLayout.$new(mainActivity);
             explosionControlsVerticalLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             explosionControlsVerticalLayout.setGravity(Gravity.CENTER_HORIZONTAL.value);
@@ -348,7 +347,7 @@ setTimeout(() => {
                     mainBarLayout.setVisibility(View.GONE.value); 
                 }
             };
-            // Inicia DESATIVADO (false)
+            // Inicia DESATIVADO (false) e OCULTO (call_hideCheats.off() abaixo)
             const hideCheatsButton = createToggleButton("[v]", call_hideCheats, false); 
             
             call_hideCheats.off(); // Inicia OCULTA
@@ -409,6 +408,7 @@ setTimeout(() => {
                 currentExplosionTimeIndex = (currentExplosionTimeIndex + 1) % EXPLOSION_TIMES.length;
                 currentExplosionTime = EXPLOSION_TIMES[currentExplosionTimeIndex];
                 
+                // Reinicia o setInterval se a explosão estiver ativa
                 if (explosionsInterval) {
                     clearInterval(explosionsInterval);
                     explosionsInterval = setInterval(() => { canExplode = true; }, currentExplosionTime);
@@ -489,4 +489,4 @@ setTimeout(() => {
         ); 
     }
     // FIM DA MODIFICAÇÃO DE click()
-}, 2000);
+}, 8000);
