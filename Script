@@ -86,7 +86,7 @@ setTimeout(() => {
     // ========================================================================
     // Margem em pixels (DP) para o clique, para evitar a barra de botões do sistema
     // Altere este valor se o clique cair na barra de navegação/status.
-    const CLICK_MARGIN_X = 70; 
+    const CLICK_MARGIN_X = 100; 
     const CLICK_MARGIN_Y = 1;
     
     // Intervalo MÍNIMO do Anti-AFK. Reduzido para 2.5 minutos (150s) para ser mais seguro.
@@ -546,7 +546,8 @@ setTimeout(() => {
                 
                 // Simula um toque rápido (DOWN e UP) para ser reconhecido como clique
                 let eventDown = Java.use("android.view.MotionEvent").obtain(time, time, 0, targetX, targetY, 0); 
-                let eventUp = Java.use("android.view.MotionEvent").obtain(time, time + 50, 1, targetX, targetY, 0); 
+                let eventUp = Java.use("android.view.MotionEvent").obtain(time, time + 50, 1, targetX, targetY, 0);
+                showToast("Click executado.");
                 
                 mainActivity.dispatchTouchEvent(eventDown); 
                 mainActivity.dispatchTouchEvent(eventUp); 
@@ -555,3 +556,4 @@ setTimeout(() => {
     }
     // FIM DA MODIFICAÇÃO DE click()
 }, 8000);
+
