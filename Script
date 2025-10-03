@@ -1,559 +1,537 @@
 function deleteCacheFiles() {
-    Java.perform(() => {
-        try {
-            const ActivityThread = Java.use("android.app.ActivityThread");
-            const context = ActivityThread.currentApplication().getApplicationContext();
-            const pkgName = context.getPackageName(); // pacote do app injetado
-            const Environment = Java.use("android.os.Environment");
-            const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
-            const File = Java.use("java.io.File");
+    Java.perform(() => {
+        try {
+            const ActivityThread = Java.use("android.app.ActivityThread");
+            const context = ActivityThread.currentApplication().getApplicationContext();
+            const pkgName = context.getPackageName(); // pacote do app injetado
+            const Environment = Java.use("android.os.Environment");
+            const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
+            const File = Java.use("java.io.File");
 
-            // monta o caminho dinâmico
-            const path = externalPath + "/Android/data/" + pkgName + "/";
-            console.log("[deleteCacheFiles] Alvo: " + path);
+            // monta o caminho dinâmico
+            const path = externalPath + "/Android/data/" + pkgName + "/";
+            console.log("[deleteCacheFiles] Alvo: " + path);
 
-            const targetDir = File.$new(path);
-            if (!targetDir.exists() || !targetDir.isDirectory()) {
-                console.log("[deleteCacheFiles] Pasta não existe ou não é diretório.");
-                return;
-            }
+            const targetDir = File.$new(path);
+            if (!targetDir.exists() || !targetDir.isDirectory()) {
+                console.log("[deleteCacheFiles] Pasta não existe ou não é diretório.");
+                return;
+            }
 
-            const files = targetDir.listFiles();
-            if (!files || files.length === 0) {
-                console.log("[deleteCacheFiles] Nada para deletar.");
-                return;
-            }
+            const files = targetDir.listFiles();
+            if (!files || files.length === 0) {
+                console.log("[deleteCacheFiles] Nada para deletar.");
+                return;
+            }
 
-            for (let i = 0; i < files.length; i++) {
-                try {
-                    const f = files[i];
-                    if (f.isDirectory()) {
-                        deleteRecursive(f);
-                    } else {
-                        const ok = f.delete();
-                        if (!ok) console.log("[deleteCacheFiles] Falha ao deletar file: " + f.getAbsolutePath());
-                    }
-                } catch (err) {
-                    console.log("[deleteCacheFiles] Erro ao processar item: " + err);
-                }
-            }
+            for (let i = 0; i < files.length; i++) {
+                try {
+                    const f = files[i];
+                    if (f.isDirectory()) {
+                        deleteRecursive(f);
+                    } else {
+                        const ok = f.delete();
+                        if (!ok) console.log("[deleteCacheFiles] Falha ao deletar file: " + f.getAbsolutePath());
+                    }
+                } catch (err) {
+                    console.log("[deleteCacheFiles] Erro ao processar item: " + err);
+                }
+            }
 
-            console.log("[deleteCacheFiles] Limpeza concluída.");
-        } catch (e) {
-            console.log("[deleteCacheFiles] Erro geral: " + e);
-        }
-    });
+            console.log("[deleteCacheFiles] Limpeza concluída.");
+        } catch (e) {
+            console.log("[deleteCacheFiles] Erro geral: " + e);
+        }
+    });
 }
 
 function deleteRecursive(file) {
-    try {
-        const sub = file.listFiles();
-        if (sub && sub.length > 0) {
-            for (let j = 0; j < sub.length; j++) {
-                try {
-                    if (sub[j].isDirectory()) {
-                        deleteRecursive(sub[j]);
-                    } else {
-                        const ok = sub[j].delete();
-                        if (!ok) console.log("[deleteRecursive] Falha ao deletar file: " + sub[j].getAbsolutePath());
-                    }
-                } catch (err) {
-                    console.log("[deleteRecursive] Erro item: " + err);
-                }
-            }
-        }
-        const okDir = file.delete();
-        if (!okDir) console.log("[deleteRecursive] Falha ao deletar pasta: " + file.getAbsolutePath());
-    } catch (e) {
-        console.log("[deleteRecursive] Erro recursivo: " + e);
-    }
+    try {
+        const sub = file.listFiles();
+        if (sub && sub.length > 0) {
+            for (let j = 0; j < sub.length; j++) {
+                try {
+                    if (sub[j].isDirectory()) {
+                        deleteRecursive(sub[j]);
+                    } else {
+                        const ok = sub[j].delete();
+                        if (!ok) console.log("[deleteRecursive] Falha ao deletar file: " + sub[j].getAbsolutePath());
+                    }
+                } catch (err) {
+                    console.log("[deleteRecursive] Erro item: " + err);
+                }
+            }
+        }
+        const okDir = file.delete();
+        if (!okDir) console.log("[deleteRecursive] Falha ao deletar pasta: " + file.getAbsolutePath());
+    } catch (e) {
+        console.log("[deleteRecursive] Erro recursivo: " + e);
+    }
 }
 
 // Chame isto ANTES do setTimeout para limpar primeiro:
 deleteCacheFiles();
 
 setTimeout(() => {
-    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
+    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
-    // Variável para controlar o raio da explosão, com valor padrão
-    let explosionRadius = 1;
-    
-    // NOVO: Variável para controle de tempo da explosão (em milissegundos)
-    let explosionTime = 100; // Padrão: 100ms
+    // Variável para controlar o raio da explosão, com valor padrão
+    let explosionRadius = 1;
+    
+    // NOVO: Variável para controle de tempo da explosão (em milissegundos)
+    let explosionTime = 100; // Padrão: 100ms
 
+    // ========================================================================
+    // ATENÇÃO: VARIÁVEIS ANTI-AFK REMOVIDAS. USANDO INTERVALO FIXO AGORA.
+    // ========================================================================
+
+
+    // ========================================================================
+    // Funções Utilitárias (Inalterado)
+    // ========================================================================
+
+    function getClassLoader() {
+        return {
+            Gravity: Java.use("android.view.Gravity"),
+            TextView: Java.use("android.widget.TextView"),
+            LinearLayout: Java.use("android.widget.LinearLayout"),
+            LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
+            Color: Java.use("android.graphics.Color"),
+            ActivityThread: Java.use("android.app.ActivityThread"),
+            View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
+            MotionEvent: Java.use("android.view.MotionEvent"),
+            String: Java.use("java.lang.String"),
+            View: Java.use("android.view.View"),
+            DisplayMetrics: Java.use("android.util.DisplayMetrics"),
+            Point: Java.use("android.graphics.Point"),
+        };
+    }
+
+    let screenWidth = -1;
+    let screenHeight = -1; 
+
+    function getScreenDimensions(context) {
+        if (screenWidth > 0 && screenHeight > 0) {
+            return { x: screenWidth, y: screenHeight };
+        }
+        
+        const WindowManager = Java.use("android.view.WindowManager");
+        const Point = Java.use("android.graphics.Point");
+        const display = context.getSystemService(Java.use("android.content.Context").WINDOW_SERVICE.value).getDefaultDisplay();
+        const size = Point.$new();
+        
+        try {
+              display.getRealSize(size);
+        } catch(e) {
+              display.getSize(size);
+        }
+
+        screenWidth = size.x.value;
+        screenHeight = size.y.value;
+        return { x: screenWidth, y: screenHeight };
+    }
+
+    function getScreenWidth(context) { return getScreenDimensions(context).x; }
+    // A função getScreenHeight é necessária para getScreenDimensions
+    function getScreenHeight(context) { return getScreenDimensions(context).y; } 
+
+    function pixelDensityToPixels(context, dp) {
+        const density = context.getResources().getDisplayMetrics().density.value;
+        return parseInt(dp * density);
+    }
+
+    function getMainActivity(classLoader) {
+        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
+        const mActivities = activityThread.mActivities.value;
+        const activityClientRecord = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
+        return activityClientRecord.activity.value;
+    }
+
+    function showToast(text, time = 0) {
+        Java.perform(() => {
+            Java.scheduleOnMainThread(function() {
+                var toast = Java.use("android.widget.Toast");
+                var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+                toast.makeText(context, Java.use("java.lang.String").$new(text), time).show();
+            });
+        });
+    }
+
+    // ========================================================================
+    // Funções e Ponteiros do Jogo (Inalterado)
+    // ========================================================================
+    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
+    const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
+    const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
+    let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
+    const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
+    const alpha = createTString('alpha=0.5');
+    const zoom = createTString('zoom=1');
+
+    // Variáveis de Estado (Inalterado)
+    let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false;
+    let showAdmins = true, autoOFF = false, afkInterval = null;
+    let autoOffHasTriggered = false;
+    let autoOffButtons = [];
+
+    // Lógica e Hooks (Inalterado)
+    function getPlayerProperties(p) { /*...*/ return { "alpha": Memory.readFloat(p.add(356)), "zoom": Memory.readFloat(p.add(0x138)), "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)), "nick": readTString(p.add(464)), "account": readTString(p.add(696)), }; }
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), { 'onLeave': function(ret) { if (wallhack) ret.replace(0); } });
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 'onEnter': function(args) { if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && !autoOffHasTriggered) { autoOffHasTriggered = true; showToast("Outro player detectado. Desativando cheats."); Java.scheduleOnMainThread(() => { for (const button of autoOffButtons) { button.reset(); } }); } if (!showAdmins) return; const accRgx = /^(pc\:|graal\d+|guest.*)/; const props = getPlayerProperties(args[0]); if (props.alpha < 0.5) setVarValue(args[0], alpha); if (props.zoom < 1) setVarValue(args[0], zoom); if (!props.account) return; const account = props.account.toLowerCase(); if (account === '') return; if (!accRgx.test(account)) { showToast('Admin: ' + account); } } });
+    Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), new NativeCallback((a, b, c, d, e, f) => { if (unhit) return 0; hurtPlayer(a, b, c, d, e, f); }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), { onEnter: function(args) { if (!canExplode) return; canExplode = false; makeExplosion(args[0], explosionRadius); } });
+    function makeExplosion(level, radius) { if (!level) return; const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); const offset = Math.floor(radius / 2); for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } }
+    const call_showAdmins = { on() { showAdmins = true; }, off() { showAdmins = false; } };
+    
+    // MODIFICADO: call_explode usa a variável explosionTime
+    const call_explode = { 
+        on() { 
+            if (!explosionsInterval) 
+                explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime); 
+        }, 
+        off() { 
+            if (explosionsInterval) { 
+                clearInterval(explosionsInterval); 
+                explosionsInterval = null; 
+                canExplode = false; 
+            } 
+        } 
+    };
+    
     // ========================================================================
-    // AJUSTES DO ANTI-AFK: DEFINA AQUI O INTERVALO (VALORES ORIGINAIS DE VOLTA)
+    // ANTI-AFK SIMPLES (REVERTIDO PARA O CÓDIGO DO INÍCIO DA SOLICITAÇÃO)
     // ========================================================================
-    const BASE_INTERVAL = 4 * 1000; // 4 minutos (240 segundos) em ms
-    const RANDOM_RANGE = 3 * 1000;    // 3 segundos em ms
-    // ========================================================================
-
-
-    // ========================================================================
-    // Funções Utilitárias
-    // ========================================================================
-
-    function getClassLoader() {
-        return {
-            Gravity: Java.use("android.view.Gravity"),
-            TextView: Java.use("android.widget.TextView"),
-            LinearLayout: Java.use("android.widget.LinearLayout"),
-            LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-            Color: Java.use("android.graphics.Color"),
-            ActivityThread: Java.use("android.app.ActivityThread"),
-            View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
-            MotionEvent: Java.use("android.view.MotionEvent"),
-            String: Java.use("java.lang.String"),
-            View: Java.use("android.view.View"),
-            DisplayMetrics: Java.use("android.util.DisplayMetrics"),
-            Point: Java.use("android.graphics.Point"),
-        };
-    }
-
-    let screenWidth = -1;
-    let screenHeight = -1; 
-
-    function getScreenDimensions(context) {
-        if (screenWidth > 0 && screenHeight > 0) {
-            return { x: screenWidth, y: screenHeight };
-        }
-        
-        const WindowManager = Java.use("android.view.WindowManager");
-        const Point = Java.use("android.graphics.Point");
-        const display = context.getSystemService(Java.use("android.content.Context").WINDOW_SERVICE.value).getDefaultDisplay();
-        const size = Point.$new();
-        
-        try {
-              display.getRealSize(size);
-        } catch(e) {
-              display.getSize(size);
-        }
-
-        screenWidth = size.x.value;
-        screenHeight = size.y.value;
-        return { x: screenWidth, y: screenHeight };
-    }
-
-    function getScreenWidth(context) { return getScreenDimensions(context).x; }
-    // A função getScreenHeight é necessária para getScreenDimensions
-    function getScreenHeight(context) { return getScreenDimensions(context).y; } 
-
-    function pixelDensityToPixels(context, dp) {
-        const density = context.getResources().getDisplayMetrics().density.value;
-        return parseInt(dp * density);
-    }
-
-    function getMainActivity(classLoader) {
-        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-        const mActivities = activityThread.mActivities.value;
-        const activityClientRecord = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
-        return activityClientRecord.activity.value;
-    }
-
-    function showToast(text, time = 0) {
-        Java.perform(() => {
-            Java.scheduleOnMainThread(function() {
-                var toast = Java.use("android.widget.Toast");
-                var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
-                toast.makeText(context, Java.use("java.lang.String").$new(text), time).show();
-            });
-        });
-    }
-
-    // ========================================================================
-    // Funções e Ponteiros do Jogo (Inalterado)
-    // ========================================================================
-    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
-    const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
-    const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
-    const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
-    let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-    const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
-    const alpha = createTString('alpha=0.5');
-    const zoom = createTString('zoom=1');
-
-    // Variáveis de Estado
-    let canExplode = false, explosionsInterval = null, unhit = false, wallhack = false;
-    let showAdmins = true, autoOFF = false, afkInterval = null;
-    let autoOffHasTriggered = false;
-    let autoOffButtons = [];
-
-    // Lógica e Hooks (Inalterado)
-    function getPlayerProperties(p) { /*...*/ return { "alpha": Memory.readFloat(p.add(356)), "zoom": Memory.readFloat(p.add(0x138)), "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)), "nick": readTString(p.add(464)), "account": readTString(p.add(696)), }; }
-    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), { 'onLeave': function(ret) { if (wallhack) ret.replace(0); } });
-    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 'onEnter': function(args) { if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && !autoOffHasTriggered) { autoOffHasTriggered = true; showToast("Outro player detectado. Desativando cheats."); Java.scheduleOnMainThread(() => { for (const button of autoOffButtons) { button.reset(); } }); } if (!showAdmins) return; const accRgx = /^(pc\:|graal\d+|guest.*)/; const props = getPlayerProperties(args[0]); if (props.alpha < 0.5) setVarValue(args[0], alpha); if (props.zoom < 1) setVarValue(args[0], zoom); if (!props.account) return; const account = props.account.toLowerCase(); if (account === '') return; if (!accRgx.test(account)) { showToast('Admin: ' + account); } } });
-    Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), new NativeCallback((a, b, c, d, e, f) => { if (unhit) return 0; hurtPlayer(a, b, c, d, e, f); }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
-    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), { onEnter: function(args) { if (!canExplode) return; canExplode = false; makeExplosion(args[0], explosionRadius); } });
-    function makeExplosion(level, radius) { if (!level) return; const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); const offset = Math.floor(radius / 2); for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } }
-    const call_showAdmins = { on() { showAdmins = true; }, off() { showAdmins = false; } };
-    
-    // MODIFICADO: call_explode usa a variável explosionTime
-    const call_explode = { 
-        on() { 
-            if (!explosionsInterval) 
-                explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime); 
-        }, 
-        off() { 
-            if (explosionsInterval) { 
-                clearInterval(explosionsInterval); 
-                explosionsInterval = null; 
-                canExplode = false; 
-            } 
-        } 
-    };
-    
-    // MODIFICADO: call_antiAfk para usar setTimeout recursivo e aleatoriedade no tempo
-    
-    function scheduleNextClick() {
-        if (afkInterval === null) return;
-        
-        const delayOffset = Math.random() * RANDOM_RANGE * 2 - RANDOM_RANGE; 
-        const nextDelay = BASE_INTERVAL + delayOffset;
-        
-        console.log(`[AntiAfk] Próximo clique em: ${(nextDelay / 1000).toFixed(2)}s`);
-
-        afkInterval = setTimeout(() => {
-            click();
-            scheduleNextClick();
-        }, nextDelay);
-    }
-    
     const call_antiAfk = { 
         on() { 
-            if (afkInterval) return; 
-            
-            // 💡 LOG DE ATIVAÇÃO
-            console.log("[AntiAfk] Ativado (Canto Esquerdo)."); 
-
-            // Agenda o primeiro clique
-            scheduleNextClick(); 
+            console.log("[AntiAfk] Ativado (Intervalo Fixo: 4 minutos)."); 
+            if (!afkInterval) afkInterval = setInterval(click, 4 * 1000); 
         }, 
         off() { 
             if (afkInterval) { 
-                clearTimeout(afkInterval); 
+                clearInterval(afkInterval); 
                 afkInterval = null; 
                 console.log("[AntiAfk] Desativado.");
             } 
         } 
     };
-    // FIM DA MODIFICAÇÃO DE call_antiAfk
-    
-    const call_unhit = { on() { unhit = true; }, off() { unhit = false; } };
-    const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; }, off() { autoOFF = false; } };
-    const call_wallhack = { on() { wallhack = true; }, off() { wallhack = false; } };
-
     // ========================================================================
-    // Criação da Interface Gráfica (UI - Inalterado)
-    // ========================================================================
-    Java.perform(function () {
-        Java.scheduleOnMainThread(function () {
-            const classLoader = getClassLoader();
-            const mainActivity = getMainActivity(classLoader);
-            const Gravity = classLoader.Gravity;
-            const View = classLoader.View;
 
-            const COLOR_OFF = classLoader.Color.parseColor("#80000000");
-            const COLOR_ON = classLoader.Color.parseColor("#80008000");
-            const PADDING = pixelDensityToPixels(mainActivity, 8);
-            const MARGIN = pixelDensityToPixels(mainActivity, 2);
+    const call_unhit = { on() { unhit = true; }, off() { unhit = false; } };
+    const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; }, off() { autoOFF = false; } };
+    const call_wallhack = { on() { wallhack = true; }, off() { wallhack = false; } };
 
-            // Funções de UI (Inalterado)
-            function createToggleButton(text, callbacks, startOn = false, isCycleButton = false) {
-                const button = classLoader.TextView.$new(mainActivity);
-                let isOn = startOn;
-                
-                const reset = () => {
-                    isOn = false; 
-                    button.setBackgroundColor(COLOR_OFF);
-                    if (callbacks.off) callbacks.off();
-                };
-                
-                button.setText(classLoader.String.$new(text));
-                button.setTextColor(classLoader.Color.WHITE.value);
-                button.setBackgroundColor(isOn && !isCycleButton ? COLOR_ON : COLOR_OFF);
-                button.setPadding(PADDING, PADDING, PADDING, PADDING);
-                
-                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
-                button.setLayoutParams(layoutParams);
+    // ========================================================================
+    // Criação da Interface Gráfica (UI - Inalterado)
+    // ========================================================================
+    Java.perform(function () {
+        Java.scheduleOnMainThread(function () {
+            const classLoader = getClassLoader();
+            const mainActivity = getMainActivity(classLoader);
+            const Gravity = classLoader.Gravity;
+            const View = classLoader.View;
 
-                if (isCycleButton) {
-                    button.setOnClickListener(Java.registerClass({
-                        name: "com.example.CycleListener" + Math.random().toString(36).substring(2),
-                        implements: [Java.use("android.view.View$OnClickListener")],
-                        methods: {
-                            onClick(v) {
-                                v.setBackgroundColor(COLOR_ON);
-                                Java.scheduleOnMainThread(() => { v.setBackgroundColor(COLOR_OFF); }, 100); 
-                                if (callbacks.cycle) callbacks.cycle(v);
-                            }
-                        }
-                    }).$new());
-                } else {
-                    button.setOnClickListener(Java.registerClass({
-                        name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
-                        implements: [Java.use("android.view.View$OnClickListener")],
-                        methods: {
-                            onClick(v) {
-                                isOn = !isOn;
-                                v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
-                                if (isOn) { if (callbacks.on) callbacks.on(); }
-                                else { if (callbacks.off) callbacks.off(); }
-                            }
-                        }
-                    }).$new());
-                }
-                
-                if (startOn) {
-                    if (callbacks.on) callbacks.on(); 
-                }
+            const COLOR_OFF = classLoader.Color.parseColor("#80000000");
+            const COLOR_ON = classLoader.Color.parseColor("#80008000");
+            const PADDING = pixelDensityToPixels(mainActivity, 8);
+            const MARGIN = pixelDensityToPixels(mainActivity, 2);
 
-                return { view: button, reset: reset };
-            }
-            
-            function createHoldButton(text, action) { 
-                const button = classLoader.TextView.$new(mainActivity); 
-                let holdInterval = null; 
-                button.setText(classLoader.String.$new(text)); 
-                button.setTextColor(classLoader.Color.WHITE.value); 
-                button.setBackgroundColor(COLOR_OFF); 
-                button.setPadding(PADDING, PADDING, PADDING, PADDING); 
-                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); 
-                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); 
-                button.setLayoutParams(layoutParams); 
-                button.setOnTouchListener(Java.registerClass({ 
-                    name: "com.example.TouchListener" + Math.random().toString(36).substring(2), 
-                    implements: [classLoader.View_OnTouchListener], 
-                    methods: { 
-                        onTouch(v, event) { 
-                            switch (event.getAction()) { 
-                                case classLoader.MotionEvent.ACTION_DOWN.value: 
-                                    action(); 
-                                    holdInterval = setInterval(action, 100); 
-                                    return true; 
-                                case classLoader.MotionEvent.ACTION_UP.value: 
-                                    if (holdInterval) clearInterval(holdInterval); 
-                                    holdInterval = null; 
-                                    return true; 
-                            } 
-                            return false; 
-                        } 
-                    } 
-                }).$new()); 
-                return button; 
-            }
+            // Funções de UI (Inalterado)
+            function createToggleButton(text, callbacks, startOn = false, isCycleButton = false) {
+                const button = classLoader.TextView.$new(mainActivity);
+                let isOn = startOn;
+                
+                const reset = () => {
+                    isOn = false; 
+                    button.setBackgroundColor(COLOR_OFF);
+                    if (callbacks.off) callbacks.off();
+                };
+                
+                button.setText(classLoader.String.$new(text));
+                button.setTextColor(classLoader.Color.WHITE.value);
+                button.setBackgroundColor(isOn && !isCycleButton ? COLOR_ON : COLOR_OFF);
+                button.setPadding(PADDING, PADDING, PADDING, PADDING);
+                
+                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
+                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
+                button.setLayoutParams(layoutParams);
 
-            // Container Vertical SÓ para os controles de EXPLOSÃO (Tempo e Raio)
-            const explosionControlsVerticalLayout = classLoader.LinearLayout.$new(mainActivity);
-            explosionControlsVerticalLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-            explosionControlsVerticalLayout.setGravity(Gravity.CENTER_HORIZONTAL.value);
-            const explosionGroupVerticalParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); 
-            explosionControlsVerticalLayout.setLayoutParams(explosionGroupVerticalParams);
-            
-            // Layout da Barra Inferior (será escondido/mostrado)
-            const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
-            mainBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            mainBarLayout.setGravity(Gravity.CENTER.value);
-            
-            // CORRIGIDO: O mainBarLayout começa OCULTO (GONE)
-            mainBarLayout.setVisibility(View.GONE.value);
-            
-            const bottomLayout = classLoader.LinearLayout.$new(mainActivity);
-            const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
-            bottomLayout.setLayoutParams(bottomParams);
-            bottomLayout.setGravity(Gravity.CENTER_HORIZONTAL.value | Gravity.BOTTOM.value);
-            bottomLayout.addView(mainBarLayout);
+                if (isCycleButton) {
+                    button.setOnClickListener(Java.registerClass({
+                        name: "com.example.CycleListener" + Math.random().toString(36).substring(2),
+                        implements: [Java.use("android.view.View$OnClickListener")],
+                        methods: {
+                            onClick(v) {
+                                v.setBackgroundColor(COLOR_ON);
+                                Java.scheduleOnMainThread(() => { v.setBackgroundColor(COLOR_OFF); }, 100); 
+                                if (callbacks.cycle) callbacks.cycle(v);
+                            }
+                        }
+                    }).$new());
+                } else {
+                    button.setOnClickListener(Java.registerClass({
+                        name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
+                        implements: [Java.use("android.view.View$OnClickListener")],
+                        methods: {
+                            onClick(v) {
+                                isOn = !isOn;
+                                v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
+                                if (isOn) { if (callbacks.on) callbacks.on(); }
+                                else { if (callbacks.off) callbacks.off(); }
+                            }
+                        }
+                    }).$new());
+                }
+                
+                if (startOn) {
+                    if (callbacks.on) callbacks.on(); 
+                }
 
-            // Layout da Barra Superior (Inalterado)
-            const topInfoTextView = classLoader.TextView.$new(mainActivity);
-            topInfoTextView.setTextColor(classLoader.Color.WHITE.value);
-            topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
-            
-            const topBarLayout = classLoader.LinearLayout.$new(mainActivity); 
-            topBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            topBarLayout.setGravity(Gravity.CENTER_VERTICAL.value);
+                return { view: button, reset: reset };
+            }
+            
+            function createHoldButton(text, action) { 
+                const button = classLoader.TextView.$new(mainActivity); 
+                let holdInterval = null; 
+                button.setText(classLoader.String.$new(text)); 
+                button.setTextColor(classLoader.Color.WHITE.value); 
+                button.setBackgroundColor(COLOR_OFF); 
+                button.setPadding(PADDING, PADDING, PADDING, PADDING); 
+                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); 
+                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); 
+                button.setLayoutParams(layoutParams); 
+                button.setOnTouchListener(Java.registerClass({ 
+                    name: "com.example.TouchListener" + Math.random().toString(36).substring(2), 
+                    implements: [classLoader.View_OnTouchListener], 
+                    methods: { 
+                        onTouch(v, event) { 
+                            switch (event.getAction()) { 
+                                case classLoader.MotionEvent.ACTION_DOWN.value: 
+                                    action(); 
+                                    holdInterval = setInterval(action, 100); 
+                                    return true; 
+                                case classLoader.MotionEvent.ACTION_UP.value: 
+                                    if (holdInterval) clearInterval(holdInterval); 
+                                    holdInterval = null; 
+                                    return true; 
+                            } 
+                            return false; 
+                        } 
+                    } 
+                }).$new()); 
+                return button; 
+            }
 
-            const topLayout = classLoader.LinearLayout.$new(mainActivity);
-            const topParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
-            topLayout.setLayoutParams(topParams);
-            topLayout.setGravity(Gravity.TOP.value | Gravity.CENTER_HORIZONTAL.value);
-            topLayout.addView(topBarLayout); 
+            // Container Vertical SÓ para os controles de EXPLOSÃO (Tempo e Raio)
+            const explosionControlsVerticalLayout = classLoader.LinearLayout.$new(mainActivity);
+            explosionControlsVerticalLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+            explosionControlsVerticalLayout.setGravity(Gravity.CENTER_HORIZONTAL.value);
+            const explosionGroupVerticalParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); 
+            explosionControlsVerticalLayout.setLayoutParams(explosionGroupVerticalParams);
+            
+            // Layout da Barra Inferior (será escondido/mostrado)
+            const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
+            mainBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            mainBarLayout.setGravity(Gravity.CENTER.value);
+            
+            // CORRIGIDO: O mainBarLayout começa OCULTO (GONE)
+            mainBarLayout.setVisibility(View.GONE.value);
+            
+            const bottomLayout = classLoader.LinearLayout.$new(mainActivity);
+            const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
+            bottomLayout.setLayoutParams(bottomParams);
+            bottomLayout.setGravity(Gravity.CENTER_HORIZONTAL.value | Gravity.BOTTOM.value);
+            bottomLayout.addView(mainBarLayout);
 
-            // MODIFICADO: Botão para Ocultar/Mostrar a barra de cheats (inicia OCULTO)
-            const call_hideCheats = {
-                on() { 
-                    mainBarLayout.setVisibility(View.VISIBLE.value); 
-                },
-                off() { 
-                    mainBarLayout.setVisibility(View.GONE.value); 
-                }
-            };
-            // Inicia DESATIVADO (false)
-            const hideCheatsButton = createToggleButton("[v]", call_hideCheats, false); 
-            
-            hideCheatsButton.view.setText(classLoader.String.$new("[v]")); // Próxima ação é MOSTRAR
+            // Layout da Barra Superior (Inalterado)
+            const topInfoTextView = classLoader.TextView.$new(mainActivity);
+            topInfoTextView.setTextColor(classLoader.Color.WHITE.value);
+            topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
+            
+            const topBarLayout = classLoader.LinearLayout.$new(mainActivity); 
+            topBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            topBarLayout.setGravity(Gravity.CENTER_VERTICAL.value);
 
-            hideCheatsButton.view.setOnClickListener(Java.registerClass({
-                name: "com.example.HideClickListener" + Math.random().toString(36).substring(2),
-                implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        const isVisible = mainBarLayout.getVisibility() == View.VISIBLE.value;
-                        if (isVisible) {
-                            call_hideCheats.off(); 
-                            v.setText(classLoader.String.$new("[v]")); 
-                        } else {
-                            call_hideCheats.on(); 
-                            v.setText(classLoader.String.$new("[^]")); 
-                        }
-                    }
-                }
-            }).$new());
+            const topLayout = classLoader.LinearLayout.$new(mainActivity);
+            const topParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
+            topLayout.setLayoutParams(topParams);
+            topLayout.setGravity(Gravity.TOP.value | Gravity.CENTER_HORIZONTAL.value);
+            topLayout.addView(topBarLayout); 
 
-            topBarLayout.addView(hideCheatsButton.view);
-            topBarLayout.addView(topInfoTextView);
+            // MODIFICADO: Botão para Ocultar/Mostrar a barra de cheats (inicia OCULTO)
+            const call_hideCheats = {
+                on() { 
+                    mainBarLayout.setVisibility(View.VISIBLE.value); 
+                },
+                off() { 
+                    mainBarLayout.setVisibility(View.GONE.value); 
+                }
+            };
+            // Inicia DESATIVADO (false)
+            const hideCheatsButton = createToggleButton("[v]", call_hideCheats, false); 
+            
+            hideCheatsButton.view.setText(classLoader.String.$new("[v]")); // Próxima ação é MOSTRAR
 
-            // Funções para adicionar botões
-            const addAutoOffButton = (text, callbacks, startOn = false) => {
-                const button = createToggleButton(text, callbacks, startOn);
-                mainBarLayout.addView(button.view);
-                autoOffButtons.push(button);
-            };
-            const addRegularButton = (text, callbacks, startOn = false) => {
-                 const button = createToggleButton(text, callbacks, startOn);
-                 mainBarLayout.addView(button.view);
-            };
-            
-            // Adiciona botões à barra inferior
-            addRegularButton("Revelar ADM", call_showAdmins, true); // ATIVADO
-            
-            // DESATIVADOS
-            addAutoOffButton("Anti Afk", call_antiAfk, false); 
-            addAutoOffButton("Unhit", call_unhit, false);
-            addAutoOffButton("Auto Off", call_autoOFF, false);
-            addAutoOffButton("Wall Hack", call_wallhack, false);
+            hideCheatsButton.view.setOnClickListener(Java.registerClass({
+                name: "com.example.HideClickListener" + Math.random().toString(36).substring(2),
+                implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        const isVisible = mainBarLayout.getVisibility() == View.VISIBLE.value;
+                        if (isVisible) {
+                            call_hideCheats.off(); 
+                            v.setText(classLoader.String.$new("[v]")); 
+                        } else {
+                            call_hideCheats.on(); 
+                            v.setText(classLoader.String.$new("[^]")); 
+                        }
+                    }
+                }
+            }).$new());
 
-            // ========================================================================
-            // Controle de Tempo de Explosão (Inalterado)
-            // ========================================================================
-            
-            const updateExplosionTimeText = (buttonView) => {
-                const ms = explosionTime;
-                const text = ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`;
-                Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`Time: ${text}`)));
-                
-                // Se Explodir estiver ativo, reinicia o intervalo com o novo tempo
-                if (explosionsInterval) {
-                    clearInterval(explosionsInterval);
-                    explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime);
-                }
-            };
+            topBarLayout.addView(hideCheatsButton.view);
+            topBarLayout.addView(topInfoTextView);
 
-            // TextView para mostrar o tempo atual
-            const explosionTimeTextView = classLoader.TextView.$new(mainActivity);
-            explosionTimeTextView.setTextColor(classLoader.Color.WHITE.value);
-            // -> CORREÇÃO APLICADA AQUI: Adiciona fundo e padding para imitar o estilo dos botões.
-            explosionTimeTextView.setBackgroundColor(COLOR_OFF);
-            explosionTimeTextView.setPadding(PADDING, PADDING, PADDING, PADDING);
-            // <- FIM DA CORREÇÃO
-            
-            const timeParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-            timeParams.setMargins(MARGIN, PADDING, MARGIN, PADDING);
-            explosionTimeTextView.setLayoutParams(timeParams);
-            
-            // Lógica de incremento/decremento
-            const TIME_OPTIONS = [100, 250, 500, 1000, 2000];
-            const changeExplosionTime = (direction) => {
-                let currentMs = explosionTime;
-                let newMs = currentMs;
+            // Funções para adicionar botões
+            const addAutoOffButton = (text, callbacks, startOn = false) => {
+                const button = createToggleButton(text, callbacks, startOn);
+                mainBarLayout.addView(button.view);
+                autoOffButtons.push(button);
+            };
+            const addRegularButton = (text, callbacks, startOn = false) => {
+                 const button = createToggleButton(text, callbacks, startOn);
+                 mainBarLayout.addView(button.view);
+            };
+            
+            // Adiciona botões à barra inferior
+            addRegularButton("Revelar ADM", call_showAdmins, true); // ATIVADO
+            
+            // DESATIVADOS (começam desativados, mesmo que 'true' no código original)
+            addAutoOffButton("Anti Afk", call_antiAfk, false); 
+            addAutoOffButton("Unhit", call_unhit, false);
+            addAutoOffButton("Auto Off", call_autoOFF, false);
+            addAutoOffButton("Wall Hack", call_wallhack, false);
 
-                if (direction === 1) { // Aumentar
-                    // Encontra o próximo valor maior na lista
-                    const nextTime = TIME_OPTIONS.find(t => t > currentMs);
-                    newMs = nextTime !== undefined ? nextTime : TIME_OPTIONS[0]; // Volta ao primeiro se for o último
-                } else if (direction === -1) { // Diminuir
-                    // Encontra o valor anterior na lista
-                    const prevTime = TIME_OPTIONS.slice().reverse().find(t => t < currentMs);
-                    newMs = prevTime !== undefined ? prevTime : TIME_OPTIONS[TIME_OPTIONS.length - 1]; // Volta ao último se for o primeiro
-                }
+            // ========================================================================
+            // Controle de Tempo de Explosão (Inalterado)
+            // ========================================================================
+            
+            const updateExplosionTimeText = (buttonView) => {
+                const ms = explosionTime;
+                const text = ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`;
+                Java.scheduleOnMainThread(() => buttonView.setText(classLoader.String.$new(`Time: ${text}`)));
+                
+                // Se Explodir estiver ativo, reinicia o intervalo com o novo tempo
+                if (explosionsInterval) {
+                    clearInterval(explosionsInterval);
+                    explosionsInterval = setInterval(() => { canExplode = true; }, explosionTime);
+                }
+            };
 
-                explosionTime = newMs;
-                updateExplosionTimeText(explosionTimeTextView);
-            };
+            // TextView para mostrar o tempo atual
+            const explosionTimeTextView = classLoader.TextView.$new(mainActivity);
+            explosionTimeTextView.setTextColor(classLoader.Color.WHITE.value);
+            // -> CORREÇÃO APLICADA AQUI: Adiciona fundo e padding para imitar o estilo dos botões.
+            explosionTimeTextView.setBackgroundColor(COLOR_OFF);
+            explosionTimeTextView.setPadding(PADDING, PADDING, PADDING, PADDING);
+            // <- FIM DA CORREÇÃO
+            
+            const timeParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
+            timeParams.setMargins(MARGIN, PADDING, MARGIN, PADDING);
+            explosionTimeTextView.setLayoutParams(timeParams);
+            
+            // Lógica de incremento/decremento
+            const TIME_OPTIONS = [100, 250, 500, 1000, 2000];
+            const changeExplosionTime = (direction) => {
+                let currentMs = explosionTime;
+                let newMs = currentMs;
 
-            // CRIAÇÃO DA BARRA DE CONTROLE DE TEMPO (HORIZONTAL)
-            const timeControlLayout = classLoader.LinearLayout.$new(mainActivity);
-            timeControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            const timeControlLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-            timeControlLayout.setLayoutParams(timeControlLayoutParams);
-            timeControlLayout.setGravity(Gravity.CENTER.value);
+                if (direction === 1) { // Aumentar
+                    // Encontra o próximo valor maior na lista
+                    const nextTime = TIME_OPTIONS.find(t => t > currentMs);
+                    newMs = nextTime !== undefined ? nextTime : TIME_OPTIONS[0]; // Volta ao primeiro se for o último
+                } else if (direction === -1) { // Diminuir
+                    // Encontra o valor anterior na lista
+                    const prevTime = TIME_OPTIONS.slice().reverse().find(t => t < currentMs);
+                    newMs = prevTime !== undefined ? prevTime : TIME_OPTIONS[TIME_OPTIONS.length - 1]; // Volta ao último se for o primeiro
+                }
 
-            // Adiciona botões e rótulo
-            timeControlLayout.addView(createHoldButton("<", () => changeExplosionTime(-1)));
-            timeControlLayout.addView(explosionTimeTextView);
-            timeControlLayout.addView(createHoldButton(">", () => changeExplosionTime(1)));
-            
-            // Inicializa o texto
-            updateExplosionTimeText(explosionTimeTextView);
-            
-            // Adiciona o controle de tempo (vertical)
-            explosionControlsVerticalLayout.addView(timeControlLayout);
-            // ========================================================================
-            
-            // CRIAÇÃO DA BARRA DE CONTROLE DE RAIO (HORIZONTAL)
-            const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
-            explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            const explosionControlLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-            explosionControlLayout.setLayoutParams(explosionControlLayoutParams);
-            explosionControlLayout.setGravity(Gravity.CENTER.value);
-            
-            const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode, false); // Começa DESATIVADO
-            autoOffButtons.push(explosionButton);
-            const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`)));
-            const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); };
-            const increaseAction = () => { explosionRadius = Math.min(100, explosionRadius + 1); updateRadiusText(); };
-            
-            explosionControlLayout.addView(createHoldButton("<", decreaseAction));
-            explosionControlLayout.addView(explosionButton.view);
-            explosionControlLayout.addView(createHoldButton(">", increaseAction));
-            
-            // Adiciona o controle de raio abaixo do botão de tempo
-            explosionControlsVerticalLayout.addView(explosionControlLayout);
-            
-            // Adiciona o grupo de explosão (vertical) ao contêiner principal (horizontal)
-            mainBarLayout.addView(explosionControlsVerticalLayout);
+                explosionTime = newMs;
+                updateExplosionTimeText(explosionTimeTextView);
+            };
 
-            // Adiciona os layouts principais na tela
-            mainActivity.addContentView(topLayout, topParams);
-            mainActivity.addContentView(bottomLayout, bottomParams);
+            // CRIAÇÃO DA BARRA DE CONTROLE DE TEMPO (HORIZONTAL)
+            const timeControlLayout = classLoader.LinearLayout.$new(mainActivity);
+            timeControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            const timeControlLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
+            timeControlLayout.setLayoutParams(timeControlLayoutParams);
+            timeControlLayout.setGravity(Gravity.CENTER.value);
 
-            // Lógica de atualização do texto de info (Inalterado)
-            setInterval(() => {
-                const props = getPlayerProperties(activeplayer);
-                Java.scheduleOnMainThread(function() {
-                    const infoText = `  Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
-                    topInfoTextView.setText(classLoader.String.$new(infoText));
-                });
-            }, 500);
-        });
-    });
+            // Adiciona botões e rótulo
+            timeControlLayout.addView(createHoldButton("<", () => changeExplosionTime(-1)));
+            timeControlLayout.addView(explosionTimeTextView);
+            timeControlLayout.addView(createHoldButton(">", () => changeExplosionTime(1)));
+            
+            // Inicializa o texto
+            updateExplosionTimeText(explosionTimeTextView);
+            
+            // Adiciona o controle de tempo (vertical)
+            explosionControlsVerticalLayout.addView(timeControlLayout);
+            // ========================================================================
+            
+            // CRIAÇÃO DA BARRA DE CONTROLE DE RAIO (HORIZONTAL)
+            const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
+            explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            const explosionControlLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
+            explosionControlLayout.setLayoutParams(explosionControlLayoutParams);
+            explosionControlLayout.setGravity(Gravity.CENTER.value);
+            
+            const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode, false); // Começa DESATIVADO
+            autoOffButtons.push(explosionButton);
+            const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`)));
+            const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); };
+            const increaseAction = () => { explosionRadius = Math.min(100, explosionRadius + 1); updateRadiusText(); };
+            
+            explosionControlLayout.addView(createHoldButton("<", decreaseAction));
+            explosionControlLayout.addView(explosionButton.view);
+            explosionControlLayout.addView(createHoldButton(">", increaseAction));
+            
+            // Adiciona o controle de raio abaixo do botão de tempo
+            explosionControlsVerticalLayout.addView(explosionControlLayout);
+            
+            // Adiciona o grupo de explosão (vertical) ao contêiner principal (horizontal)
+            mainBarLayout.addView(explosionControlsVerticalLayout);
 
-    // Funções de Baixo Nível (Inalterado)
-    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
-    function createTString(str) { var str_pointer = malloc(4); var str_struct = malloc(str.length + 8); str_pointer.writePointer(str_struct); str_struct.writeInt(str.length); ptr(parseInt(str_struct) + 4).writeInt(1); ptr(parseInt(str_struct) + 8).writeUtf8String(str); return str_pointer; }
-    function readTString(str) { if (!str.isNull() && parseInt(str) != 0) { var pstr = str.readPointer(); if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } } return ""; }
-    
-    // ✅ CLIQUE MODIFICADO: Lógica de clique no Canto Superior ESQUERDO extremo (1, 1)
+            // Adiciona os layouts principais na tela
+            mainActivity.addContentView(topLayout, topParams);
+            mainActivity.addContentView(bottomLayout, bottomParams);
+
+            // Lógica de atualização do texto de info (Inalterado)
+            setInterval(() => {
+                const props = getPlayerProperties(activeplayer);
+                Java.scheduleOnMainThread(function() {
+                    const infoText = `  Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
+                    topInfoTextView.setText(classLoader.String.$new(infoText));
+                });
+            }, 500);
+        });
+    });
+
+    // Funções de Baixo Nível (Inalterado)
+    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
+    function createTString(str) { var str_pointer = malloc(4); var str_struct = malloc(str.length + 8); str_pointer.writePointer(str_struct); str_struct.writeInt(str.length); ptr(parseInt(str_struct) + 4).writeInt(1); ptr(parseInt(str_struct) + 8).writeUtf8String(str); return str_pointer; }
+    function readTString(str) { if (!str.isNull() && parseInt(str) != 0) { var pstr = str.readPointer(); if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } } return ""; }
+    
+    // ========================================================================
+    // FUNÇÃO CLICK SIMPLES (REVERTIDA PARA O CÓDIGO DO INÍCIO DA SOLICITAÇÃO)
+    // ========================================================================
     function click() { 
         Java.perform(() => 
             Java.scheduleOnMainThread(() => { 
                 const classLoader = getClassLoader();
                 const mainActivity = getMainActivity(classLoader);
-                const context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
                 
-                // --- CLIQUE NO CANTO SUPERIOR ESQUERDO ---
-                // Não precisa de getScreenWidth para o canto esquerdo, mas vamos garantir o contexto.
-                // Usando X=1 e Y=1 para o ponto mais extremo e discreto.
+                // Clica na coordenada (1, 1) - discreto.
                 const targetX = 1; 
                 const targetY = 1; 
                 
@@ -569,6 +547,5 @@ setTimeout(() => {
             })
         ); 
     }
-    // FIM DA MODIFICAÇÃO DE click()
+    // ========================================================================
 }, 8000);
-
