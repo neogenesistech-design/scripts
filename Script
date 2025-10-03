@@ -84,14 +84,10 @@ setTimeout(() => {
     // ========================================================================
     // AJUSTES DO ANTI-AFK: DEFINA AQUI A MARGEM E O INTERVALO
     // ========================================================================
-    // Margem Horizontal (Borda Direita - Barra de Botões): 50px da direita.
-    const CLICK_MARGIN_X = 50; 
-    
-    // Margem Vertical (Borda Superior - Máximo para cima): 1px do topo.
-    const CLICK_MARGIN_Y = 1; 
+    // REMOVIDO: CLICK_MARGIN_X e CLICK_MARGIN_Y para voltar à lógica original (Largura-1, 1)
     
     // ✅ CORREÇÃO CRÍTICA: Intervalo Anti-AFK seguro: 2.5 minutos (150 segundos).
-    const BASE_INTERVAL = 3 * 1000; 
+    const BASE_INTERVAL = 150 * 1000; 
     const RANDOM_RANGE = 3 * 1000;
     // ========================================================================
 
@@ -228,12 +224,10 @@ setTimeout(() => {
         on() { 
             if (afkInterval) return; 
             
-            // 💡 CORREÇÃO DE LOG: Confirma que a função ON foi chamada
+            // 💡 LOG: Confirma que a função ON foi chamada
             console.log("[AntiAfk] Ativado. Primeiro clique será agendado."); 
 
-            // 💡 CORREÇÃO DE LÓGICA: O primeiro clique será agendado, não executado imediatamente.
-            // Para testar imediatamente, você pode forçar um clique aqui: click();
-            // Mas para o uso normal de Anti-AFK, ele deve começar o ciclo agendado.
+            // Agenda o primeiro clique
             scheduleNextClick(); 
         }, 
         off() { 
@@ -551,7 +545,7 @@ setTimeout(() => {
     function createTString(str) { var str_pointer = malloc(4); var str_struct = malloc(str.length + 8); str_pointer.writePointer(str_struct); str_struct.writeInt(str.length); ptr(parseInt(str_struct) + 4).writeInt(1); ptr(parseInt(str_struct) + 8).writeUtf8String(str); return str_pointer; }
     function readTString(str) { if (!str.isNull() && parseInt(str) != 0) { var pstr = str.readPointer(); if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } } return ""; }
     
-    // MODIFICADO: Função click() para usar margem configurável no canto superior direito
+    // ✅ CLIQUE MODIFICADO: Voltou à lógica de clique original e extrema (Largura - 1, 1)
     function click() { 
         Java.perform(() => 
             Java.scheduleOnMainThread(() => { 
@@ -559,27 +553,24 @@ setTimeout(() => {
                 const mainActivity = getMainActivity(classLoader);
                 const context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
                 
-                // Dimensões da tela (ajustado para suportar o celular deitado)
-                const { x: screen_width, y: screen_height } = getScreenDimensions(context);
+                // Dimensões da tela (Obtém para ter a largura correta, mesmo que não use a altura)
+                const { x: screen_width } = getScreenDimensions(context);
                 
-                // Cálculo da posição do clique (Canto Superior Direito com Margem)
-                const targetX = screen_width - CLICK_MARGIN_X; 
-                const targetY = CLICK_MARGIN_Y;
+                // LÓGICA DE CLIQUE ORIGINAL: Canto superior direito extremo
+                const targetX = screen_width - 1; 
+                const targetY = 1;
                 
-                console.log(`[AntiAfk] CLIQUE EXECUTADO em: (${targetX}, ${targetY}). Largura: ${screen_width}, Altura: ${screen_height}`);
+                console.log(`[AntiAfk] CLIQUE EXECUTADO (Original) em: (${targetX}, ${targetY}).`);
 
                 let time = Java.use("android.os.SystemClock").uptimeMillis(); 
                 
-                // Simula um toque rápido (DOWN e UP) para ser reconhecido como clique
-                let eventDown = Java.use("android.view.MotionEvent").obtain(time, time, 0, targetX, targetY, 0); 
-                let eventUp = Java.use("android.view.MotionEvent").obtain(time, time + 50, 1, targetX, targetY, 0); 
+                // Simula um toque (DOWN e UP são implícitos no MotionEvent.obtain original, mas vou usar o mais simples que você usou)
+                let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, targetX, targetY, 0); 
                 
-                mainActivity.dispatchTouchEvent(eventDown); 
-                mainActivity.dispatchTouchEvent(eventUp); 
+                mainActivity.dispatchTouchEvent(event); 
                 showToast("Anti-AFK: Click enviado."); // Confirmação visual
             })
         ); 
     }
     // FIM DA MODIFICAÇÃO DE click()
 }, 8000);
-
