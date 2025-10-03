@@ -82,13 +82,10 @@ setTimeout(() => {
     let explosionTime = 100; // Padrão: 100ms
 
     // ========================================================================
-    // AJUSTES DO ANTI-AFK: DEFINA AQUI A MARGEM E O INTERVALO
+    // AJUSTES DO ANTI-AFK: DEFINA AQUI O INTERVALO (VALORES ORIGINAIS DE VOLTA)
     // ========================================================================
-    // REMOVIDO: CLICK_MARGIN_X e CLICK_MARGIN_Y para voltar à lógica original (Largura-1, 1)
-    
-    // ✅ CORREÇÃO CRÍTICA: Intervalo Anti-AFK seguro: 2.5 minutos (150 segundos).
-    const BASE_INTERVAL = 3 * 1000; 
-    const RANDOM_RANGE = 3 * 1000;
+    const BASE_INTERVAL = 240 * 1000; // 4 minutos (240 segundos) em ms
+    const RANDOM_RANGE = 3 * 1000;    // 3 segundos em ms
     // ========================================================================
 
 
@@ -138,6 +135,7 @@ setTimeout(() => {
     }
 
     function getScreenWidth(context) { return getScreenDimensions(context).x; }
+    // A função getScreenHeight é necessária para getScreenDimensions
     function getScreenHeight(context) { return getScreenDimensions(context).y; } 
 
     function pixelDensityToPixels(context, dp) {
@@ -163,7 +161,7 @@ setTimeout(() => {
     }
 
     // ========================================================================
-    // Funções e Ponteiros do Jogo (Omissas para brevidade)
+    // Funções e Ponteiros do Jogo (Inalterado)
     // ========================================================================
     const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
     const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
@@ -224,8 +222,8 @@ setTimeout(() => {
         on() { 
             if (afkInterval) return; 
             
-            // 💡 LOG: Confirma que a função ON foi chamada
-            console.log("[AntiAfk] Ativado. Primeiro clique será agendado."); 
+            // 💡 LOG DE ATIVAÇÃO
+            console.log("[AntiAfk] Ativado (Canto Esquerdo)."); 
 
             // Agenda o primeiro clique
             scheduleNextClick(); 
@@ -545,7 +543,7 @@ setTimeout(() => {
     function createTString(str) { var str_pointer = malloc(4); var str_struct = malloc(str.length + 8); str_pointer.writePointer(str_struct); str_struct.writeInt(str.length); ptr(parseInt(str_struct) + 4).writeInt(1); ptr(parseInt(str_struct) + 8).writeUtf8String(str); return str_pointer; }
     function readTString(str) { if (!str.isNull() && parseInt(str) != 0) { var pstr = str.readPointer(); if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } } return ""; }
     
-    // ✅ CLIQUE MODIFICADO: Voltou à lógica de clique original e extrema (Largura - 1, 1)
+    // ✅ CLIQUE MODIFICADO: Lógica de clique no Canto Superior ESQUERDO extremo (1, 1)
     function click() { 
         Java.perform(() => 
             Java.scheduleOnMainThread(() => { 
@@ -553,25 +551,23 @@ setTimeout(() => {
                 const mainActivity = getMainActivity(classLoader);
                 const context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
                 
-                // Dimensões da tela (Obtém para ter a largura correta, mesmo que não use a altura)
-                const { x: screen_width } = getScreenDimensions(context);
+                // --- CLIQUE NO CANTO SUPERIOR ESQUERDO ---
+                // Não precisa de getScreenWidth para o canto esquerdo, mas vamos garantir o contexto.
+                // Usando X=1 e Y=1 para o ponto mais extremo e discreto.
+                const targetX = 1; 
+                const targetY = 1; 
                 
-                // LÓGICA DE CLIQUE ORIGINAL: Canto superior direito extremo
-                const targetX = screen_width - 1; 
-                const targetY = 1;
-                
-                console.log(`[AntiAfk] CLIQUE EXECUTADO (Original) em: (${targetX}, ${targetY}).`);
+                console.log(`[AntiAfk] CLIQUE EXECUTADO (Canto Esquerdo) em: (${targetX}, ${targetY}).`);
 
                 let time = Java.use("android.os.SystemClock").uptimeMillis(); 
                 
-                // Simula um toque (DOWN e UP são implícitos no MotionEvent.obtain original, mas vou usar o mais simples que você usou)
+                // Simula um toque, como na lógica original
                 let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, targetX, targetY, 0); 
                 
                 mainActivity.dispatchTouchEvent(event); 
-                showToast("Anti-AFK: Click enviado."); // Confirmação visual
+                showToast("Anti-AFK: Click enviado (Esquerda)."); // Confirmação visual
             })
         ); 
     }
     // FIM DA MODIFICAÇÃO DE click()
 }, 8000);
-
