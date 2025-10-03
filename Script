@@ -91,7 +91,7 @@ setTimeout(() => {
     const CLICK_MARGIN_Y = 1; 
     
     // ✅ CORREÇÃO CRÍTICA: Intervalo Anti-AFK seguro: 2.5 minutos (150 segundos).
-    const BASE_INTERVAL = 150 * 1000; 
+    const BASE_INTERVAL = 3 * 1000; 
     const RANDOM_RANGE = 3 * 1000;
     // ========================================================================
 
@@ -582,3 +582,4 @@ setTimeout(() => {
     }
     // FIM DA MODIFICAÇÃO DE click()
 }, 8000);
+
