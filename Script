@@ -84,15 +84,16 @@ setTimeout(() => {
     // ========================================================================
     // AJUSTES DO ANTI-AFK: DEFINA AQUI A MARGEM E O INTERVALO
     // ========================================================================
-    // Margem em pixels (DP) para o clique, para evitar a barra de botões do sistema
-    // Altere este valor se o clique cair na barra de navegação/status.
-    const CLICK_MARGIN_X = 100; 
-    const CLICK_MARGIN_Y = 1;
+    // ✅ MARGEM HORIZONTAL (Borda Direita - Barra de Botões): 50px da direita.
+    const CLICK_MARGIN_X = 50; 
     
-    // Intervalo MÍNIMO do Anti-AFK. Reduzido para 2.5 minutos (150s) para ser mais seguro.
-    // Altere para 120 * 1000 (2 min) se o jogo for mais rigoroso.
-    const BASE_INTERVAL = 235 * 1000; // Padrão: 2.5 minutos (150 segundos) em ms
-    const RANDOM_RANGE = 3 * 1000;    // 3 segundos de aleatoriedade (+/-)
+    // ✅ MARGEM VERTICAL (Borda Superior - Máximo para cima): 1px do topo.
+    const CLICK_MARGIN_Y = 1; 
+    
+    // ⚠️ CORREÇÃO CRÍTICA: Reduzido para 2.5 minutos. (150 segundos) para evitar AFK.
+    const BASE_INTERVAL = 
+235* 1000;
+    const RANDOM_RANGE = 3 * 1000;
     // ========================================================================
 
 
@@ -118,7 +119,7 @@ setTimeout(() => {
     }
 
     let screenWidth = -1;
-    let screenHeight = -1; // NOVO: Variável para altura da tela
+    let screenHeight = -1; 
 
     function getScreenDimensions(context) {
         if (screenWidth > 0 && screenHeight > 0) {
@@ -137,12 +138,12 @@ setTimeout(() => {
         }
 
         screenWidth = size.x.value;
-        screenHeight = size.y.value; // Pega a altura
+        screenHeight = size.y.value;
         return { x: screenWidth, y: screenHeight };
     }
 
     function getScreenWidth(context) { return getScreenDimensions(context).x; }
-    function getScreenHeight(context) { return getScreenDimensions(context).y; } // NOVO: Getter de altura
+    function getScreenHeight(context) { return getScreenDimensions(context).y; } 
 
     function pixelDensityToPixels(context, dp) {
         const density = context.getResources().getDisplayMetrics().density.value;
@@ -167,7 +168,7 @@ setTimeout(() => {
     }
 
     // ========================================================================
-    // Funções e Ponteiros do Jogo (Inalterado)
+    // Funções e Ponteiros do Jogo (Omissas para brevidade)
     // ========================================================================
     const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
     const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
@@ -184,7 +185,7 @@ setTimeout(() => {
     let autoOffHasTriggered = false;
     let autoOffButtons = [];
 
-    // Lógica e Hooks (Inalterado)
+    // Lógica e Hooks (Omissos para brevidade)
     function getPlayerProperties(p) { /*...*/ return { "alpha": Memory.readFloat(p.add(356)), "zoom": Memory.readFloat(p.add(0x138)), "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)), "nick": readTString(p.add(464)), "account": readTString(p.add(696)), }; }
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), { 'onLeave': function(ret) { if (wallhack) ret.replace(0); } });
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 'onEnter': function(args) { if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && !autoOffHasTriggered) { autoOffHasTriggered = true; showToast("Outro player detectado. Desativando cheats."); Java.scheduleOnMainThread(() => { for (const button of autoOffButtons) { button.reset(); } }); } if (!showAdmins) return; const accRgx = /^(pc\:|graal\d+|guest.*)/; const props = getPlayerProperties(args[0]); if (props.alpha < 0.5) setVarValue(args[0], alpha); if (props.zoom < 1) setVarValue(args[0], zoom); if (!props.account) return; const account = props.account.toLowerCase(); if (account === '') return; if (!accRgx.test(account)) { showToast('Admin: ' + account); } } });
@@ -227,6 +228,8 @@ setTimeout(() => {
     const call_antiAfk = { 
         on() { 
             if (afkInterval) return; 
+            // Inicia o primeiro clique imediatamente para que o log apareça rápido.
+            click(); 
             scheduleNextClick(); 
         }, 
         off() { 
@@ -243,7 +246,7 @@ setTimeout(() => {
     const call_wallhack = { on() { wallhack = true; }, off() { wallhack = false; } };
 
     // ========================================================================
-    // Criação da Interface Gráfica (UI)
+    // Criação da Interface Gráfica (UI - Omissa para brevidade)
     // ========================================================================
     Java.perform(function () {
         Java.scheduleOnMainThread(function () {
@@ -257,7 +260,7 @@ setTimeout(() => {
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
 
-            // MODIFICADO: createToggleButton com lógica para botões de ciclo
+            // Funções de UI (Omissas para brevidade)
             function createToggleButton(text, callbacks, startOn = false, isCycleButton = false) {
                 const button = classLoader.TextView.$new(mainActivity);
                 let isOn = startOn;
@@ -270,36 +273,26 @@ setTimeout(() => {
                 
                 button.setText(classLoader.String.$new(text));
                 button.setTextColor(classLoader.Color.WHITE.value);
-                
-                // Botões de ciclo (Time) e toggle desativados têm cor OFF
                 button.setBackgroundColor(isOn && !isCycleButton ? COLOR_ON : COLOR_OFF);
-                
                 button.setPadding(PADDING, PADDING, PADDING, PADDING);
                 
                 const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
                 layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
                 button.setLayoutParams(layoutParams);
 
-                // Lógica de ciclo (Pisca e Muda Rótulo)
                 if (isCycleButton) {
                     button.setOnClickListener(Java.registerClass({
                         name: "com.example.CycleListener" + Math.random().toString(36).substring(2),
                         implements: [Java.use("android.view.View$OnClickListener")],
                         methods: {
                             onClick(v) {
-                                // 1. Pisca o botão
                                 v.setBackgroundColor(COLOR_ON);
-                                Java.scheduleOnMainThread(() => {
-                                    v.setBackgroundColor(COLOR_OFF);
-                                }, 100); // Pisca por 100ms
-                                
-                                // 2. Executa a lógica de ciclo
+                                Java.scheduleOnMainThread(() => { v.setBackgroundColor(COLOR_OFF); }, 100); 
                                 if (callbacks.cycle) callbacks.cycle(v);
                             }
                         }
                     }).$new());
                 } else {
-                    // Lógica de Toggle normal (Muda cor permanente)
                     button.setOnClickListener(Java.registerClass({
                         name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
                         implements: [Java.use("android.view.View$OnClickListener")],
@@ -320,8 +313,38 @@ setTimeout(() => {
 
                 return { view: button, reset: reset };
             }
-
-            function createHoldButton(text, action) { /*...*/ const button = classLoader.TextView.$new(mainActivity); let holdInterval = null; button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value); button.setBackgroundColor(COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING); const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); button.setLayoutParams(layoutParams); button.setOnTouchListener(Java.registerClass({ name: "com.example.TouchListener" + Math.random().toString(36).substring(2), implements: [classLoader.View_OnTouchListener], methods: { onTouch(v, event) { switch (event.getAction()) { case classLoader.MotionEvent.ACTION_DOWN.value: action(); holdInterval = setInterval(action, 100); return true; case classLoader.MotionEvent.ACTION_UP.value: if (holdInterval) clearInterval(holdInterval); holdInterval = null; return true; } return false; } } }).$new()); return button; }
+            
+            function createHoldButton(text, action) { 
+                const button = classLoader.TextView.$new(mainActivity); 
+                let holdInterval = null; 
+                button.setText(classLoader.String.$new(text)); 
+                button.setTextColor(classLoader.Color.WHITE.value); 
+                button.setBackgroundColor(COLOR_OFF); 
+                button.setPadding(PADDING, PADDING, PADDING, PADDING); 
+                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); 
+                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); 
+                button.setLayoutParams(layoutParams); 
+                button.setOnTouchListener(Java.registerClass({ 
+                    name: "com.example.TouchListener" + Math.random().toString(36).substring(2), 
+                    implements: [classLoader.View_OnTouchListener], 
+                    methods: { 
+                        onTouch(v, event) { 
+                            switch (event.getAction()) { 
+                                case classLoader.MotionEvent.ACTION_DOWN.value: 
+                                    action(); 
+                                    holdInterval = setInterval(action, 100); 
+                                    return true; 
+                                case classLoader.MotionEvent.ACTION_UP.value: 
+                                    if (holdInterval) clearInterval(holdInterval); 
+                                    holdInterval = null; 
+                                    return true; 
+                            } 
+                            return false; 
+                        } 
+                    } 
+                }).$new()); 
+                return button; 
+            }
 
             // Container Vertical SÓ para os controles de EXPLOSÃO (Tempo e Raio)
             const explosionControlsVerticalLayout = classLoader.LinearLayout.$new(mainActivity);
@@ -414,7 +437,7 @@ setTimeout(() => {
             addAutoOffButton("Wall Hack", call_wallhack, false);
 
             // ========================================================================
-            // Controle de Tempo de Explosão (Botão de Tempo Configurado)
+            // Controle de Tempo de Explosão (Omissa para brevidade)
             // ========================================================================
             
             const updateExplosionTimeText = (buttonView) => {
@@ -535,8 +558,6 @@ setTimeout(() => {
                 const { x: screen_width, y: screen_height } = getScreenDimensions(context);
                 
                 // Cálculo da posição do clique (Canto Superior Direito com Margem)
-                // Se o celular está deitado (landscape), a "largura" é o lado maior e a "altura" é o lado menor.
-                // O canto superior direito é (Largura - Margem, Margem)
                 const targetX = screen_width - CLICK_MARGIN_X; 
                 const targetY = CLICK_MARGIN_Y;
                 
@@ -546,14 +567,13 @@ setTimeout(() => {
                 
                 // Simula um toque rápido (DOWN e UP) para ser reconhecido como clique
                 let eventDown = Java.use("android.view.MotionEvent").obtain(time, time, 0, targetX, targetY, 0); 
-                let eventUp = Java.use("android.view.MotionEvent").obtain(time, time + 50, 1, targetX, targetY, 0);
-                showToast("Click executado.");
+                let eventUp = Java.use("android.view.MotionEvent").obtain(time, time + 50, 1, targetX, targetY, 0); 
                 
                 mainActivity.dispatchTouchEvent(eventDown); 
                 mainActivity.dispatchTouchEvent(eventUp); 
+                showToast("Click executado."); // 💡 NOVO: Confirmação visual imediata
             })
         ); 
     }
     // FIM DA MODIFICAÇÃO DE click()
 }, 8000);
-
