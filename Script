@@ -84,14 +84,14 @@ setTimeout(() => {
     // ========================================================================
     // AJUSTES DO ANTI-AFK: DEFINA AQUI A MARGEM E O INTERVALO
     // ========================================================================
-    // ✅ MARGEM HORIZONTAL (Borda Direita - Barra de Botões): 50px da direita.
+    // Margem Horizontal (Borda Direita - Barra de Botões): 50px da direita.
     const CLICK_MARGIN_X = 50; 
     
-    // ✅ MARGEM VERTICAL (Borda Superior - Máximo para cima): 1px do topo.
+    // Margem Vertical (Borda Superior - Máximo para cima): 1px do topo.
     const CLICK_MARGIN_Y = 1; 
     
-    // ⚠️ CORREÇÃO CRÍTICA: Reduzido para 2.5 minutos. (150 segundos) para evitar AFK.
-    const BASE_INTERVAL = 5 * 1000;
+    // ✅ CORREÇÃO CRÍTICA: Intervalo Anti-AFK seguro: 2.5 minutos (150 segundos).
+    const BASE_INTERVAL = 150 * 1000; 
     const RANDOM_RANGE = 3 * 1000;
     // ========================================================================
 
@@ -184,7 +184,7 @@ setTimeout(() => {
     let autoOffHasTriggered = false;
     let autoOffButtons = [];
 
-    // Lógica e Hooks (Omissos para brevidade)
+    // Lógica e Hooks (Inalterado)
     function getPlayerProperties(p) { /*...*/ return { "alpha": Memory.readFloat(p.add(356)), "zoom": Memory.readFloat(p.add(0x138)), "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)), "nick": readTString(p.add(464)), "account": readTString(p.add(696)), }; }
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), { 'onLeave': function(ret) { if (wallhack) ret.replace(0); } });
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 'onEnter': function(args) { if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && !autoOffHasTriggered) { autoOffHasTriggered = true; showToast("Outro player detectado. Desativando cheats."); Java.scheduleOnMainThread(() => { for (const button of autoOffButtons) { button.reset(); } }); } if (!showAdmins) return; const accRgx = /^(pc\:|graal\d+|guest.*)/; const props = getPlayerProperties(args[0]); if (props.alpha < 0.5) setVarValue(args[0], alpha); if (props.zoom < 1) setVarValue(args[0], zoom); if (!props.account) return; const account = props.account.toLowerCase(); if (account === '') return; if (!accRgx.test(account)) { showToast('Admin: ' + account); } } });
@@ -227,14 +227,20 @@ setTimeout(() => {
     const call_antiAfk = { 
         on() { 
             if (afkInterval) return; 
-            // Inicia o primeiro clique imediatamente para que o log apareça rápido.
-            click(); 
+            
+            // 💡 CORREÇÃO DE LOG: Confirma que a função ON foi chamada
+            console.log("[AntiAfk] Ativado. Primeiro clique será agendado."); 
+
+            // 💡 CORREÇÃO DE LÓGICA: O primeiro clique será agendado, não executado imediatamente.
+            // Para testar imediatamente, você pode forçar um clique aqui: click();
+            // Mas para o uso normal de Anti-AFK, ele deve começar o ciclo agendado.
             scheduleNextClick(); 
         }, 
         off() { 
             if (afkInterval) { 
                 clearTimeout(afkInterval); 
                 afkInterval = null; 
+                console.log("[AntiAfk] Desativado.");
             } 
         } 
     };
@@ -245,7 +251,7 @@ setTimeout(() => {
     const call_wallhack = { on() { wallhack = true; }, off() { wallhack = false; } };
 
     // ========================================================================
-    // Criação da Interface Gráfica (UI - Omissa para brevidade)
+    // Criação da Interface Gráfica (UI - Inalterado)
     // ========================================================================
     Java.perform(function () {
         Java.scheduleOnMainThread(function () {
@@ -259,7 +265,7 @@ setTimeout(() => {
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
 
-            // Funções de UI (Omissas para brevidade)
+            // Funções de UI (Inalterado)
             function createToggleButton(text, callbacks, startOn = false, isCycleButton = false) {
                 const button = classLoader.TextView.$new(mainActivity);
                 let isOn = startOn;
@@ -436,7 +442,7 @@ setTimeout(() => {
             addAutoOffButton("Wall Hack", call_wallhack, false);
 
             // ========================================================================
-            // Controle de Tempo de Explosão (Omissa para brevidade)
+            // Controle de Tempo de Explosão (Inalterado)
             // ========================================================================
             
             const updateExplosionTimeText = (buttonView) => {
@@ -560,7 +566,7 @@ setTimeout(() => {
                 const targetX = screen_width - CLICK_MARGIN_X; 
                 const targetY = CLICK_MARGIN_Y;
                 
-                console.log(`[AntiAfk] Clicando em (${targetX}, ${targetY}). Largura: ${screen_width}, Altura: ${screen_height}`);
+                console.log(`[AntiAfk] CLIQUE EXECUTADO em: (${targetX}, ${targetY}). Largura: ${screen_width}, Altura: ${screen_height}`);
 
                 let time = Java.use("android.os.SystemClock").uptimeMillis(); 
                 
@@ -570,11 +576,9 @@ setTimeout(() => {
                 
                 mainActivity.dispatchTouchEvent(eventDown); 
                 mainActivity.dispatchTouchEvent(eventUp); 
-                showToast("Click executado."); // 💡 NOVO: Confirmação visual imediata
+                showToast("Anti-AFK: Click enviado."); // Confirmação visual
             })
         ); 
     }
     // FIM DA MODIFICAÇÃO DE click()
 }, 8000);
-
-
