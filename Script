@@ -205,7 +205,7 @@ setTimeout(() => {
     const call_antiAfk = { 
         on() { 
             console.log("[AntiAfk] Ativado (Intervalo Fixo: 4 minutos)."); 
-            if (!afkInterval) afkInterval = setInterval(click, 4 * 1000); 
+            if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); 
         }, 
         off() { 
             if (afkInterval) { 
@@ -549,3 +549,4 @@ setTimeout(() => {
     }
     // ========================================================================
 }, 8000);
+
