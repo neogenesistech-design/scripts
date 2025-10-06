@@ -73,6 +73,19 @@ function deleteRecursive(file) {
 deleteCacheFiles();
 
 setTimeout(() => {
+    // ========================================================================
+    // CONFIGURAÇÕES BASE DO DUMPER (Para uso interno do hideAllPlayers)
+    // ========================================================================
+    const BASE_MODULE_NAME = "libqplay.so";
+    const POINTER_SIZE = 8; // ARM64
+
+    // Endereços Estáticos (Offsets de libqplay.so)
+    const ADDR_QYZ_YL0 = 0x0026ac88;     
+    
+    // Offsets da Estrutura da Lista (vy1JgaKVkH) - PALPITES 64-BIT
+    const LIST_SIZE_OFFSET = 0x10; // Palpite: Contador da lista (Size)
+    const LIST_ARRAY_BASE_OFFSET = 0x0; // Palpite: Ponteiro do array (Begin)
+    
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
     // Variável para controlar o raio da explosão, com valor padrão
@@ -80,10 +93,9 @@ setTimeout(() => {
     
     // NOVO: Variável para controle de tempo da explosão (em milissegundos)
     let explosionTime = 100; // Padrão: 100ms
-
-    // ========================================================================
-    // ATENÇÃO: VARIÁVEIS ANTI-AFK REMOVIDAS. USANDO INTERVALO FIXO AGORA.
-    // ========================================================================
+    
+    // Variável de estado global para a nova função
+    let hidePlayersActive = false; 
 
 
     // ========================================================================
@@ -160,13 +172,21 @@ setTimeout(() => {
     // ========================================================================
     // Funções e Ponteiros do Jogo (Inalterado)
     // ========================================================================
+    // Adicionado baseAddress para estabilizar
+    const baseAddress = Module.findBaseAddress(BASE_MODULE_NAME);
+
+    // activeplayer e ADDR_DKCHGA_GRiF são globais e só podem ser lidos após a base
     const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    
     const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
     const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
     const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
     let hurtPlayer = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
-    const alpha = createTString('alpha=0.5');
+    
+    // VARIÁVEIS DE ALPHA (VISÍVEL E ESCONDIDO)
+    const alpha_visible = createTString('alpha=0.5'); // O 'alpha' original
+    const alpha_hidden = createTString('alpha=0');    // NOVO: Para ocultar
     const zoom = createTString('zoom=1');
 
     // Variáveis de Estado (Inalterado)
@@ -174,11 +194,94 @@ setTimeout(() => {
     let showAdmins = true, autoOFF = false, afkInterval = null;
     let autoOffHasTriggered = false;
     let autoOffButtons = [];
+    
+    // ========================================================================
+    // NOVA FUNÇÃO: OCULTAR/REVELAR JOGADORES
+    // ========================================================================
+    function hideAllPlayers(shouldHide) {
+        if (!baseAddress) return;
 
-    // Lógica e Hooks (Inalterado)
+        try {
+            const gameStatePtrAddr = baseAddress.add(ADDR_QYZ_YL0);
+            const entityListPtr = gameStatePtrAddr.add(0x90).readPointer();
+            
+            if (entityListPtr.isNull()) return showToast("Erro: Lista de entidades nula.");
+            
+            // Lendo a estrutura da lista (tentativa 64-bit - PALPITES)
+            // Se esta linha falhar, o Toast de erro abaixo será disparado.
+            const entityCount = entityListPtr.add(LIST_SIZE_OFFSET).readU64().toUInt32();
+            const entityArrayBasePtr = entityListPtr.add(LIST_ARRAY_BASE_OFFSET).readPointer();
+            
+            if (entityCount === 0 || entityCount > 1000 || entityArrayBasePtr.isNull()) {
+                 console.log(`[HidePlayers] Falha nos offsets da lista. Count: ${entityCount}, Base: ${entityArrayBasePtr}`);
+                 return showToast("Erro: Offsets da lista inválidos (64-bit).");
+            }
+
+            const targetAlpha = shouldHide ? alpha_hidden : alpha_visible;
+
+            for (let i = 0; i < entityCount; i++) {
+                const ptrToEntity = entityArrayBasePtr.add(i * POINTER_SIZE); 
+                const entityAddress = ptrToEntity.readPointer(); 
+                
+                if (!entityAddress.isNull() && !entityAddress.equals(activeplayer)) {
+                    // Oculta/Revela APENAS se não for o jogador local
+                    setVarValue(entityAddress, targetAlpha); 
+                }
+            }
+            showToast(shouldHide ? "Jogadores Ocultos (Alpha=0)." : "Jogadores Visíveis (Alpha=0.5).");
+            hidePlayersActive = shouldHide;
+            
+        } catch (e) {
+            console.log(`[Hide Players Error] Falha ao iterar: ${e.message}`);
+            showToast("Erro ao ocultar jogadores.");
+        }
+    }
+    
+    // NOVO CONTROLADOR DE OCULTAÇÃO DE PLAYERS
+    const call_hidePlayers = { 
+        on() { 
+            Java.scheduleOnMainThread(() => { hideAllPlayers(true); }); 
+        }, 
+        off() { 
+            Java.scheduleOnMainThread(() => { hideAllPlayers(false); }); 
+        } 
+    };
+
+    // Lógica e Hooks (Adaptado)
     function getPlayerProperties(p) { /*...*/ return { "alpha": Memory.readFloat(p.add(356)), "zoom": Memory.readFloat(p.add(0x138)), "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)), "nick": readTString(p.add(464)), "account": readTString(p.add(696)), }; }
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"), { 'onLeave': function(ret) { if (wallhack) ret.replace(0); } });
-    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 'onEnter': function(args) { if (autoOFF && args[0].toInt32() != activeplayer.toInt32() && !autoOffHasTriggered) { autoOffHasTriggered = true; showToast("Outro player detectado. Desativando cheats."); Java.scheduleOnMainThread(() => { for (const button of autoOffButtons) { button.reset(); } }); } if (!showAdmins) return; const accRgx = /^(pc\:|graal\d+|guest.*)/; const props = getPlayerProperties(args[0]); if (props.alpha < 0.5) setVarValue(args[0], alpha); if (props.zoom < 1) setVarValue(args[0], zoom); if (!props.account) return; const account = props.account.toLowerCase(); if (account === '') return; if (!accRgx.test(account)) { showToast('Admin: ' + account); } } });
+    
+    // O Hook de Administradores é adaptado para respeitar o estado de 'hidePlayersActive'
+    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 
+        'onEnter': function(args) { 
+            const targetEntity = args[0];
+            if (autoOFF && targetEntity.toInt32() != activeplayer.toInt32() && !autoOffHasTriggered) { 
+                autoOffHasTriggered = true; 
+                showToast("Outro player detectado. Desativando cheats."); 
+                Java.scheduleOnMainThread(() => { for (const button of autoOffButtons) { button.reset(); } }); 
+            } 
+            
+            if (!showAdmins) return; 
+
+            // Se a função 'Hide Players' estiver ativa E a entidade NÃO for o jogador ativo, 
+            // não aplicamos alpha_visible aqui. A função hideAllPlayers gerencia isso.
+            if (!hidePlayersActive || targetEntity.equals(activeplayer)) {
+                const props = getPlayerProperties(targetEntity); 
+                
+                // Aplica Alpha=0.5 se for menor (mantendo a visibilidade padrão)
+                if (props.alpha < 0.5) setVarValue(targetEntity, alpha_visible); 
+                if (props.zoom < 1) setVarValue(targetEntity, zoom); 
+
+                // Lógica de Admin
+                const accRgx = /^(pc\:|graal\d+|guest.*)/; 
+                const account = props.account.toLowerCase(); 
+                if (account !== '' && !accRgx.test(account)) { 
+                    showToast('Admin: ' + account); 
+                } 
+            }
+        } 
+    });
+
     Interceptor.replace(Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"), new NativeCallback((a, b, c, d, e, f) => { if (unhit) return 0; hurtPlayer(a, b, c, d, e, f); }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
     Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd"), { onEnter: function(args) { if (!canExplode) return; canExplode = false; makeExplosion(args[0], explosionRadius); } });
     function makeExplosion(level, radius) { if (!level) return; const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); const offset = Math.floor(radius / 2); for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } }
@@ -199,23 +302,23 @@ setTimeout(() => {
         } 
     };
     
-    // ========================================================================
-    // ANTI-AFK SIMPLES (REVERTIDO PARA O CÓDIGO DO INÍCIO DA SOLICITAÇÃO)
-    // ========================================================================
-    const call_antiAfk = { 
-        on() { 
-            console.log("[AntiAfk] Ativado (Intervalo Fixo: 4 minutos)."); 
-            if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); 
-        }, 
-        off() { 
-            if (afkInterval) { 
-                clearInterval(afkInterval); 
-                afkInterval = null; 
-                console.log("[AntiAfk] Desativado.");
-            } 
-        } 
-    };
-    // ========================================================================
+    // ========================================================================
+    // ANTI-AFK SIMPLES (REVERTIDO PARA O CÓDIGO DO INÍCIO DA SOLICITAÇÃO)
+    // ========================================================================
+    const call_antiAfk = { 
+        on() { 
+            console.log("[AntiAfk] Ativado (Intervalo Fixo: 4 minutos)."); 
+            if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); 
+        }, 
+        off() { 
+            if (afkInterval) { 
+                clearInterval(afkInterval); 
+                afkInterval = null; 
+                console.log("[AntiAfk] Desativado.");
+            } 
+        } 
+    };
+    // ========================================================================
 
     const call_unhit = { on() { unhit = true; }, off() { unhit = false; } };
     const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; }, off() { autoOFF = false; } };
@@ -501,6 +604,10 @@ setTimeout(() => {
             
             // Adiciona o grupo de explosão (vertical) ao contêiner principal (horizontal)
             mainBarLayout.addView(explosionControlsVerticalLayout);
+            
+            // NOVO BOTÃO DE ESCONDER PLAYERS AQUI!
+            const hidePlayersButton = createToggleButton("Esconder Players", call_hidePlayers, false);
+            mainBarLayout.addView(hidePlayersButton.view);
 
             // Adiciona os layouts principais na tela
             mainActivity.addContentView(topLayout, topParams);
@@ -525,28 +632,27 @@ setTimeout(() => {
     // ========================================================================
     // FUNÇÃO CLICK SIMPLES (REVERTIDA PARA O CÓDIGO DO INÍCIO DA SOLICITAÇÃO)
     // ========================================================================
-    function click() { 
-        Java.perform(() => 
-            Java.scheduleOnMainThread(() => { 
-                const classLoader = getClassLoader();
-                const mainActivity = getMainActivity(classLoader);
-                
-                // Clica na coordenada (1, 1) - discreto.
-                const targetX = 1; 
-                const targetY = 1; 
-                
-                console.log(`[AntiAfk] CLIQUE EXECUTADO (Canto Esquerdo) em: (${targetX}, ${targetY}).`);
+    function click() { 
+        Java.perform(() => 
+            Java.scheduleOnMainThread(() => { 
+                const classLoader = getClassLoader();
+                const mainActivity = getMainActivity(classLoader);
+                
+                // Clica na coordenada (1, 1) - discreto.
+                const targetX = 1; 
+                const targetY = 1; 
+                
+                console.log(`[AntiAfk] CLIQUE EXECUTADO (Canto Esquerdo) em: (${targetX}, ${targetY}).`);
 
-                let time = Java.use("android.os.SystemClock").uptimeMillis(); 
-                
-                // Simula um toque, como na lógica original
-                let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, targetX, targetY, 0); 
-                
-                mainActivity.dispatchTouchEvent(event); 
-                showToast("Anti-AFK: Click enviado (Esquerda)."); // Confirmação visual
-            })
-        ); 
-    }
-    // ========================================================================
+                let time = Java.use("android.os.SystemClock").uptimeMillis(); 
+                
+                // Simula um toque, como na lógica original
+                let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, targetX, targetY, 0); 
+                
+                mainActivity.dispatchTouchEvent(event); 
+                showToast("Anti-AFK: Click enviado (Esquerda)."); // Confirmação visual
+            })
+        ); 
+    }
+    // ========================================================================
 }, 8000);
-
