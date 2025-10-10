@@ -1,259 +1,283 @@
-// A lógica do Menu (getClassLoader, pixelDensityToPixels, getMainActivity, Menu class)
-// ... DEVE SER INSERIDA AQUI (Copie do seu código original) ...
-
-// ========================================================================
-// SCRIPT DE ANÁLISE v20 - Investigador de Estrutura de Mensagens
-// ... (Seu código original das funções getClassLoader, pixelDensityToPixels, etc., e a classe Menu)
-// ...
-
-function getClassLoader() {
-    return {
-        Gravity: Java.use("android.view.Gravity"),
-        TextView: Java.use("android.widget.TextView"),
-        LinearLayout: Java.use("android.widget.LinearLayout"),
-        LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-        Color: Java.use("android.graphics.Color"),
-        ActivityThread: Java.use("android.app.ActivityThread"),
-        View_OnClickListener: Java.use("android.view.View$OnClickListener"),
-        String: Java.use("java.lang.String"),
-        ScrollView: Java.use("android.widget.ScrollView"),
-        View: Java.use("android.view.View"),
-        Typeface: Java.use("android.graphics.Typeface"),
-    };
-}
-
-function pixelDensityToPixels(context, dp) {
-    const density = context.getResources().getDisplayMetrics().density.value;
-    return parseInt(dp * density);
-}
-
-function getMainActivity(classLoader) {
-    const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-    const mActivities = activityThread.mActivities.value;
-    const activityClientRecord = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
-    return activityClientRecord.activity.value;
-}
-
-class Menu {
-    #classLoader; #activity; #menuLayout; #controlContainer; #logContainer; #logScrollView; #colorOn; #colorOff; #isExpanded = true;
-
-    constructor(classLoader, activity, title, width, bgColor) {
-        this.#classLoader = classLoader;
-        this.#activity = activity;
-        this.#createStaticLayout(title, width, bgColor);
+/**
+ * Script de Hook: Entity List (Lista de Entidades)
+ *
+ * Objetivo: Detectar e listar todas as entidades (objetos, jogadores, etc.) do jogo
+ * em um menu flutuante.
+ */
+(function() {
+    // ========================================================================
+    // VARIÁVEIS DO JOGO
+    // ========================================================================
+    
+    // Supondo que 'MpGzgariDy' é o ponteiro global para o gerenciador de entidades (o "World" ou "Level").
+    // O ponteiro 'activeplayer' está no escopo, mas usaremos a entidade principal.
+    const get_entity_manager = Module.findExportByName("libqplay.so", "dkCHgaGRiF"); 
+    if (!get_entity_manager) {
+        console.error("ERRO: Export 'dkCHgaGRiF' (Gerenciador de Entidades) não encontrado. Script inativo.");
+        return;
     }
-
-    #createStaticLayout(title, width, bgColor) {
-        const MATCH = -1;
-        const WRAP = -2;
-        const widthDp = pixelDensityToPixels(this.#activity, width);
-
-        const rootView = this.#classLoader.LinearLayout.$new(this.#activity);
-        rootView.setLayoutParams(this.#classLoader.LinearLayout_LayoutParams.$new(MATCH, MATCH));
-        rootView.setGravity(this.#classLoader.Gravity.LEFT.value);
-        this.rootView = rootView;
-
-        this.#menuLayout = this.#classLoader.LinearLayout.$new(this.#activity);
-        const menuParams = this.#classLoader.LinearLayout_LayoutParams.$new(widthDp, WRAP);
-        this.#menuLayout.setLayoutParams(menuParams);
-        this.#menuLayout.setBackgroundColor(this.#classLoader.Color.parseColor(bgColor));
-        this.#menuLayout.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-
-        const menuBarLayout = this.#classLoader.TextView.$new(this.#activity);
-        menuBarLayout.setText(this.#classLoader.String.$new(title));
-        menuBarLayout.setTextColor(this.#classLoader.Color.parseColor("#FFC107"));
-        menuBarLayout.setBackgroundColor(this.#classLoader.Color.parseColor("#B3635985"));
-        menuBarLayout.setGravity(this.#classLoader.Gravity.CENTER.value);
-        menuBarLayout.setPadding(10, 10, 10, 10);
-        this.#menuLayout.addView(menuBarLayout);
-
-        this.#controlContainer = this.#classLoader.LinearLayout.$new(this.#activity);
-        this.#controlContainer.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-        this.#controlContainer.setPadding(8, 8, 8, 8);
-        this.#menuLayout.addView(this.#controlContainer);
-
-        this.#logScrollView = this.#classLoader.ScrollView.$new(this.#activity);
-        this.#logScrollView.setLayoutParams(this.#classLoader.LinearLayout_LayoutParams.$new(MATCH, pixelDensityToPixels(this.#activity, 300)));
-        this.#logContainer = this.#classLoader.LinearLayout.$new(this.#activity);
-        this.#logContainer.setOrientation(this.#classLoader.LinearLayout.VERTICAL.value);
-        this.#logContainer.setPadding(8, 8, 8, 8);
-        this.#logScrollView.addView(this.#logContainer);
-        this.#menuLayout.addView(this.#logScrollView);
-
-        const self = this;
-        const View = this.#classLoader.View;
-        menuBarLayout.setOnClickListener(Java.registerClass({
-            name: "com.logger.ToggleClickListener" + Math.random().toString().replace(".", ""),
-            implements: [this.#classLoader.View_OnClickListener],
-            methods: {
-                onClick(v) {
-                    self.#isExpanded = !self.#isExpanded;
-                    const visibility = self.#isExpanded ? View.VISIBLE.value : View.GONE.value;
-                    self.#controlContainer.setVisibility(visibility);
-                    self.#logScrollView.setVisibility(visibility);
-                }
-            }
-        }).$new());
-        
-        this.rootView.addView(this.#menuLayout);
-    }
-
-    setOptionColors(colorOn, colorOff) { this.#colorOn = colorOn; this.#colorOff = colorOff; }
-
-    addOption(id, name, callbacks) {
-        const option = this.#classLoader.TextView.$new(this.#activity);
-        option.setText(this.#classLoader.String.$new(name));
-        option.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-        option.setTextColor(this.#classLoader.Color.WHITE.value);
-        option.setGravity(this.#classLoader.Gravity.CENTER.value);
-        const params = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2);
-        params.setMargins(0, 5, 0, 5);
-        option.setLayoutParams(params);
-        option.setPadding(10, 10, 10, 10);
-        let state = false;
-        option.setOnClickListener(Java.registerClass({
-            name: "com.logger.OptionClick" + id,
-            implements: [this.#classLoader.View_OnClickListener],
-            methods: {
-                onClick: (v) => {
-                    state = !state;
-                    v.setBackgroundColor(this.#classLoader.Color.parseColor(state ? this.#colorOn : this.#colorOff));
-                    if (state) callbacks.on(); else callbacks.off();
-                }
-            }
-        }).$new());
-        this.#controlContainer.addView(option);
-    }
-
-    addButton(text, callback) {
-        const button = this.#classLoader.TextView.$new(this.#activity);
-        button.setText(this.#classLoader.String.$new(text));
-        button.setBackgroundColor(this.#classLoader.Color.parseColor(this.#colorOff));
-        button.setTextColor(this.#classLoader.Color.WHITE.value);
-        button.setGravity(this.#classLoader.Gravity.CENTER.value);
-        const params = this.#classLoader.LinearLayout_LayoutParams.$new(-1, -2);
-        params.setMargins(0, 5, 0, 5);
-        button.setLayoutParams(params);
-        button.setPadding(10, 10, 10, 10);
-        button.setOnClickListener(Java.registerClass({
-            name: "com.logger.ButtonClick" + text.replace(/ /g, ""),
-            implements: [this.#classLoader.View_OnClickListener],
-            methods: { onClick: (v) => callback() }
-        }).$new());
-        this.#controlContainer.addView(button);
-    }
-
-    addLog(text) {
-        Java.scheduleOnMainThread(() => {
-            const logEntry = this.#classLoader.TextView.$new(this.#activity);
-            logEntry.setText(this.#classLoader.String.$new(text));
-            logEntry.setTextColor(this.#classLoader.Color.parseColor("#00FF00"));
-            logEntry.setTypeface(this.#classLoader.Typeface.MONOSPACE);
-            this.#logContainer.addView(logEntry, 0);
-            if (this.#logContainer.getChildCount() > 50) {
-                this.#logContainer.removeViewAt(50);
-            }
-        });
+    const activeplayer = get_entity_manager.readPointer();
+    
+    // Assumimos que a lista de entidades é uma estrutura em um offset do gerenciador.
+    // É uma suposição comum, mas o OFFSET PODE MUDAR.
+    // Exemplo: 0x140 ou 0x130 pode ser o ponteiro para o array/vector de entidades.
+    // **Você pode precisar ajustar este OFFSET_ENTITY_VECTOR baseado na análise do binário.**
+    const OFFSET_ENTITY_VECTOR = 0x140; 
+    
+    // Funções do Jogo (Apenas o necessário)
+    const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
+    const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
+    
+    // Função utilitária para ler TString (Inalterado)
+    function readTString(str) { 
+        if (!str.isNull() && parseInt(str) != 0) { 
+            var pstr = str.readPointer(); 
+            if (!pstr.isNull()) { 
+                var strlen = pstr.readInt(); 
+                if (strlen > 0 && strlen < 256) // Limite razoável para evitar crash em dados corrompidos
+                    return ptr(parseInt(pstr) + 8).readCString(strlen); 
+            } 
+        } 
+        return "N/A"; 
     }
     
-    clearLog() { this.#logContainer.removeAllViews(); }
-    start() { this.#activity.addContentView(this.rootView, this.rootView.getLayoutParams()); }
-}
-
-
-// --- LÓGICA DE ENGENHARIA REVERSA ---
-const LIB_NAME = "libqplay.so";
-const RVA_DKCH_POINTER = 0x26C3A4; 
-const OFFSET_TO_ENTITY_LIST = 0x318; 
-const OFFSET_COUNT = 0x8;   
-const OFFSET_ARRAY_START = 0xC; 
-const POINTER_SIZE = 4;
-
-function readGlobalAddress(base) {
-    const dkchAddress = base.add(RVA_DKCH_POINTER);
-    return dkchAddress.readPointer(); 
-}
-
-function dumpEntityList() {
-    let logLines = ["", "=== DUMP DE ENTIDADES ==="];
-    
-    try {
-        const targetModule = Process.findModuleByName(LIB_NAME);
-        if (!targetModule) {
-            logLines.push(`[ERRO] Módulo ${LIB_NAME} não encontrado.`);
-            return;
-        }
-
-        const entityManagerInstance = readGlobalAddress(targetModule.base);
-
-        if (entityManagerInstance.isNull()) {
-            logLines.push(`[ERRO] Instância Global (DKCH) não inicializada.`);
-            return;
-        }
-        logLines.push(`[INFO] Gerenciador Base: ${entityManagerInstance}`);
-
-        // Leitura 32-bit forçada (Corrige desalinhamento)
-        const entityListObjectPtr = entityManagerInstance.add(OFFSET_TO_ENTITY_LIST);
-        const entityListObjectU32 = entityListObjectPtr.readU32();
-        const entityListObject = ptr(entityListObjectU32);
-
-        if (entityListObject.isNull()) {
-            logLines.push(`[ERRO] Ponteiro da Lista (+0x318) é NULL.`);
-            return;
-        }
-        
-        // Leitura de Count e Array Start
-        const entityCount = entityListObject.add(OFFSET_COUNT).readInt(); 
-        const entityArrayStartU32 = entityListObject.add(OFFSET_ARRAY_START).readU32();
-        const entityArrayStart = ptr(entityArrayStartU32);
-
-        logLines.push(`[INFO] Objeto Lista: ${entityListObject}`);
-        logLines.push(`[TOTAL] Entidades Ativas: ${entityCount}`);
-        
-        if (entityCount > 0 && entityCount < 5000 && !entityArrayStart.isNull()) {
-            logLines.push("--- Endereços de Objetos ---");
-            for (let i = 0; i < Math.min(entityCount, 50); i++) {
-                const entityPointerOffset = i * POINTER_SIZE;
-                const entityObjectAddress = entityArrayStart.add(entityPointerOffset).readPointer();
-                logLines.push(`[${i.toString().padStart(2, '0')}] ${entityObjectAddress}`);
-            }
-        } else if (entityCount > 5000) {
-            logLines.push("[ERRO] Contagem irrealista. Estrutura de Count incorreta.");
-        }
-
-    } catch (e) {
-        // Captura o access violation
-        logLines.push(`[ERRO CRÍTICO] Falha na leitura de memória: ${e.message}`);
-        logLines.push("-> Falha provável no desalinhamento do ponteiro.");
-    } finally {
-        logLines.push("==========================");
-        logLines.forEach(line => menu.addLog(line));
+    // Funções de Propriedades de Entidade (Apenas o necessário para lista)
+    function getPlayerProperties(p) { 
+        return {
+            // Nota: O offset para nick (464) pode ser diferente para outras entidades
+            "nick": readTString(p.add(464)), 
+            "account": readTString(p.add(696)),
+            "x": Memory.readDouble(p.add(0x238)), 
+            "y": Memory.readDouble(p.add(0x240)), 
+        }; 
     }
-}
+    
+    // ========================================================================
+    // LÓGICA DE DETECÇÃO DE ENTIDADES
+    // ========================================================================
+
+    // Função principal para listar entidades
+    function listEntities(activePlayerPtr) {
+        const entityList = [];
+        
+        // Ponteiro para o gerenciador principal
+        const entity_manager = Memory.readPointer(activePlayerPtr);
+        if (entity_manager.isNull()) {
+            return entityList;
+        }
+
+        // Ponteiro para a estrutura do vetor (std::vector no C++ ou equivalente)
+        const vector_ptr = entity_manager.add(OFFSET_ENTITY_VECTOR);
+        
+        // Leitura do ponteiro inicial e final do vetor (std::vector implementation)
+        const start_ptr = vector_ptr.readPointer();
+        const end_ptr = vector_ptr.add(8).readPointer(); 
+        
+        // Se a lista estiver vazia
+        if (start_ptr.equals(end_ptr)) {
+            return entityList;
+        }
+
+        // Tamanho do ponteiro (4 bytes em 32-bit, 8 bytes em 64-bit)
+        const PTR_SIZE = Process.pointerSize; 
+
+        let current_ptr = start_ptr;
+        let count = 0;
+
+        // Itera pelo vetor de ponteiros
+        while (current_ptr.compare(end_ptr) < 0) {
+            const entity_ptr = current_ptr.readPointer();
+            
+            if (!entity_ptr.isNull() && entity_ptr.compare(ptr(1000)) > 0) { // Ignora ponteiros muito baixos
+                const props = getPlayerProperties(entity_ptr);
+                
+                // Calculando a distância (apenas para exibição)
+                const localX = getlocalx(activePlayerPtr);
+                const localY = getlocaly(activePlayerPtr);
+                const dx = props.x - localX;
+                const dy = props.y - localY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                let name = `0x${entity_ptr.toString(16)}`;
+                if (props.nick && props.nick !== "N/A" && props.nick.trim().length > 0) {
+                    name = props.nick;
+                } else if (props.account && props.account !== "N/A" && props.account.trim().length > 0) {
+                    name = props.account;
+                }
+
+                entityList.push({
+                    name: name,
+                    ptr: entity_ptr.toString(16),
+                    pos: `(${props.x.toFixed(1)}, ${props.y.toFixed(1)})`,
+                    dist: distance.toFixed(1),
+                    isPlayer: (props.nick && props.nick !== "N/A") || (props.account && props.account !== "N/A") // Heurística
+                });
+                count++;
+            }
+
+            // Move para o próximo ponteiro na lista
+            current_ptr = current_ptr.add(PTR_SIZE);
+            if (count > 200) break; // Limite de segurança
+        }
+
+        return entityList;
+    }
 
 
-// --- EXECUÇÃO PRINCIPAL ---
-setTimeout(() => {
+    // ========================================================================
+    // UTILS e UI (Mínimo Necessário)
+    // ========================================================================
+    
+    // Funções utilitárias (mínimo necessário, adaptado do original)
+    function getClassLoader() {
+        return {
+            Gravity: Java.use("android.view.Gravity"),
+            TextView: Java.use("android.widget.TextView"),
+            LinearLayout: Java.use("android.widget.LinearLayout"),
+            LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
+            Color: Java.use("android.graphics.Color"),
+            ActivityThread: Java.use("android.app.ActivityThread"),
+            String: Java.use("java.lang.String"),
+            View: Java.use("android.view.View"),
+            ScrollView: Java.use("android.widget.ScrollView") // Novo componente para lista rolável
+        };
+    }
+
+    function pixelDensityToPixels(context, dp) {
+        const density = context.getResources().getDisplayMetrics().density.value;
+        return parseInt(dp * density);
+    }
+
+    function getMainActivity(classLoader) {
+        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
+        const mActivities = activityThread.mActivities.value;
+        const activityClientRecord = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
+        return activityClientRecord.activity.value;
+    }
+    
+    // ========================================================================
+    // CRIAÇÃO DA INTERFACE GRÁFICA (UI)
+    // ========================================================================
+
     Java.perform(function () {
-        try {
+        // Delay para garantir que a Activity está pronta
+        Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
             const mainActivity = getMainActivity(classLoader);
+            const Gravity = classLoader.Gravity;
+            const View = classLoader.View;
+
+            const COLOR_BG = classLoader.Color.parseColor("#C0000000"); // Preto semi-transparente
+            const COLOR_PLAYER = classLoader.Color.parseColor("#FFFFA500"); // Laranja para jogadores
+            const COLOR_OTHER = classLoader.Color.WHITE.value;
+            const PADDING = pixelDensityToPixels(mainActivity, 4);
+            const MARGIN = pixelDensityToPixels(mainActivity, 2);
+            const WIDTH_DP = 250; // Largura fixa para o menu
+            const HEIGHT_DP = 300; // Altura fixa para o menu
+
+            const WIDTH_PX = pixelDensityToPixels(mainActivity, WIDTH_DP);
+            const HEIGHT_PX = pixelDensityToPixels(mainActivity, HEIGHT_DP);
+
+            // ----------------------------------------------------------------
+            // 1. Container da Lista (Scrollable)
+            // ----------------------------------------------------------------
+            const entityListContainer = classLoader.LinearLayout.$new(mainActivity);
+            entityListContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+            entityListContainer.setPadding(PADDING, PADDING, PADDING, PADDING);
             
-            menu = new Menu(classLoader, mainActivity, "Entity List Inspector", 350, "#B318122B"); 
-            menu.setOptionColors("#B3443C68", "#B3393053");
-
-            // Não precisamos mais do hook de timing, a leitura será por botão.
+            // ----------------------------------------------------------------
+            // 2. ScrollView (Permite que a lista seja maior que a tela e role)
+            // ----------------------------------------------------------------
+            const scrollView = classLoader.ScrollView.$new(mainActivity);
+            scrollView.setBackgroundColor(COLOR_BG);
+            scrollView.addView(entityListContainer);
             
-            menu.addButton("Limpar Log", () => { menu.clearLog(); });
-            // ADICIONAMOS O BOTÃO DE AÇÃO PRINCIPAL
-            menu.addButton("MOSTRAR LISTA DE ENTIDADES", dumpEntityList);
+            const scrollParams = classLoader.LinearLayout_LayoutParams.$new(WIDTH_PX, HEIGHT_PX);
+            // Posição: Canto superior direito
+            const mainLayoutParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
+            
+            // ----------------------------------------------------------------
+            // 3. Layout Principal (Top Right)
+            // ----------------------------------------------------------------
+            const mainLayout = classLoader.LinearLayout.$new(mainActivity);
+            mainLayout.setLayoutParams(mainLayoutParams);
+            mainLayout.setGravity(Gravity.TOP.value | Gravity.RIGHT.value);
+            
+            // Layout Wrapper para dar margem
+            const wrapperLayout = classLoader.LinearLayout.$new(mainActivity);
+            const wrapperParams = classLoader.LinearLayout_LayoutParams.$new(WIDTH_PX, HEIGHT_PX);
+            wrapperParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
+            wrapperLayout.setLayoutParams(wrapperParams);
+            wrapperLayout.addView(scrollView);
+            
+            mainLayout.addView(wrapperLayout);
+            mainActivity.addContentView(mainLayout, mainLayoutParams);
 
-            menu.start();
-            menu.addLog("[LOADED] Menu de Inspeção de Entidades Ativo.");
+            // ----------------------------------------------------------------
+            // Lógica de Atualização da Lista
+            // ----------------------------------------------------------------
+            
+            // Array para manter as referências dos TextViews
+            let entityTextViews = [];
 
-        } catch (error) { 
-            console.error(`[!] Erro ao iniciar a UI/Frida: ${error.message}`); 
-        }
+            const updateEntityListUI = () => {
+                const entities = listEntities(activeplayer);
+                
+                // 1. Remove views antigas se houver mais do que o necessário
+                while (entityTextViews.length > entities.length) {
+                    const viewToRemove = entityTextViews.pop();
+                    entityListContainer.removeView(viewToRemove);
+                }
+
+                // 2. Atualiza ou cria TextViews
+                for (let i = 0; i < entities.length; i++) {
+                    const entity = entities[i];
+                    let textView;
+                    
+                    const entityText = `${entity.name} [Dist: ${entity.dist} / Ptr: 0x${entity.ptr}]`;
+
+                    if (i < entityTextViews.length) {
+                        // Atualiza TextView existente
+                        textView = entityTextViews[i];
+                        textView.setText(classLoader.String.$new(entityText));
+                    } else {
+                        // Cria novo TextView
+                        textView = classLoader.TextView.$new(mainActivity);
+                        textView.setText(classLoader.String.$new(entityText));
+                        textView.setPadding(PADDING, 0, PADDING, 0); // Pequeno padding
+                        
+                        const textParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
+                        textView.setLayoutParams(textParams);
+                        
+                        entityListContainer.addView(textView);
+                        entityTextViews.push(textView);
+                    }
+                    
+                    // Colore o texto: Laranja para 'Jogadores' (pela heurística), Branco para outros
+                    textView.setTextColor(entity.isPlayer ? COLOR_PLAYER : COLOR_OTHER);
+                }
+                
+                // Se a lista estiver vazia
+                if (entities.length === 0) {
+                    const noEntityText = "Nenhuma entidade detectada (Verifique o OFFSET_ENTITY_VECTOR!).";
+                    if (entityTextViews.length === 0) {
+                         const textView = classLoader.TextView.$new(mainActivity);
+                         textView.setText(classLoader.String.$new(noEntityText));
+                         textView.setTextColor(COLOR_OTHER);
+                         entityListContainer.addView(textView);
+                         entityTextViews.push(textView);
+                    } else {
+                        entityTextViews[0].setText(classLoader.String.$new(noEntityText));
+                        entityTextViews[0].setTextColor(COLOR_OTHER);
+                    }
+                }
+            };
+            
+            // Chama a função de atualização a cada 500ms
+            setInterval(updateEntityListUI, 500);
+
+            console.log("[ENTITY LIST] Menu de Entidades Carregado.");
+        });
     });
-
-}, 5000); // 5 segundos de espera para o sistema Java carregar
+    
+})();
