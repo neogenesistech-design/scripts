@@ -1,7 +1,3 @@
-// ========================================================================
-// FUNÇÕES DE LIMPEZA E BLOQUEIO DE ESCRITA (NOVA FUNÇÃO ADICIONADA)
-// ========================================================================
-
 function deleteCacheFiles() {
     Java.perform(() => {
         try {
@@ -73,80 +69,8 @@ function deleteRecursive(file) {
     }
 }
 
-
-// NOVO BLOCO: Bloqueia a escrita no diretório de cache
-function preventCacheWrite() {
-    Java.perform(() => {
-        try {
-            // Obter o prefixo do caminho de cache (o mesmo usado em deleteCacheFiles)
-            const ActivityThread = Java.use("android.app.ActivityThread");
-            const context = ActivityThread.currentApplication().getApplicationContext();
-            const pkgName = context.getPackageName();
-            const Environment = Java.use("android.os.Environment");
-            const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
-            const CACHE_PATH_PREFIX = externalPath + "/Android/data/" + pkgName + "/";
-            
-            console.log("[preventCacheWrite] Alvo de bloqueio: " + CACHE_PATH_PREFIX);
-
-            const File = Java.use("java.io.File");
-            
-            // 1. Bloquear Criação de Arquivo (File.createNewFile())
-            File.createNewFile.implementation = function () {
-                if (this.getAbsolutePath().startsWith(CACHE_PATH_PREFIX)) {
-                    console.log(`[File Block] Bloqueando criação de arquivo: ${this.getAbsolutePath()}`);
-                    return false; 
-                }
-                return this.createNewFile(); 
-            };
-            
-            // 2. Bloquear Criação de Diretório (File.mkdirs())
-            File.mkdirs.implementation = function () {
-                if (this.getAbsolutePath().startsWith(CACHE_PATH_PREFIX)) {
-                    console.log(`[File Block] Bloqueando criação de diretório: ${this.getAbsolutePath()}`);
-                    return false; 
-                }
-                return this.mkdirs();
-            };
-
-            // 3. Bloquear Escrita de Stream (FileOutputStream)
-            const FileOutputStream = Java.use('java.io.FileOutputStream');
-            
-            // Hook no construtor FileOutputStream(File file)
-            FileOutputStream.$init.overload('java.io.File').implementation = function (file) {
-                if (file.getAbsolutePath().startsWith(CACHE_PATH_PREFIX)) {
-                    console.log(`[File Block] Bloqueando FileOutputStream (File) para: ${file.getAbsolutePath()}`);
-                    // Redireciona para um arquivo não escrito ou '/dev/null' para simular falha/ignorar.
-                    const dummyFile = File.$new("/dev/null"); 
-                    return FileOutputStream.$init.overload('java.io.File').call(this, dummyFile);
-                }
-                return FileOutputStream.$init.overload('java.io.File').call(this, file);
-            };
-            
-            // Hook no construtor FileOutputStream(String name)
-            FileOutputStream.$init.overload('java.lang.String').implementation = function (name) {
-                const filePath = name.toString();
-                if (filePath.startsWith(CACHE_PATH_PREFIX)) {
-                    console.log(`[File Block] Bloqueando FileOutputStream (String) para: ${filePath}`);
-                    const dummyFile = "/dev/null"; 
-                    return FileOutputStream.$init.overload('java.lang.String').call(this, dummyFile);
-                }
-                return FileOutputStream.$init.overload('java.lang.String').call(this, name);
-            };
-            
-            console.log("[preventCacheWrite] Hooks de escrita Java ativados.");
-            
-        } catch (e) {
-            console.log("[preventCacheWrite] Erro geral: " + e);
-        }
-    });
-}
-// ========================================================================
-
 // Chame isto ANTES do setTimeout para limpar primeiro:
 deleteCacheFiles();
-
-// Chame o bloqueio logo após a limpeza para evitar que ele escreva novamente:
-preventCacheWrite();
 
 setTimeout(() => {
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
@@ -275,23 +199,23 @@ setTimeout(() => {
         } 
     };
     
-    // ========================================================================
-    // ANTI-AFK SIMPLES (REVERTIDO PARA O CÓDIGO DO INÍCIO DA SOLICITAÇÃO)
-    // ========================================================================
-    const call_antiAfk = { 
-        on() { 
-            console.log("[AntiAfk] Ativado (Intervalo Fixo: 4 minutos)."); 
-            if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); 
-        }, 
-        off() { 
-            if (afkInterval) { 
-                clearInterval(afkInterval); 
-                afkInterval = null; 
-                console.log("[AntiAfk] Desativado.");
-            } 
-        } 
-    };
-    // ========================================================================
+    // ========================================================================
+    // ANTI-AFK SIMPLES (REVERTIDO PARA O CÓDIGO DO INÍCIO DA SOLICITAÇÃO)
+    // ========================================================================
+    const call_antiAfk = { 
+        on() { 
+            console.log("[AntiAfk] Ativado (Intervalo Fixo: 4 minutos)."); 
+            if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); 
+        }, 
+        off() { 
+            if (afkInterval) { 
+                clearInterval(afkInterval); 
+                afkInterval = null; 
+                console.log("[AntiAfk] Desativado.");
+            } 
+        } 
+    };
+    // ========================================================================
 
     const call_unhit = { on() { unhit = true; }, off() { unhit = false; } };
     const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; }, off() { autoOFF = false; } };
@@ -585,7 +509,7 @@ setTimeout(() => {
             // Lógica de atualização do texto de info (Inalterado)
             setInterval(() => {
                 const props = getPlayerProperties(activeplayer);
-    191;           Java.scheduleOnMainThread(function() {
+                Java.scheduleOnMainThread(function() {
                     const infoText = `  Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
                     topInfoTextView.setText(classLoader.String.$new(infoText));
                 });
@@ -601,27 +525,27 @@ setTimeout(() => {
     // ========================================================================
     // FUNÇÃO CLICK SIMPLES (REVERTIDA PARA O CÓDIGO DO INÍCIO DA SOLICITAÇÃO)
     // ========================================================================
-    function click() { 
-        Java.perform(() => 
-            Java.scheduleOnMainThread(() => { 
-                const classLoader = getClassLoader();
-                const mainActivity = getMainActivity(classLoader);
-                
-                // Clica na coordenada (1, 1) - discreto.
-                const targetX = 1; 
-                const targetY = 1; 
-                
-                console.log(`[AntiAfk] CLIQUE EXECUTADO (Canto Esquerdo) em: (${targetX}, ${targetY}).`);
+    function click() { 
+        Java.perform(() => 
+            Java.scheduleOnMainThread(() => { 
+                const classLoader = getClassLoader();
+                const mainActivity = getMainActivity(classLoader);
+                
+                // Clica na coordenada (1, 1) - discreto.
+                const targetX = 1; 
+                const targetY = 1; 
+                
+                console.log(`[AntiAfk] CLIQUE EXECUTADO (Canto Esquerdo) em: (${targetX}, ${targetY}).`);
 
-                let time = Java.use("android.os.SystemClock").uptimeMillis(); 
-                
-                // Simula um toque, como na lógica original
-                let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, targetX, targetY, 0); 
-                
-                mainActivity.dispatchTouchEvent(event); 
-                showToast("Anti-AFK: Click enviado (Esquerda)."); // Confirmação visual
-            })
-        ); 
-    }
-    // ========================================================================
+                let time = Java.use("android.os.SystemClock").uptimeMillis(); 
+                
+                // Simula um toque, como na lógica original
+                let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, targetX, targetY, 0); 
+                
+                mainActivity.dispatchTouchEvent(event); 
+                showToast("Anti-AFK: Click enviado (Esquerda)."); // Confirmação visual
+            })
+        ); 
+    }
+    // ========================================================================
 }, 8000);
