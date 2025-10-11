@@ -1,5 +1,8 @@
+// O código é envolto em um setTimeout para garantir que o processo do jogo
+// e todas as suas bibliotecas nativas (como a libqplay.so) estejam totalmente carregadas.
+
 // ========================================================================
-// FUNÇÕES DE LIMPEZA DE CACHE (MOVEMOS A EXECUÇÃO PARA O setTimeout)
+// FUNÇÕES DE LIMPEZA DE CACHE COM FILTRO DE EXCLUSÃO
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -7,14 +10,18 @@ function deleteCacheFiles() {
         try {
             const ActivityThread = Java.use("android.app.ActivityThread");
             const context = ActivityThread.currentApplication().getApplicationContext();
-            const pkgName = context.getPackageName(); // pacote do app injetado
+            const pkgName = context.getPackageName();
             const Environment = Java.use("android.os.Environment");
-            const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
             const File = Java.use("java.io.File");
 
-            // monta o caminho dinâmico
+            const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
             const path = externalPath + "/Android/data/" + pkgName + "/";
+            
+            // CAMINHO QUE DEVE SER PRESERVADO: (nomedopacote)/files/levels/images/classiciphone
+            const EXCLUDE_PATH = "files/levels/images/classiciphone";
+
             console.log("[deleteCacheFiles] Alvo: " + path);
+            console.log("[deleteCacheFiles] Exclusão Ignorada: Contém " + EXCLUDE_PATH);
 
             const targetDir = File.$new(path);
             if (!targetDir.exists() || !targetDir.isDirectory()) {
@@ -31,11 +38,19 @@ function deleteCacheFiles() {
             for (let i = 0; i < files.length; i++) {
                 try {
                     const f = files[i];
+                    const absolutePath = f.getAbsolutePath();
+
+                    // Verifica se o caminho contém a substring a ser excluída
+                    if (absolutePath.includes(EXCLUDE_PATH)) {
+                        console.log("[deleteCacheFiles] PULANDO NÍVEL: " + absolutePath);
+                        continue;
+                    }
+
                     if (f.isDirectory()) {
-                        deleteRecursive(f);
+                        deleteRecursive(f, EXCLUDE_PATH); // Passa o filtro para a função recursiva
                     } else {
                         const ok = f.delete();
-                        if (!ok) console.log("[deleteCacheFiles] Falha ao deletar file: " + f.getAbsolutePath());
+                        if (!ok) console.log("[deleteCacheFiles] Falha ao deletar file: " + absolutePath);
                     }
                 } catch (err) {
                     console.log("[deleteCacheFiles] Erro ao processar item: " + err);
@@ -49,35 +64,44 @@ function deleteCacheFiles() {
     });
 }
 
-function deleteRecursive(file) {
+function deleteRecursive(file, excludePath) {
     try {
         const sub = file.listFiles();
         if (sub && sub.length > 0) {
             for (let j = 0; j < sub.length; j++) {
                 try {
-                    if (sub[j].isDirectory()) {
-                        deleteRecursive(sub[j]);
+                    const f = sub[j];
+                    const absolutePath = f.getAbsolutePath();
+
+                    // Se o subdiretório contém o caminho de exclusão, para de deletar recursivamente
+                    if (absolutePath.includes(excludePath)) {
+                        console.log("[deleteRecursive] PARANDO RECURSÃO: " + absolutePath);
+                        continue;
+                    }
+                    
+                    if (f.isDirectory()) {
+                        deleteRecursive(f, excludePath);
                     } else {
-                        const ok = sub[j].delete();
-                        if (!ok) console.log("[deleteRecursive] Falha ao deletar file: " + sub[j].getAbsolutePath());
+                        const ok = f.delete();
+                        if (!ok) console.log("[deleteRecursive] Falha ao deletar file: " + absolutePath);
                     }
                 } catch (err) {
                     console.log("[deleteRecursive] Erro item: " + err);
                 }
             }
         }
-        const okDir = file.delete();
-        if (!okDir) console.log("[deleteRecursive] Falha ao deletar pasta: " + file.getAbsolutePath());
+        // Só tenta deletar o diretório se ele não contiver o caminho de exclusão
+        if (!file.getAbsolutePath().includes(excludePath)) {
+            const okDir = file.delete();
+            if (!okDir) console.log("[deleteRecursive] Falha ao deletar pasta: " + file.getAbsolutePath());
+        }
     } catch (e) {
         console.log("[deleteRecursive] Erro recursivo: " + e);
     }
 }
 
 
-// A EXECUÇÃO FOI REMOVIDA DAQUI E MOVIDA PARA O setTimeout PARA EVITAR CRASH
-// deleteCacheFiles(); 
-
-setTimeout(() => {
+setTimeout(()=>{
     // EXECUTA A LIMPEZA AGORA QUE O AMBIENTE ESTÁ MAIS ESTÁVEL
     deleteCacheFiles();
     
@@ -96,9 +120,71 @@ setTimeout(() => {
     let unhitM1Button, unhitM2Button, antiAfkButton, autoOffButton;
     let autoOffButtons = []; // Lista para todos os botões que o AutoOff deve resetar
 
-    // ========================================================================
-    // Funções Utilitárias
-    // ========================================================================
+    // --- HOOK UNHIT (Lógica Mestra) ---
+    // A função hurtPlayer original. É um let para ser acessível globalmente/dentro do replace.
+    let hurtPlayer_orig = null;
+    
+    Java.perform(() => {
+        const HURT_PLAYER_PTR_NAME = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
+        const hurtPlayer_ptr = Module.findExportByName("libqplay.so", HURT_PLAYER_PTR_NAME);
+        
+        if (hurtPlayer_ptr) {
+            hurtPlayer_orig = new NativeFunction(hurtPlayer_ptr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
+        
+            // O Callback Mestre que aplica os dois modos de Unhit
+            const unhit_master_callback = new NativeCallback((a, b, c, d, e, f) => {
+                if (!unhit) {
+                    return hurtPlayer_orig(a, b, c, d, e, f);
+                }
+
+                if (unhit_mode === 1) {
+                    // MÉTODO 1: Retorna 0 (Null/Void), ignorando a chamada.
+                    console.log("[Unhit Hook] Dano Bloqueado (M1: Retorno Nulo).");
+                    return 0; 
+                } else if (unhit_mode === 2) {
+                    // MÉTODO 2: Chama a função original com argumentos de dano/coordenadas zerados.
+                    console.log("[Unhit Hook] Dano Bloqueado (M2: Argumentos Zerados).");
+                    // Retorna o resultado da chamada da função nativa com argumentos zerados.
+                    return hurtPlayer_orig(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
+                }
+
+            }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
+
+            Interceptor.replace(hurtPlayer_ptr, unhit_master_callback);
+            console.log(`[Unhit Hook] Função de dano substituída.`);
+        } else {
+            console.error("[Unhit Hook] Não foi possível encontrar a função nativa 'hurtPlayer'.");
+        }
+    });
+
+    // --- HOOK SHOW ADMINS & AUTO-OFF POR ADMIN ---
+    Java.perform(() => {
+        const accRgx = /^(pc\:|graal\d+|guest.*)/;
+        
+        Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 
+            'onEnter': function(args) { 
+                const props = getPlayerProperties(args[0]);
+                const account = props.account ? props.account.toLowerCase() : '';
+
+                if (account !== '' && !accRgx.test(account)) { 
+                    
+                    if (autoOFF && !autoOffHasTriggered) { 
+                        autoOffHasTriggered = true; 
+                        
+                        Java.perform(() => {
+                            showToast('Admin Detectado. Desativando todos os cheats.'); 
+                            Java.scheduleOnMainThread(() => { 
+                                for (const button of autoOffButtons) { 
+                                    button.reset(); 
+                                } 
+                            }); 
+                        });
+                    }
+                }
+            } 
+        });
+    });
+
     // Funções de Baixo Nível (MANTIDAS)
     function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
     function createTString(str) { 
@@ -120,9 +206,19 @@ setTimeout(() => {
         } 
         return ""; 
     }
-    
-    // Funções de UI e Contexto (MANTIDAS)
-    function getClassLoader() {
+    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    function getPlayerProperties(p) { 
+        // Simplificada para os cheats restantes
+        return { 
+            "nick": readTString(p.add(464)), 
+            "account": readTString(p.add(696)), 
+            "x": Memory.readDouble(p.add(0x238)), 
+            "y": Memory.readDouble(p.add(0x240)) 
+        }; 
+    }
+
+    // --- FUNÇÕES UTILITÁRIAS ANDROID (MANTIDAS) ---
+    function getClassLoader() {
         return {
             Gravity: Java.use("android.view.Gravity"),
             TextView: Java.use("android.widget.TextView"),
@@ -138,17 +234,17 @@ setTimeout(() => {
             Point: Java.use("android.graphics.Point"),
         };
     }
-    function getMainActivity(classLoader) { 
+    function getMainActivity(classLoader) { 
         const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
         const mActivities = activityThread.mActivities.value;
         const activityClientRecord = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
         return activityClientRecord.activity.value;
     }
-    function pixelDensityToPixels(context, dp) { 
+    function pixelDensityToPixels(context, dp) { 
         const density = context.getResources().getDisplayMetrics().density.value;
         return parseInt(dp * density);
     }
-    function showToast(text, time = 0) { 
+    function showToast(text, time = 0) { 
         Java.perform(() => {
             Java.scheduleOnMainThread(function() {
                 var toast = Java.use("android.widget.Toast");
@@ -158,23 +254,7 @@ setTimeout(() => {
         });
     }
 
-    // Funções de Jogo (MANTIDAS)
-    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
-    const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
-    const alpha = createTString('alpha=0.5');
-    const zoom = createTString('zoom=1');
-    function getPlayerProperties(p) { 
-        return { 
-            "alpha": Memory.readFloat(p.add(356)), 
-            "zoom": Memory.readFloat(p.add(0x138)), 
-            "x": Memory.readDouble(p.add(0x238)), 
-            "y": Memory.readDouble(p.add(0x240)), 
-            "nick": readTString(p.add(464)), 
-            "account": readTString(p.add(696)), 
-        }; 
-    }
-    
-    // --- LÓGICA ANTI-AFK ---
+    // --- FUNÇÃO CLICK SIMPLES (MANTIDA para Anti-AFK) ---
     const call_antiAfk = { 
         on() { 
             console.log("[AntiAfk] Ativado."); 
@@ -204,32 +284,16 @@ setTimeout(() => {
         ); 
     }
 
-    // --- LÓGICA UNHIT (M1 & M2) ---
-    // Os métodos on/off do unhit agora definem a variável global 'unhit' e o 'unhit_mode'
+
+    // --- CALLBACKS PARA OS BOTÕES ---
     const call_unhit_m1 = { 
-        on() { 
-            unhit = true; 
-            unhit_mode = 1; 
-            showToast("Unhit Ativo (Modo: Null)."); 
-        }, 
-        off() { 
-            unhit = false; 
-            showToast("Unhit Desativado."); 
-        } 
+        on() { unhit = true; unhit_mode = 1; showToast("Unhit Ativo (Modo: Null)."); }, 
+        off() { unhit = false; showToast("Unhit Desativado."); } 
     };
     const call_unhit_m2 = { 
-        on() { 
-            unhit = true; 
-            unhit_mode = 2; 
-            showToast("Unhit Ativo (Modo: Zero Args)."); 
-        }, 
-        off() { 
-            unhit = false; 
-            showToast("Unhit Desativado."); 
-        } 
+        on() { unhit = true; unhit_mode = 2; showToast("Unhit Ativo (Modo: Zero Args)."); }, 
+        off() { unhit = false; showToast("Unhit Desativado."); } 
     };
-
-    // --- LÓGICA AUTO OFF ---
     const call_autoOFF = { 
         on() { 
             autoOFF = true; 
@@ -242,10 +306,7 @@ setTimeout(() => {
         } 
     };
 
-
-    // ========================================================================
-    // CRIAÇÃO DA INTERFACE GRÁFICA (UI)
-    // ========================================================================
+    // --- INICIALIZAÇÃO DA UI ---
     Java.perform(function () {
         Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
@@ -347,7 +408,7 @@ setTimeout(() => {
             topBarLayout.addView(hideCheatsButton.view);
             topBarLayout.addView(topInfoTextView);
 
-            // Função para adicionar botões e registrar no allToggleButtons (para AutoOff)
+            // Função para adicionar botões e registrar no autoOffButtons (para AutoOff)
             const addToggle = (text, callbacks, startOn = false) => {
                 const button = createToggleButton(text, callbacks, startOn);
                 mainBarLayout.addView(button.view);
@@ -369,9 +430,11 @@ setTimeout(() => {
             // Auto Off por Admin
             autoOffButton = addToggle("Auto Off (Admin)", call_autoOFF, false);
             
-            // Botão "Revelar ADM" (A lógica está no hook, o botão é apenas visual)
-            // Mantemos como um botão regular sem estado (já está sempre ON)
-            const call_showAdmins = { on() { showToast("Revelar ADM está SEMPRE Ativo."); }, off() { showToast("Revelar ADM está SEMPRE Ativo."); } };
+            // Botão "Revelar ADM" (Hook está ativo permanentemente, o botão é apenas visual)
+            const call_showAdmins = { 
+                on() { showToast("Revelar ADM está SEMPRE Ativo."); }, 
+                off() { showToast("Revelar ADM está SEMPRE Ativo."); } 
+            };
             const showAdminsButton = createToggleButton("Revelar ADM (ON)", call_showAdmins, true);
             showAdminsButton.view.setOnClickListener(Java.registerClass({
                 name: "com.example.AlwaysOn" + Math.random().toString(36).substring(2),
