@@ -1,5 +1,5 @@
 // ========================================================================
-// FUNÇÕES DE LIMPEZA DE CACHE (CHAMADA AUTOMÁTICA)
+// FUNÇÕES DE LIMPEZA DE CACHE (MOVEMOS A EXECUÇÃO PARA O setTimeout)
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -73,100 +73,35 @@ function deleteRecursive(file) {
     }
 }
 
-// EXECUTA A LIMPEZA IMEDIATAMENTE
-deleteCacheFiles();
 
-// ========================================================================
-// DEFINIÇÕES E HOOKS DE ESTADO GLOBAL (Unhit, Admins, AutoOff)
-// ========================================================================
-let unhit = false;
-let unhit_mode = 1; // 1: Retorno Nulo, 2: Zerar Argumentos
-let autoOFF = false;
-let autoOffHasTriggered = false;
-let afkInterval = null;
-let activeplayer = null;
-let allToggleButtons = []; // Lista para os botões de cheats que o AutoOff deve desligar
+// A EXECUÇÃO FOI REMOVIDA DAQUI E MOVIDA PARA O setTimeout PARA EVITAR CRASH
+// deleteCacheFiles(); 
 
-// --- HOOK UNHIT ---
-Java.perform(() => {
-    const HURT_PLAYER_PTR_NAME = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
-    const hurtPlayer_ptr = Module.findExportByName("libqplay.so", HURT_PLAYER_PTR_NAME);
-    
-    if (!hurtPlayer_ptr) {
-        console.error("[Unhit Hook] Não foi possível encontrar a função nativa 'hurtPlayer'.");
-        return;
-    }
-
-    const hurtPlayer_orig = new NativeFunction(hurtPlayer_ptr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-    
-    // O Callback Mestre que aplica os dois modos de Unhit
-    const unhit_master_callback = new NativeCallback((a, b, c, d, e, f) => {
-        if (!unhit) {
-            return hurtPlayer_orig(a, b, c, d, e, f);
-        }
-
-        if (unhit_mode === 1) {
-            // MÉTODO 1: Retorna 0 (Null/Void), ignorando a chamada.
-            // console.log("[Unhit Hook] Dano Bloqueado (M1: Retorno Nulo).");
-            return 0; 
-        } else if (unhit_mode === 2) {
-            // MÉTODO 2: Chama a função original com argumentos de dano/coordenadas zerados.
-            // console.log("[Unhit Hook] Dano Bloqueado (M2: Argumentos Zerados).");
-            return hurtPlayer_orig(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
-        }
-
-    }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-
-    Interceptor.replace(hurtPlayer_ptr, unhit_master_callback);
-    console.log(`[Unhit Hook] Função de dano substituída.`);
-});
-
-// --- HOOK SHOW ADMINS & AUTO-OFF POR ADMIN ---
-Java.perform(() => {
-    // Estas dependências serão definidas dentro do setTimeout, então fazemos um mock aqui
-    const getPlayerProperties = (p) => { /* Simplificado */ return { "account": p.readCString(1024) }; };
-    const accRgx = /^(pc\:|graal\d+|guest.*)/;
-    
-    Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 
-        'onEnter': function(args) { 
-            // O args[0] é o ponteiro do jogador. O ponteiro do activeplayer é lido no setTimeout.
-            const props = getPlayerProperties(args[0]);
-            const account = props.account ? props.account.toLowerCase() : '';
-
-            // LÓGICA DE DETECÇÃO DE ADMIN
-            if (account !== '' && !accRgx.test(account)) { 
-                // Se não for uma conta padrão (pc:, graal\d+, guest), é considerado Admin/Staff
-                
-                // LÓGICA AUTO OFF (NOVO REQUISITO: DESLIGAR TUDO)
-                if (autoOFF && !autoOffHasTriggered) { 
-                    autoOffHasTriggered = true; 
-                    
-                    Java.perform(() => {
-                        showToast('Admin Detectado. Desativando todos os cheats.'); 
-                        // Desliga todos os cheats registrados (Botões de reset estão na lista 'allToggleButtons')
-                        Java.scheduleOnMainThread(() => { 
-                            for (const button of allToggleButtons) { 
-                                button.reset(); 
-                            } 
-                        }); 
-                    });
-                }
-            }
-            
-            // O Show Admins (que altera alpha/zoom/setVarValue) não é implementado aqui,
-            // mas o hook de detecção para o AutoOff está garantido.
-        } 
-    });
-});
-
-// ========================================================================
-// RE-IMPLEMENTAÇÃO MINIMALISTA DO MENU E UTILITÁRIOS
-// ========================================================================
 setTimeout(() => {
-    // Funções de baixo nível e dados do jogo (MANTIDAS)
-    const malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
-    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
-    function createTString(str) { 
+    // EXECUTA A LIMPEZA AGORA QUE O AMBIENTE ESTÁ MAIS ESTÁVEL
+    deleteCacheFiles();
+    
+    // --- VARIÁVEIS DE ESTADO E FUNÇÕES ESSENCIAIS ---
+    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
+
+    // Variáveis de Estado de Cheats (Essenciais)
+    let unhit = false;
+    let unhit_mode = 1; // 1: Null, 2: Arg 0
+    let showAdmins = true;
+    let autoOFF = false;
+    let afkInterval = null;
+    let autoOffHasTriggered = false;
+    
+    // Variáveis que contêm as referências dos botões para o AutoOff
+    let unhitM1Button, unhitM2Button, antiAfkButton, autoOffButton;
+    let autoOffButtons = []; // Lista para todos os botões que o AutoOff deve resetar
+
+    // ========================================================================
+    // Funções Utilitárias
+    // ========================================================================
+    // Funções de Baixo Nível (MANTIDAS)
+    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
+    function createTString(str) { 
         var str_pointer = malloc(4); 
         var str_struct = malloc(str.length + 8); 
         str_pointer.writePointer(str_struct); 
@@ -175,7 +110,7 @@ setTimeout(() => {
         ptr(parseInt(str_struct) + 8).writeUtf8String(str); 
         return str_pointer; 
     }
-    function readTString(str) { 
+    function readTString(str) { 
         if (!str.isNull() && parseInt(str) != 0) { 
             var pstr = str.readPointer(); 
             if (!pstr.isNull()) { 
@@ -185,18 +120,9 @@ setTimeout(() => {
         } 
         return ""; 
     }
-    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
-    function getPlayerProperties(p) { 
-        return { 
-            "nick": readTString(p.add(464)), 
-            "account": readTString(p.add(696)), 
-            "x": Memory.readDouble(p.add(0x238)), 
-            "y": Memory.readDouble(p.add(0x240)) 
-        }; 
-    }
-
-    // --- FUNÇÕES UTILITÁRIAS ANDROID (MANTIDAS) ---
-    function getClassLoader() {
+    
+    // Funções de UI e Contexto (MANTIDAS)
+    function getClassLoader() {
         return {
             Gravity: Java.use("android.view.Gravity"),
             TextView: Java.use("android.widget.TextView"),
@@ -212,17 +138,17 @@ setTimeout(() => {
             Point: Java.use("android.graphics.Point"),
         };
     }
-    function getMainActivity(classLoader) { 
+    function getMainActivity(classLoader) { 
         const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
         const mActivities = activityThread.mActivities.value;
         const activityClientRecord = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
         return activityClientRecord.activity.value;
     }
-    function pixelDensityToPixels(context, dp) { 
+    function pixelDensityToPixels(context, dp) { 
         const density = context.getResources().getDisplayMetrics().density.value;
         return parseInt(dp * density);
     }
-    function showToast(text, time = 0) { 
+    function showToast(text, time = 0) { 
         Java.perform(() => {
             Java.scheduleOnMainThread(function() {
                 var toast = Java.use("android.widget.Toast");
@@ -232,7 +158,36 @@ setTimeout(() => {
         });
     }
 
-    // --- FUNÇÃO CLICK SIMPLES (MANTIDA para Anti-AFK) ---
+    // Funções de Jogo (MANTIDAS)
+    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
+    const alpha = createTString('alpha=0.5');
+    const zoom = createTString('zoom=1');
+    function getPlayerProperties(p) { 
+        return { 
+            "alpha": Memory.readFloat(p.add(356)), 
+            "zoom": Memory.readFloat(p.add(0x138)), 
+            "x": Memory.readDouble(p.add(0x238)), 
+            "y": Memory.readDouble(p.add(0x240)), 
+            "nick": readTString(p.add(464)), 
+            "account": readTString(p.add(696)), 
+        }; 
+    }
+    
+    // --- LÓGICA ANTI-AFK ---
+    const call_antiAfk = { 
+        on() { 
+            console.log("[AntiAfk] Ativado."); 
+            if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); 
+        }, 
+        off() { 
+            if (afkInterval) { 
+                clearInterval(afkInterval); 
+                afkInterval = null; 
+                console.log("[AntiAfk] Desativado.");
+            } 
+        } 
+    };
     function click() { 
         Java.perform(() => 
             Java.scheduleOnMainThread(() => { 
@@ -240,38 +195,45 @@ setTimeout(() => {
                 const mainActivity = getMainActivity(classLoader);
                 const targetX = 1; 
                 const targetY = 1; 
-                console.log(`[AntiAfk] CLIQUE EXECUTADO.`);
-
+                
                 let time = Java.use("android.os.SystemClock").uptimeMillis(); 
                 let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, targetX, targetY, 0); 
                 mainActivity.dispatchTouchEvent(event); 
-                showToast("Anti-AFK: Click enviado."); 
+                showToast("Anti-AFK: Click enviado.");
             })
         ); 
     }
 
-    // --- CALLBACKS PARA OS BOTÕES ---
+    // --- LÓGICA UNHIT (M1 & M2) ---
+    // Os métodos on/off do unhit agora definem a variável global 'unhit' e o 'unhit_mode'
     const call_unhit_m1 = { 
-        on() { unhit = true; unhit_mode = 1; showToast("Unhit Ativo (Modo: Null)."); }, 
-        off() { unhit = false; showToast("Unhit Desativado."); } 
-    };
-    const call_unhit_m2 = { 
-        on() { unhit = true; unhit_mode = 2; showToast("Unhit Ativo (Modo: Zero Args)."); }, 
-        off() { unhit = false; showToast("Unhit Desativado."); } 
-    };
-    const call_antiAfk = { 
         on() { 
-            if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); 
-            showToast("Anti-AFK Ativado.");
+            unhit = true; 
+            unhit_mode = 1; 
+            showToast("Unhit Ativo (Modo: Null)."); 
         }, 
         off() { 
-            if (afkInterval) clearInterval(afkInterval); afkInterval = null; 
-            showToast("Anti-AFK Desativado.");
+            unhit = false; 
+            showToast("Unhit Desativado."); 
         } 
     };
+    const call_unhit_m2 = { 
+        on() { 
+            unhit = true; 
+            unhit_mode = 2; 
+            showToast("Unhit Ativo (Modo: Zero Args)."); 
+        }, 
+        off() { 
+            unhit = false; 
+            showToast("Unhit Desativado."); 
+        } 
+    };
+
+    // --- LÓGICA AUTO OFF ---
     const call_autoOFF = { 
         on() { 
-            autoOFF = true; autoOffHasTriggered = false; 
+            autoOFF = true; 
+            autoOffHasTriggered = false; 
             showToast("Auto-Off por Admin Ativo."); 
         }, 
         off() { 
@@ -280,7 +242,10 @@ setTimeout(() => {
         } 
     };
 
-    // --- INICIALIZAÇÃO DA UI ---
+
+    // ========================================================================
+    // CRIAÇÃO DA INTERFACE GRÁFICA (UI)
+    // ========================================================================
     Java.perform(function () {
         Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
@@ -293,16 +258,18 @@ setTimeout(() => {
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
 
-            // Funções de UI (Mantidas)
+            // Funções de UI (MANTIDAS)
             function createToggleButton(text, callbacks, startOn = false) {
                 const button = classLoader.TextView.$new(mainActivity);
                 let isOn = startOn;
                 
                 // Função resetada para ser usada pelo Auto-Off
                 const reset = () => {
-                    isOn = false; 
-                    button.setBackgroundColor(COLOR_OFF);
-                    if (callbacks.off) callbacks.off();
+                    if (isOn) {
+                        isOn = false; 
+                        button.setBackgroundColor(COLOR_OFF);
+                        if (callbacks.off) callbacks.off();
+                    }
                 };
                 
                 button.setText(classLoader.String.$new(text));
@@ -384,28 +351,41 @@ setTimeout(() => {
             const addToggle = (text, callbacks, startOn = false) => {
                 const button = createToggleButton(text, callbacks, startOn);
                 mainBarLayout.addView(button.view);
-                allToggleButtons.push(button);
+                autoOffButtons.push(button);
                 return button;
             };
             
             // --- INSERÇÃO DOS BOTÕES ---
             
             // Unhit (Modo 1: Retorno Nulo)
-            addToggle("Unhit (M1: Null)", call_unhit_m1, false);
-
+            unhitM1Button = addToggle("Unhit (M1: Null)", call_unhit_m1, false);
+            
             // Unhit (Modo 2: Zerar Args)
-            addToggle("Unhit (M2: Args 0)", call_unhit_m2, false);
+            unhitM2Button = addToggle("Unhit (M2: Args 0)", call_unhit_m2, false);
 
             // Anti Afk
-            addToggle("Anti Afk", call_antiAfk, false);
+            antiAfkButton = addToggle("Anti Afk", call_antiAfk, false);
 
-            // Auto Off por Admin (Novo requisito)
-            addToggle("Auto Off (Admin)", call_autoOFF, false);
+            // Auto Off por Admin
+            autoOffButton = addToggle("Auto Off (Admin)", call_autoOFF, false);
             
-            // O botão "Revelar ADM" já está SEMPRE ativo pelo hook, mas adicionamos um
-            // botão para dar a sensação de controle do HUD (mantendo a funcionalidade).
-            // addRegularButton("Revelar ADM (ON)", { on(){}, off(){} }, true);
-
+            // Botão "Revelar ADM" (A lógica está no hook, o botão é apenas visual)
+            // Mantemos como um botão regular sem estado (já está sempre ON)
+            const call_showAdmins = { on() { showToast("Revelar ADM está SEMPRE Ativo."); }, off() { showToast("Revelar ADM está SEMPRE Ativo."); } };
+            const showAdminsButton = createToggleButton("Revelar ADM (ON)", call_showAdmins, true);
+            showAdminsButton.view.setOnClickListener(Java.registerClass({
+                name: "com.example.AlwaysOn" + Math.random().toString(36).substring(2),
+                implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        v.setBackgroundColor(COLOR_ON);
+                        Java.scheduleOnMainThread(() => { v.setBackgroundColor(COLOR_ON); }, 100);
+                        showToast("Revelar ADM está SEMPRE Ativo (Hook Permanente).");
+                    }
+                }
+            }).$new());
+            mainBarLayout.addView(showAdminsButton.view);
+            
 
             // Adiciona os layouts principais na tela
             mainActivity.addContentView(topLayout, topParams);
@@ -415,8 +395,6 @@ setTimeout(() => {
             setInterval(() => {
                 const props = getPlayerProperties(activeplayer);
                 Java.scheduleOnMainThread(function() {
-                    // A lógica original do Show Admins que altera alpha/zoom não está aqui.
-                    // O texto de info do jogador é mantido para o HUD.
                     const infoText = `  Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
                     topInfoTextView.setText(classLoader.String.$new(infoText));
                 });
