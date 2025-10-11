@@ -100,10 +100,11 @@ function deleteRecursive(file, excludePath) {
     }
 }
 
+ deleteCacheFiles();
 
 setTimeout(()=>{
     // EXECUTA A LIMPEZA AGORA QUE O AMBIENTE ESTÁ MAIS ESTÁVEL
-    deleteCacheFiles();
+   
     
     // --- VARIÁVEIS DE ESTADO E FUNÇÕES ESSENCIAIS ---
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
@@ -465,3 +466,4 @@ setTimeout(()=>{
         });
     });
 }, 8000);
+
