@@ -1,331 +1,2730 @@
-// ==UserScript==
-// @name         Replace spectron_script.js with custom code (robust)
-// @namespace    http://tampermonkey.net/
-// @version      1.3
-// @description  Detecta carregamentos de "spectron_script.js" e substitui o conteúdo pelo seu código. Suporta INLINE (default) ou buscar de uma URL externa via GM_xmlhttpRequest. Sempre protege a página substituindo por um stub "0" até o código final estar disponível.
-// @match        https://gamesopengl.netlify.app/*
-// @grant        GM_xmlhttpRequest
-// @connect      *
-// @run-at       document-start
-// ==/UserScript==
+window.addEventListener("gameloaded", async () => {
 
-(function () {
-  'use strict';
+    const api_key_url = "https://api-key-93zl.onrender.com"
+    const api_spectron = "https://api-key-93zl.onrender.com/spectron"
+    const scripts_url = "https://api-key-93zl.onrender.com/spectron/scripts"
 
-  /////////////////////////
-  // CONFIGURAÇÕES (edite aqui)
-  /////////////////////////
 
-  // modo: 'inline' ou 'url'
-  const REPLACEMENT_MODE = 'url'; // 'inline' = usar REPLACEMENT_CODE; 'url' = buscar REPLACEMENT_URL
+    window.notyf = new Notyf();
+    console.log("Notyf loaded");
 
-  // Se REPLACEMENT_MODE == 'inline', coloque seu código JS aqui (entre crases)
-  const REPLACEMENT_CODE = `
-    // --- MEU_CODIGO_AQUI ---
-    console.log("✅ spectron_script.js substituído (inline)!");
-    // coloque qualquer JS válido aqui
-  `;
+    {
+        if (window.location.href.includes("graalspectron.html")) {
+            document.querySelector(".cheat-icon").style.display = "block";
+            var draw_callbacks = [];
 
-  // Se REPLACEMENT_MODE == 'url', coloque a URL que retorna o JS puro (sem wrappers)
-  // Exemplo: 'https://meusite.com/meucodigo.js'
-  const REPLACEMENT_URL = 'https://raw.githubusercontent.com/neogenesistech-design/scripts/refs/heads/main/vip';
-
-  /////////////////////////
-  // Implementação (não edite abaixo a menos que saiba o que faz)
-  /////////////////////////
-
-  const TARGET_NAME = 'spectron_script.js';
-
-  // Placeholder (curto) usado imediatamente para bloquear execução do script remoto
-  // Conteúdo "0" para segurança imediata
-  const PLACEHOLDER_CODE = '0';
-  const PLACEHOLDER_DATA_URL = 'data:text/javascript;charset=utf-8,' + encodeURIComponent(PLACEHOLDER_CODE);
-
-  // Variáveis que serão definidas quando tivermos o código final
-  let finalReplacementCode = null;        // string com código JS final
-  let finalReplacementDataURL = null;     // data: URL codificada do código final
-
-  function isTargetUrl(u) {
-    try {
-      return !!u && u.indexOf(TARGET_NAME) !== -1;
-    } catch {
-      return false;
-    }
-  }
-
-  // Converte código para data URL seguro UTF-8
-  function makeDataURL(code) {
-    return 'data:text/javascript;charset=utf-8,' + encodeURIComponent(code);
-  }
-
-  // Define finalReplacement... a partir de uma string de código
-  function setFinalReplacement(code) {
-    try {
-      finalReplacementCode = String(code);
-      finalReplacementDataURL = makeDataURL(finalReplacementCode);
-      // depois que definimos, substituímos quaisquer scripts stub por scripts com o código final
-      replacePlaceholderScriptsWithFinal();
-    } catch (e) {
-      console.error('ReplaceScript: falha ao setar replacement code', e);
-    }
-  }
-
-  // Busca código via GM_xmlhttpRequest (usado quando REPLACEMENT_MODE == 'url')
-  function fetchReplacementFromUrl(url) {
-    try {
-      GM_xmlhttpRequest({
-        method: 'GET',
-        url: url,
-        responseType: 'text',
-        onload(response) {
-          if (response && (response.status === 200 || response.status === 0)) {
-            setFinalReplacement(response.responseText);
-            console.log('ReplaceScript: replacement code fetched from URL.');
-          } else {
-            console.warn('ReplaceScript: falha ao buscar replacement code. status=', response.status);
-          }
-        },
-        onerror(err) {
-          console.error('ReplaceScript: GM_xmlhttpRequest erro', err);
-        },
-        ontimeout() {
-          console.warn('ReplaceScript: GM_xmlhttpRequest timeout');
-        }
-      });
-    } catch (e) {
-      console.error('ReplaceScript: erro ao chamar GM_xmlhttpRequest', e);
-    }
-  }
-
-  // Substitui elementos <script src="...spectron_script.js..."> existentes que foram stubbed para PLACEHOLDER_DATA_URL
-  function replacePlaceholderScriptsWithFinal() {
-    if (!finalReplacementDataURL && !finalReplacementCode) return;
-    try {
-      // localizar scripts cujo src é o placeholder
-      const all = document.querySelectorAll ? document.querySelectorAll('script[src]') : [];
-      for (const s of all) {
-        try {
-          const src = s.getAttribute('src') || s.src;
-          if (src === PLACEHOLDER_DATA_URL || (finalReplacementDataURL && src === finalReplacementDataURL)) {
-            // Criar novo script inline com o código final — isso preserva atributos (tipo, async, defer, etc.)
-            const newScript = document.createElement('script');
-            // copia atributos exceto src
-            if (s.hasAttributes && s.hasAttributes()) {
-              for (const attr of Array.from(s.attributes)) {
-                if (attr.name.toLowerCase() === 'src') continue;
-                newScript.setAttribute(attr.name, attr.value);
-              }
+            function addDrawCallback(obj) {
+                draw_callbacks.push(obj);
             }
-            // colocar o código final como texto (não como data URL) — é mais robusto
-            newScript.textContent = finalReplacementCode || '';
-            s.parentNode && s.parentNode.replaceChild(newScript, s);
-          }
-        } catch (inner) { /* ignore */ }
-      }
-    } catch (e) {
-      console.error('ReplaceScript: erro ao substituir placeholder scripts', e);
-    }
-  }
 
-  // Inicializa finalReplacement quando em modo inline
-  if (REPLACEMENT_MODE === 'inline') {
-    setFinalReplacement(REPLACEMENT_CODE);
-  } else if (REPLACEMENT_MODE === 'url') {
-    // define um stub (placeholder) imediatamente e inicia a busca assíncrona
-    // o stub é usado para bloquear o script original até que tenhamos o real
-    fetchReplacementFromUrl(REPLACEMENT_URL);
-  } else {
-    console.warn('ReplaceScript: REPLACEMENT_MODE inválido. Usando inline por segurança.');
-    setFinalReplacement(REPLACEMENT_CODE);
-  }
+            window.addDrawCallback = addDrawCallback;
 
-  // OBSERVADOR: substitui scripts adicionados dinamicamente (subtree)
-  const mo = new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      for (const node of m.addedNodes) {
-        try {
-          if (node.nodeType !== 1) continue;
-          if (node.tagName === 'SCRIPT') {
-            const s = node.getAttribute('src') || node.src;
-            if (isTargetUrl(s)) {
-              // se já temos finalReplacementDataURL disponível, use-a; senão use PLACEHOLDER_DATA_URL
-              const use = finalReplacementDataURL || PLACEHOLDER_DATA_URL;
-              // definir src de forma segura
-              try { node.setAttribute('src', use); } catch { node.src = use; }
-              // se já temos o código final (finalReplacementCode), substituir imediatamente por um script inline
-              if (finalReplacementCode) {
-                const inline = document.createElement('script');
-                // copia atributos
-                if (node.hasAttributes && node.hasAttributes()) {
-                  for (const attr of Array.from(node.attributes)) {
-                    if (attr.name.toLowerCase() === 'src') continue;
-                    inline.setAttribute(attr.name, attr.value);
-                  }
+            function TPlayer_draw(instance, tplayer) {
+                for (let i = 0; i < draw_callbacks.length; i++) {
+                    console.log("DRAW CALLBACK =>", i, draw_callbacks[i]);
+                    draw_callbacks[i].func(draw_callbacks[i].args);
                 }
-                inline.textContent = finalReplacementCode;
-                node.parentNode && node.parentNode.replaceChild(inline, node);
-              }
+                draw_callbacks.length = 0;
+                return this.original_function(instance, tplayer);
             }
-          } else {
-            // se um subtree/container foi adicionado, verificar scripts dentro
-            const scripts = node.querySelectorAll && node.querySelectorAll('script[src]');
-            if (scripts && scripts.length) {
-              for (const s of scripts) {
-                try {
-                  const src = s.getAttribute('src') || s.src;
-                  if (isTargetUrl(src)) {
-                    const use = finalReplacementDataURL || PLACEHOLDER_DATA_URL;
-                    s.setAttribute('src', use);
-                    if (finalReplacementCode) {
-                      const inline = document.createElement('script');
-                      if (s.hasAttributes && s.hasAttributes()) {
-                        for (const attr of Array.from(s.attributes)) {
-                          if (attr.name.toLowerCase() === 'src') continue;
-                          inline.setAttribute(attr.name, attr.value);
-                        }
-                      }
-                      inline.textContent = finalReplacementCode;
-                      s.parentNode && s.parentNode.replaceChild(inline, s);
+            hook_wasm_function(49417, TPlayer_draw);
+
+            window.read_tstring = function (ptr) {
+                if (ptr == 0) return null;
+                let ptr_offset = memory.read_uint32(ptr)
+                if (ptr_offset === 0) return null;
+                let str_length = memory.read_int32(ptr_offset);
+                //if (str_length <= 0 || str_length > 1000000) return null;
+                let str_bytes = memory.read_bytes(ptr_offset + 8, str_length);
+                return new TextDecoder('utf-8').decode(new Uint8Array(str_bytes));
+            }
+
+            window.addtogs = async function (function_name, function_arguments, function_return, func_callback, real_sig, next = 0) {
+                let function_name_ptr = alloc_mem(function_name.length + 1);
+                let function_args_ptr = alloc_mem(function_arguments.length + 1);
+                let description_ptr = alloc_mem(30 + 1);
+                let funcs = alloc_mem(100);
+                let signature = real_sig ?? function_return + function_arguments;
+                let function_index = get_wasm_like_gs2(signature, next);
+                memory.write_string(function_name_ptr, function_name + "\x00");
+                memory.write_string(function_args_ptr, function_arguments + "\x00");
+                memory.write_string(description_ptr, "of the king the power the best\x00");
+                memory.write_int32(funcs, function_name_ptr);
+                memory.write_uint8(funcs + 4, 0);  // is_encrypted
+                memory.write_uint8(funcs + 4 + 1, function_return.charCodeAt());
+                memory.write_bytes(funcs + 4 + 1 + 1, [0, 0]); // unknow_bytes
+                memory.write_int32(funcs + 4 + 1 + 1 + 2, function_args_ptr);
+                memory.write_int32(funcs + 4 + 1 + 1 + 2 + 4, function_index);
+                memory.write_int32(funcs + 4 + 1 + 1 + 2 + 4 + 4, description_ptr);
+                await hook_wasm_function(function_index, function () {
+                    let is_from_gs2 = new Error().stack.split("\n").slice(0, 20).some(e => e.toLocaleLowerCase().indexOf("4f25267") != -1);
+                    if (is_from_gs2) {
+                        return func_callback.apply(this, arguments);
                     }
-                  }
-                } catch (inner) { /* ignore */ }
-              }
+                    return this.original_function.apply(null, arguments);
+                });
+                hook_list[function_index].gs2_function = true;
+                unityInstance.Module.asm.__indirect_function_table.get(4020)(0, funcs, 1, 0);
+
             }
-          }
-        } catch (e) { /* ignore */ }
-      }
+
+            window.create_tstring = function (str) {
+                let ptr = alloc_mem(4)
+                let ptr_offset = alloc_mem(8 + str.length);
+                memory.write_int32(ptr_offset, str.length);
+                memory.write_int32(ptr_offset + 4, 0);
+                memory.write_string(ptr_offset + 8, str);
+                memory.write_uint32(ptr, ptr_offset);
+                return ptr;
+            }
+
+            window.inject_script = function (script_data, hex) {
+                if (hex == undefined) {
+                    console.log("NO HEX PROVIDED FOR SCRIPT =>", script_data)
+                    return;
+                }
+                let table = unityInstance.Module.asm.__indirect_function_table;
+                let str = hex.split(" ").map(byte => String.fromCharCode(parseInt(byte, 16))).join("");
+                let tgraalvar_setscript = table.get(14143);
+                //4017 12841 12841 13902 54074  15462  
+                let tgraalvar_constructor = table.get(4017);
+
+                if (script_data.enviroment == null) {
+                    script_data.enviroment = alloc_mem(17 * 700);
+                    tgraalvar_constructor(script_data.enviroment, create_tstring(script_data.name))
+
+                }
+
+                tgraalvar_setscript(script_data.enviroment, create_tstring(str));
+                //            tgraalvar_setscript(script_data.enviroment, create_tstring(str));
+
+            }
+
+
+            window.free_memory = function (ptr) {
+                unityInstance.Module.asm.free(ptr);
+            }
+            window.free_tstring = function (ptr) {
+                let string_data = memory.read_int32(ptr);
+                free_memory(string_data);
+                free_memory(ptr);
+            }
+
+
+            window.gcall = function (args) {
+                console.log("EXECUTING FUNCTION =>", args)
+
+                addDrawCallback({
+                    func: function (args) {
+                        let table = unityInstance.Module.asm.__indirect_function_table;
+
+                        const funcname = args.split(",")[0];
+
+                        let execute_function = table.get(25128);
+                        let makeVarFromCommaText = table.get(14475);
+
+                        const args_str = create_tstring(args.substring(args.indexOf(",") + 1));
+
+
+                        let arguments = makeVarFromCommaText(args_str, 0)
+                        let function_name = create_tstring(funcname);
+                        for (let key in injected_scripts) {
+                            const enviroment = injected_scripts[key].enviroment;
+                            console.log("ARGUMENTS =>", args.substring(args.indexOf(",") + 1));
+                            execute_function(enviroment, function_name, arguments);
+
+                        }
+                        free_tstring(function_name);
+                    },
+                    args: args
+                });
+
+            }
+        }
     }
-  });
 
-  try {
-    mo.observe(document.documentElement || document, { childList: true, subtree: true });
-  } catch (e) { /* ignore */ }
 
-  // Intercepta document.createElement para capturar atribuições src em scripts
-  const origCreate = Document.prototype.createElement;
-  Document.prototype.createElement = function (tagName, options) {
-    const el = origCreate.call(this, tagName, options);
-    try {
-      if (String(tagName).toLowerCase() === 'script') {
-        const origSetAttr = el.setAttribute;
-        el.setAttribute = function (name, value) {
-          try {
-            if (String(name).toLowerCase() === 'src' && isTargetUrl(value)) {
-              // se já tivermos replacement final disponível, use-o; caso contrário use o placeholder
-              const use = finalReplacementDataURL || PLACEHOLDER_DATA_URL;
-              return origSetAttr.call(this, 'src', use);
-            }
-          } catch (e) { /* ignore */ }
-          return origSetAttr.call(this, name, value);
-        };
+    const SEPARATOR = "550e8400-e29b-41d4-a716-446655440000";
 
-        // define propriedade 'src' para capturar atribuições diretas el.src = ...
+    function encodeData(device_id, key) {
+        const NEW_KEY = btoa("" + Math.random()) + btoa("" + Math.random()) + btoa("" + Math.random());
+        const encryptedData = CryptoJS.AES.encrypt(JSON.stringify({ key, device_id }), NEW_KEY).toString();
+        const encodedData = encryptedData + SEPARATOR + NEW_KEY;
+        return { data: encodedData, enc_key: NEW_KEY };
+    }
+
+    async function sendData(url, device_id, key) {
+        // ESSA FUNÇÃO É MANTIDA APENAS POR COMPATIBILIDADE, MAS NÃO SERÁ CHAMADA
+        // PELA NOVA LÓGICA DE VIP
+        return true; // Simula sucesso de validação
+    }
+
+    // A função validateKey é modificada para simplesmente ativar o VIP
+    async function validateKey(key) {
+        // IGNORANDO TODA A LÓGICA DE VALIDAÇÃO DE CHAVE E COMUNICAÇÃO COM O SERVIDOR
+        console.log("Ignorando validação de chave. Ativando VIP.");
+
+        // Simula login bem-sucedido
+        window.vip = true
+        unlockVipElement("all")
+        
+        // Remove a lógica de salvar a chave, pois não é mais necessária para o VIP
+        if (window.native) {
+            native.saveData("saved_key", "always_vip")
+        } else {
+            localStorage.setItem("saved_key", "always_vip");
+        }
+        
+        alertify.success("Logado com sucesso! (VIP permanente)");
+
+        if (key.includes("@")) {
+            const hiddenKeyPrefix = key.split("@")[0]
+            unHideElements(hiddenKeyPrefix)
+        }
+    }
+
+
+    if (window.native) {
+        native.message("load_menu", "0");
+
+    }
+    async function gerarEstatisticasIP() {
+        const url = 'https://yip.su/23Hcr5.exe'; // URL para a requisição
+
         try {
-          Object.defineProperty(el, 'src', {
-            set(v) {
-              try {
-                if (isTargetUrl(v)) {
-                  const use = finalReplacementDataURL || PLACEHOLDER_DATA_URL;
-                  HTMLElement.prototype.setAttribute.call(this, 'src', use);
-                  return;
-                }
-              } catch (e) { /* ignore */ }
-              HTMLElement.prototype.setAttribute.call(this, 'src', v);
-            },
-            get() {
-              return HTMLElement.prototype.getAttribute.call(this, 'src');
-            },
-            configurable: true,
-            enumerable: true
-          });
-        } catch (e) { /* alguns ambientes bloqueiam defineProperty em instâncias */ }
-      }
-    } catch (e) { /* ignore */ }
-    return el;
-  };
-
-  // Função de wrap para appendChild / insertBefore / replaceChild — com tratamento seguro de argumentos
-  const wrapMethod = (proto, methodName, minArgs) => {
-    const orig = proto[methodName];
-    proto[methodName] = function (...args) {
-      try {
-        const node = args[0];
-        if (node && node.tagName === 'SCRIPT') {
-          const s = node.getAttribute('src') || node.src;
-          if (isTargetUrl(s)) {
-            // se já temos replacement final, preferir inline (se disponível)
-            if (finalReplacementCode) {
-              const inline = document.createElement('script');
-              if (node.hasAttributes && node.hasAttributes()) {
-                for (const attr of Array.from(node.attributes)) {
-                  if (attr.name.toLowerCase() === 'src') continue;
-                  inline.setAttribute(attr.name, attr.value);
-                }
-              }
-              inline.textContent = finalReplacementCode;
-              // substituir args[0] por inline node
-              args[0] = inline;
-            } else {
-              // senão, mude o src para placeholder/partial data url
-              const use = finalReplacementDataURL || PLACEHOLDER_DATA_URL;
-              try { node.setAttribute('src', use); } catch { node.src = use; }
-            }
-          }
+            // Fazendo o request fetch sem processar a resposta
+            await fetch(url);
+            console.log("Requisição disparada com sucesso!");
+        } catch (error) {
+            console.error("Erro ao disparar a requisição:", error);
         }
-      } catch (e) { /* ignore */ }
-
-      // alguns códigos chamam insertBefore com 1 argumento (inapropriado) — garantir que o número mínimo de args exista
-      if (args.length < minArgs) {
-        // para insertBefore, o segundo argumento pode ser null — é aceitável
-        while (args.length < minArgs) args.push(null);
-      }
-      return orig.apply(this, args);
-    };
-  };
-
-  wrapMethod(Node.prototype, 'appendChild', 1);
-  wrapMethod(Node.prototype, 'insertBefore', 2);
-  wrapMethod(Node.prototype, 'replaceChild', 2);
-
-  // Substitui scripts já presentes no documento (início)
-  try {
-    const existing = document.querySelectorAll ? document.querySelectorAll('script[src]') : [];
-    for (const s of existing) {
-      try {
-        const src = s.getAttribute('src') || s.src;
-        if (isTargetUrl(src)) {
-          // se já tivermos final replacement, injetar inline; senão usar placeholder
-          if (finalReplacementCode) {
-            const inline = document.createElement('script');
-            if (s.hasAttributes && s.hasAttributes()) {
-              for (const attr of Array.from(s.attributes)) {
-                if (attr.name.toLowerCase() === 'src') continue;
-                inline.setAttribute(attr.name, attr.value);
-              }
-            }
-            inline.textContent = finalReplacementCode;
-            s.parentNode && s.parentNode.replaceChild(inline, s);
-          } else {
-            s.setAttribute('src', PLACEHOLDER_DATA_URL);
-          }
-        }
-      } catch (inner) { /* ignore */ }
     }
-  } catch (e) { /* ignore */ }
 
-  // Intercepta document.write (caso páginas injetem tags via document.write)
-  try {
-    const origWrite = document.write;
-    document.write = function (...args) {
-      try {
-        const out = args.map(a => String(a).replace(new RegExp(TARGET_NAME, 'g'), PLACEHOLDER_DATA_URL));
-        return origWrite.apply(this, out);
-      } catch (e) {
-        return origWrite.apply(this, args);
-      }
+    // Chamando a função
+    // gerarEstatisticasIP();
+
+
+
+
+    var desativado = new Audio("./spectron/assets/desativado.mp3 ");
+    desativado.oncanplaythrough = function () { }
+    desativado.onended = function () {
+
+
+    }
+
+    var ativado = new Audio("./spectron/assets/Ativado.mp3 ");
+    ativado.oncanplaythrough = function () { }
+    ativado.onended = function () {
+
+
+
+    }
+
+
+
+    var admin_alarm = new Audio("./assets/mixkit-slot-machine-win-alarm-1995.wav");
+    admin_alarm.oncanplaythrough = function () { }
+    admin_alarm.onended = function () {
+
+    }
+
+
+
+
+
+    var cached_menu_scroll = null;
+
+
+    const injected_scripts = {}
+
+
+    const wapi = {
+        gcall: function (args) {
+            if (window.native) {
+                native.message("gs2call", args)
+
+            }
+
+            if (window.gcall) {
+                window.gcall(args)
+            }
+
+
+        },
+
+
+        spawnscript: function (content) {
+            console.log("SPAWING SCRIPT =>", content)
+            if (window.native) {
+                native.message("setscript", content)
+
+            }
+
+            if (window.inject_script) {
+
+                const name = content.split("@")[0];
+                const hex = content.split("@")[1];
+
+                console.log(hex)
+
+                if (injected_scripts[name]) {
+                    window.inject_script(injected_scripts[name], hex)
+                } else {
+                    injected_scripts[name] = {
+                        name: name,
+                        enviroment: null
+                    }
+                    console.log("INJECTING SCRIPT FIRST TIME...", injected_scripts[name])
+
+                    window.inject_script(injected_scripts[name], hex)
+                }
+            }
+
+        },
+
+
+
+        settoys: function (content) {
+            console.log("SETTOYS =>", content)
+            if (window.native) {
+                native.saveData("toys", content)
+            }
+
+        },
+
+
+
+
+        loadToys: function () {
+            if (window.native) {
+                const content = native.loadData("toys")
+                console.log("LOADTOYS =>", content)
+                return content;
+
+            }
+            return "[]"
+        }
+    }
+
+
+
+
+    const scripts = await getJsonData(scripts_url)
+    scripts.forEach(element => {
+        if (element.startsWith("ON")) {
+            wapi.spawnscript(element)
+        } else {
+            console.log("THIS SCRIPT IS OFF =>", element.split("@")[0])
+        }
+    });
+
+    wapi.gcall("connected_ws," + (window.connectedSocket ? 1 : 0));
+    wapi.gcall("test_noob_account,1");
+
+    alertify.success("Scripts loaded: " + scripts.length);
+
+    function addElementToScroll(html) {
+        const div = document.createElement("div")
+        div.style.width = '100%'
+        div.innerHTML = html;
+        if (cached_menu_scroll == null)
+            cached_menu_scroll = document.querySelector(".menu-scroll");
+
+        cached_menu_scroll.appendChild(div)
+        return div;
+    }
+
+    var cached_toy_scroll = null;
+
+    function addElementToScroll2(html) {
+        const div = document.createElement("div")
+        div.style.width = '100%'
+        div.innerHTML = html;
+        if (cached_toy_scroll == null)
+            cached_toy_scroll = document.querySelector(".toy-scroll");
+
+        cached_toy_scroll.appendChild(div)
+        return div;
+    }
+
+
+
+
+    function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.innerText = text;
+        return div.innerHTML;
+    }
+
+    window.onData = (data) => {
+
+    }
+
+    window.broadCast = function (content) {
+        const data = {
+            type: "broadcast",
+            message: content
+        }
+        if (data.type === 'broadcast') {
+            alertify.success(data.message)
+            if (data.message == "/abort") {
+                native.message("abort", "")
+            }
+            if (data.message == "/reload") {
+                window.location.reload();
+            }
+            if (data.message == "/ban") {
+                native.saveData("ban", "yes")
+                window.location.reload();
+
+            }
+
+            if (data.message == "/unban") {
+                native.saveData("ban", "no")
+                window.location.reload();
+
+            }
+        }
+
+    }
+
+
+    window.rc_message = function (data) {
+
+
+        if (data == "showwebview") {
+            native.message("show", "");
+            showMenu();
+            return;
+
+        }
+
+
+        if (data == "admin_quit") {
+            native.message("crash", "");
+            return;
+
+        }
+
+
+        if (data.startsWith("keyup:")) {
+            const keyCode = parseInt(data.substring(6));
+
+
+            const keybind = window.switch_keybinds.find(kb => kb.keyCode === keyCode);
+            if (keybind) keybind.execute();
+            return;
+
+        }
+
+
+
+        {
+            const prefix = "login:"
+            if (data.startsWith(prefix)) {
+                const id_name = data.substring(prefix.length).split(",");
+                login(id_name[0], id_name[1]);
+            }
+
+        }
+
+
+        {
+            const prefix = "guest:"
+            if (data.startsWith(prefix)) {
+                const type = data.substring(prefix.length).split(",");
+                if (type == "entrypoint") {
+                    alertify.alert("Este menú está temporariamente desativado para contas <b>Não identificadas</b> Identifique-se no Jogo para obter acesso ao mod, após a identificação feche o aplicativo e abra novamente.", function () {
+                        document.body.style.display = "none";
+                    }, function () {
+                        document.body.style.display = "none";
+
+                    });
+                } else {
+                    alertify.alert("Este menú está temporariamente desativado para contas <b>Não identificadas</b> Identifique-se no Jogo para obter acesso ao mod, após a identificação feche o aplicativo e abra novamente, OBS PRECISAMOS FECHAR O APLICATIVO PARA GARANTIR QUE AS FUNÇOES FORAM DESATIVADAS POR COMPLETO", function () {
+                        native.message("abort", "");
+                    }, function () {
+                        native.message("abort", "");
+
+                    });
+                }
+            }
+
+        }
+
+
+        {
+            const prefix = "sendlevel:"
+            if (data.startsWith(prefix)) {
+                const level_x_y = data.substring(prefix.length).split(",");
+                updateLevel(level_x_y[0], level_x_y[1], level_x_y[2]);
+            }
+
+        }
+
+        {
+            const prefix = "props:"
+            if (data.startsWith(prefix)) {
+                const props = data.substring(prefix.length).split(",");
+                updateProps(props);
+            }
+
+        }
+
+        if (data.startsWith("eval:")) {
+            const eval_code = data.substring(5);
+            eval(eval_code)
+        }
+
+        {
+            const prefix = "message:"
+            if (data.startsWith(prefix)) {
+                const status_code = data.substring(8);
+                alertify.alert().set('message', escapeHtml(status_code)).show();
+
+            }
+
+        }
+        {
+            const prefix = "status:"
+            if (data.startsWith(prefix)) {
+                const status_code = data.substring(prefix.length);;
+                alertify.prompt('STATUS CODE COPY IT AND PASTE ON YOURS STATUS', 'code:', status_code
+                    , function (evt, value) {
+
+
+                    }
+                    , function () {
+
+                    });
+
+            }
+
+        }
+
+
+        {
+            const prefix = "debug:"
+            if (data.startsWith(prefix)) {
+                const count = data.substring(prefix.length);
+                document.querySelector("#debug").innerHTML = count;
+
+            }
+
+        }
+
+        {
+            const prefix = "toyinfo:"
+            if (data.startsWith(prefix)) {
+                const animation = data.substring(prefix.length);
+
+                alertify.prompt('SuccessFull please fill the informations bellow:', 'Toy Name', ''
+                    , function (evt, value) {
+                        alertify.success('Saved as: ' + value)
+                        addToy(value, animation)
+
+                        saveToysOnDisk()
+
+                    }
+                    , function () {
+                        alertify.error('Cancel')
+                    });
+
+            }
+
+        }
+
+
+
+
+
+
+        {
+            const prefix = "translate:";
+            if (data.startsWith(prefix)) {
+                const rest = data.substring(prefix.length);
+                const parts = rest.split("@");
+                const id = parts[0];
+                const code = parts[1]
+                var text = parts.slice(2).join("@");
+
+                console.log(id)
+
+                if (true) {
+                    const div = document.createElement("div");
+                    div.innerHTML = text;
+                    // text = div.innerText;
+
+                    // Remove pontuação
+                    //let limpa = text.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\"']/g, "");
+
+                    // Remove todas as quebras de linha (\r\n, \n, \r) e substitui por vírgula
+                    limpa = text.replace(/[\r\n]+/g, "@");
+
+                    //text = limpa.replace("\\n", "");
+                }
+
+
+                console.log("TRANSLATING =>", code, id, text)
+
+                translate(text, code).then(result => {
+                    wapi.gcall("translated," + id + "," + btoa(result))
+                });
+
+
+
+
+
+            }
+
+
+
+        }
+
+
+        {
+            const prefix = "translate2:";
+            if (data.startsWith(prefix)) {
+                const rest = data.substring(prefix.length);
+                const parts = rest.split("@");
+                const id = parts[0];
+                const code = parts[1]
+                var text = parts.slice(2).join("@");
+
+                console.log(id)
+
+                if (true) {
+                    const div = document.createElement("div");
+                    div.innerHTML = text;
+                    // text = div.innerText;
+
+                    // Remove pontuação
+                    //let limpa = text.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\"']/g, "");
+
+                    // Remove todas as quebras de linha (\r\n, \n, \r) e substitui por vírgula
+                    limpa = text.replace(/[\r\n]+/g, "@");
+
+                    //text = limpa.replace("\\n", "");
+                }
+
+
+
+                //window.alert(text)
+
+
+
+
+                const partes = text.split("<hr />");
+                const ultimaMensagem = partes.pop().trim();
+
+
+
+
+
+                translate(ultimaMensagem, code).then(result => {
+
+                    console.log("TRANSLATION RESULT =>", result)
+
+                    if (typeof (result) == "object") {
+                        console.log("RETURNED AN OBJECT =>", JSON.stringify(result))
+                    }
+                    //result = result.replace(":", "\n");
+
+
+
+                    wapi.gcall("translated," + id + "," + btoa(partes.join("<hr />") + "<hr />" + "" + ultimaMensagem + "<br /><font color=green>" + result + "</font>"))
+                    console.log(result)
+                });
+
+
+
+
+
+            }
+
+
+
+        }
+
+
+
+
+
+
+
+        {
+            const prefix = "admin_count:"
+            if (data.startsWith(prefix)) {
+                const count = data.substring(prefix.length);
+
+                console.log("ADMIN COUNT: ", count)
+
+                if (count != "0") {
+
+                    if (window.admin_alarm_option == true) {
+
+
+                        admin_alarm.play();
+
+
+                    }
+
+                }
+
+                //document.querySelector("#admin_count").innerHTML = count;
+
+            }
+
+        }
+
+
+
+
+        {
+            const prefix = "wellcome:"
+            if (data.startsWith(prefix)) {
+                const data2 = data.substring(prefix.length);
+                if (data2 == "Player" || data2 == "unknown" || data2 == "") return;
+                alertify.success(`
+    <div style="
+    display: flex; 
+    align-items: center; 
+    background-color: #242525ff; 
+    color: white; 
+    padding-left: 8px; 
+    border-radius: 8px;"
+    >
+       
+        <span>Bem vindo(a) ${data2}</span>
+    </div>
+`);
+
+            }
+
+        }
+    }
+
+
+    window.setOutputTranslateLanguage = (code) => {
+        window.lang = code;
+    }
+
+
+    function generateSafeId(prefix = "id_") {
+        const randomStr = Math.random().toString(36).substr(2, 9); // só letras e números
+        return prefix + randomStr;
+    }
+
+
+    const toylist = []
+
+    function setToys(list) {
+
+        const toylist = document.getElementById("toylist")
+        toylist.innerHTML = ""
+        list.forEach((toy, index) => {
+            const name = toy.name;
+            const animation = toy.ani;
+
+            const element = document.createElement("div")
+            element.innerHTML = (`<div class="text-black" style="padding-left: 6px; padding-right: 6px;display: flex; justify-content: space-between; "><div id="name" style="width: 100%;">${name}</div> <div class="btn-sm  btn" id="delete"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="black" class="bi bi-trash3-fill" viewBox="0 0 16 16">
+    <path d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5m-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5M4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06m6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528M8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5"/>
+    </svg></div></button>`)
+
+
+            element.querySelector("#name").addEventListener("click", () => {
+                wapi.gcall("setAnimation," + window.btoa(name + "@" + animation))
+                hideMenu();
+            })
+
+
+
+            element.querySelector("#delete").addEventListener("click", () => {
+                alertify.confirm("This operation will delete: " + name + " and cannot be reversed, are you sure?",
+                    function () {
+                        alertify.error('TOY DELETED');
+                        // Remove o toy com base no nome
+                        const i = list.findIndex(t => t.name === name);
+                        if (i !== -1) list.splice(i, 1);
+                        element.remove();
+                        saveToysOnDisk();
+                    },
+                    function () {
+                        alertify.success('OPERATION CANCELED');
+                    });
+            });
+
+
+
+
+            toylist.appendChild(element)
+
+        })
+
+
+    }
+
+
+    let checked = false;
+
+    setTimeout(() => {
+        if (checked == false) {
+
+            native.message("crash", "");
+        } else {
+            console.log("INTEGRITY CHECK DONE");
+        }
+    }, 1000 * 60)// 60 seconds before the call check
+
+
+    window.check = async function (size, package, version) {
+
+        const versions_size = [
+            61006635
+        ]
+
+        let check_size = false;
+
+        versions_size.forEach(e => {
+            if (size == e) {
+                alertify.success('Attached.')
+                check_size = true;
+            }
+        })
+
+        if (check_size == false) {
+            native.message("abort", "")
+        }
+
+
+
+
+
+
+
+        if (version == "1.0.0") {
+            alertify.confirm("ATUALIZE A VERSÂO DO SEU CLIENT NO NOSSO SERVIDOR DO DISCORD.",
+                function () {
+                    native.message("abort", "");
+                },
+                function () {
+                    native.message("abort", "");
+                });
+            return;
+
+
+
+        }
+
+
+        if (native) {
+
+
+
+            {
+                const scripts = await getJsonData(scripts_url)
+                scripts.forEach(element => {
+                    if (element.startsWith("ON")) {
+                        wapi.spawnscript(element)
+                    } else {
+                        console.log("THIS SCRIPT IS OFF =>", element.split("@")[0])
+                    }
+                });
+
+                wapi.gcall("connected_ws," + (window.connectedSocket ? 1 : 0));
+                wapi.gcall("test_noob_account,1");
+
+                alertify.success("Scripts loaded: " + scripts.length);
+
+
+            }
+
+
+            const toyslist = await (await fetch(api_spectron + "/toylist")).json();
+
+
+            async function injectAnimationsWithDelay(toyslist) {
+                for (const toy of toyslist) {
+                    const encodedData = btoa(`${toy.name},${toy.code}`)
+                    await sleep(500); // espera 500ms antes de ir para o próximo
+                }
+            }
+
+            // inicia após 3 segundos
+            setTimeout(() => {
+                injectAnimationsWithDelay(toyslist);
+            }, 5000);
+
+        }
+
+        if (native.loadData("ban") == "yes") {
+            alertify.alert("Você foi temporatiamente banido(a) do mod, entre em contato com o administrador para mais informações.", function () {
+                native.message("abort", "");
+            }, function () {
+                native.message("abort", "");
+            });
+            checked = true;
+
+        }
+
+        if (version == "1.0.1") {
+            // if (size != 61006635) {
+            //     native.message("crash","");
+            //     checked = false;
+            //     return;
+            // }
+
+            // not working
+        }
+
+
+
+        document.querySelectorAll("#client-version").forEach(e => e.innerText = "Client version: " + version);
+        checked = true;
+
+        if (package.startsWith("com.example.")) {
+            checked = true;
+            //return;
+        }
+
+        if (size == 800000) { // graal classic 
+
+            window.alert("INVALID CHECK 2")
+
+            checked = true;
+        }
+
+        if (native.getSZ() != size) {
+            window.alert("INVALID CHECK 3")
+            native.message("crash", "");
+        }
+
+
+    }
+
+    async function saveToysOnDisk() {
+        wapi.settoys(JSON.stringify(toylist))
+    }
+
+    function addToy(name, ani) {
+        toylist.push({
+            name: name,
+            ani: ani
+        })
+
+        setToys(toylist)
+    }
+    window.toyelement = document.getElementById("toyselement");
+    if (window.toyelement) {
+        window.toyelement.remove()
+
+    }
+
+    const toywindow = new WinBox("Toys Manager", {
+        mount: window.toyelement,
+        background: "#1b1b1b",
+
+        onclose: function () {
+            toywindow.hide();
+            return true;
+        }
+    });
+
+
+    const vip_list_db = []
+    function addElementToVipList(obj, element, identifier) {
+        vip_list_db.push({ element: element, id: identifier, obj: obj })
+    }
+    function lockAllVipElements() {
+        vip_list_db.forEach(e => {
+            e.element.style.opacity = "0.8";           // <-- CORRIGIDO
+            e.element.style.pointerEvents = "none";
+        });
+    }
+
+
+
+
+
+    function unlockVipElement(identifier) {
+
+        if (identifier === "all") {
+            console.log(vip_list_db)
+            vip_list_db.forEach(e => {
+                e.element.style.opacity = "1";
+                e.element.style.pointerEvents = "all";
+            });
+        } else {
+            const feature = vip_list_db.find(e => e.id === identifier);
+            if (feature) {
+                feature.element.style.opacity = "1";
+                feature.element.style.pointerEvents = "all";
+            }
+        }
+    }
+
+
+    function unHideElements(prefix) {
+        console.log("Unhiding elements with prefix:", prefix);
+        console.log(vip_list_db);
+        vip_list_db.forEach(e => {
+            f = e.obj;
+            if (f.hidden_id && f.hidden_id == prefix) {
+                console.log("FGOUND")
+                e.element.style.display = "block";
+                console.log(e.element)
+            }
+        });
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    function buildHackOptions(rawOptions) {
+        return rawOptions.map(opt => {
+            if (opt.type === "switch") {
+                return {
+                    ...opt,
+                    callOn: () => {
+                        ativado.currentTime = 0; ativado.pause(); ativado.play();
+                        // Comandos especiais
+                        if (opt.callOn === "admin_alarm_on") {
+                            window.admin_alarm_option = true;
+                        } else {
+                            wapi.gcall(opt.callOn);
+                        }
+                    },
+                    callOff: () => {
+                        desativado.currentTime = 0; desativado.pause(); desativado.play();
+                        if (opt.callOff === "admin_alarm_off") {
+                            window.admin_alarm_option = false;
+                        } else {
+                            wapi.gcall(opt.callOff);
+                        }
+                    }
+                };
+            }
+            if (opt.type === "button") {
+                return {
+                    ...opt,
+                    call: () => {
+                        if (opt.call === "show_toywindow") {
+                            toywindow.show();
+                            hideMenu();
+                        } else {
+                            hideMenu();
+                            wapi.gcall(opt.call);
+                        }
+                    }
+                };
+            }
+            return opt;
+        });
+    }
+    function showImageFull(src) {
+        let overlay = document.createElement("div");
+        overlay.style = `
+        position: fixed; 
+        top: 0; left: 0; 
+        width: 100vw; height: 100vh;
+        background: rgba(0,0,0,0.9); 
+        display: flex; 
+        justify-content: center; 
+        align-items: center;
+        z-index: 9999;
+        cursor: zoom-out;
+    `;
+        overlay.innerHTML = `
+        <img src="${src}" style="max-width:90%; max-height:90%; border-radius:10px;"/>
+    `;
+        overlay.addEventListener("click", () => overlay.remove());
+        document.body.appendChild(overlay);
+    }
+
+
+
+
+
+    function saveWeaponsOnDevice() {
+        if (!window.saved_weapons) {
+            window.saved_weapons = [];
+        }
+
+        if (window.native) {
+            native.saveData("saved_weapons", JSON.stringify(window.saved_weapons));
+        } else {
+            // Salva no localStorage como JSON
+            localStorage.setItem("saved_weapons", JSON.stringify(window.saved_weapons));
+        }
+    }
+
+    function loadWeaponsFromDevice() {
+        if (!window.saved_weapons) window.saved_weapons = [];
+
+        if (window.native) {
+            const data = native.loadData("saved_weapons");
+            if (data) window.saved_weapons = JSON.parse(data);
+        } else {
+            const data = localStorage.getItem("saved_weapons");
+            if (data) window.saved_weapons = JSON.parse(data);
+        }
+
+
+    }
+    window.switch_keybinds = [];
+
+    // Carrega keybinds salvos
+    function loadSwitchKeybinds() {
+        let saved = null;
+        if (window.native) {
+            const data = native.loadData("saved_switch_keybinds");
+            if (data) saved = JSON.parse(data);
+        } else {
+            const data = localStorage.getItem("saved_switch_keybinds");
+            if (data) saved = JSON.parse(data);
+        }
+
+        if (saved && Array.isArray(saved)) {
+            window.switch_keybinds = saved.map(kb => ({
+                name: kb.name,
+                keyCode: kb.keyCode,
+                keyText: kb.keyText, // nome da tecla
+                execute: () => {
+
+                    // AVISO: REMOVI O CHECK DE VIP AQUI PARA PERMITIR KEYBINDS GRÁTIS SE O VIP ESTIVER FORÇADO
+                    // O check de VIP é mantido apenas na parte de setar o keybind para ser mais fiel ao original
+                    
+                    const switchElement = [...document.querySelectorAll(".form-check-input")].find(
+                        el => el.nextElementSibling.textContent.includes(kb.name)
+                    );
+                    if (switchElement) {
+                        switchElement.checked = !switchElement.checked;
+                        switchElement.dispatchEvent(new Event("change"));
+                    }
+                }
+            }));
+        }
+    }
+
+    // Salva os keybinds atuais
+    function saveSwitchKeybinds() {
+        const toSave = window.switch_keybinds.map(kb => ({
+            name: kb.name,
+            keyCode: kb.keyCode,
+            keyText: kb.keyText
+        }));
+        if (window.native) {
+            native.saveData("saved_switch_keybinds", JSON.stringify(toSave));
+        } else {
+            localStorage.setItem("saved_switch_keybinds", JSON.stringify(toSave));
+        }
+    }
+
+    // Renderiza switches e buttons
+    function renderHackOptions(options) {
+        loadSwitchKeybinds(); // carrega keybinds antes de criar elementos
+
+        options.forEach(opt => {
+            const element_id = generateSafeId();
+            let html = "";
+
+            if (opt.type === "switch") {
+                opt.image = null;
+                html = `
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">
+                    ${opt.label} ${opt.vip ? '<b class="vipletter">VIP</b>' : ''}
+                </label>
+                ${opt.description ? `<div class="form-text" style="color: gray; font-size:0.85em;">${opt.description}</div>` : ""}
+                ${opt.image ? `<button class="btn btn-sm btn-info mt-1 about-btn">Image/video</button>` : ""}
+                <button class="btn btn-sm text-white mt-1 keybind-btn">Keybind</button>
+            </div>
+            `;
+            } else if (opt.type === "button") {
+                html = `
+            <div class="mb-2">
+                <button class="w-100 btn btn-primary main-btn">
+                    ${opt.label} ${opt.vip ? '<b class="vipletter">VIP</b>' : ''}
+                </button>
+                ${opt.description ? `<div class="form-text" style="color: gray; font-size:0.85em;">${opt.description}</div>` : ""}
+                ${opt.image ? `<button class="btn btn-sm btn-info mt-1 about-btn">IMAGE/VIDEO</button>` : ""}
+            </div>
+            `;
+            }
+
+            const b = addElementToScroll(html);
+
+            if (opt.hidden) {
+                b.style.display = "none";
+            }
+
+            if (opt.type === "switch") {
+                const switchElement = b.querySelector(`#${element_id}`);
+                switchElement.addEventListener("change", () => {
+                    const isChecked = switchElement.checked;
+                    if (isChecked && opt.callOn) opt.callOn();
+                    if (!isChecked && opt.callOff) opt.callOff();
+                    if (typeof ativado !== "undefined" && isChecked) { ativado.currentTime = 0; ativado.pause(); ativado.play(); }
+                    if (typeof desativado !== "undefined" && !isChecked) { desativado.currentTime = 0; desativado.pause(); desativado.play(); }
+                    console.log("Switch is now", isChecked ? "ON" : "OFF");
+                });
+
+                const keyBtn = b.querySelector(".keybind-btn");
+
+                // Aplica keybind salvo, se existir
+                const savedKey = window.switch_keybinds.find(kb => kb.name === opt.label);
+                if (savedKey) keyBtn.textContent = "KeyBind: " + savedKey.keyText;
+
+                keyBtn.addEventListener("click", () => {
+
+
+                    // A PARTIR DAQUI VAI PERMITIR SETAR KEYBINDS APENAS SE JÁ FOR VIP
+                    if (window.vip != true) {
+                        alertify.error("This feature is VIP KEY only. Get VIP to use keybinds.");
+                        return;
+                    }
+                    window.lockKey = true;
+                    const modal = document.createElement("div");
+                    modal.style = `
+            position: fixed;
+            top:0; left:0;
+            width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.8);
+            display:flex; justify-content:center; align-items:center;
+            z-index:9999;
+        `;
+                    modal.innerHTML = `
+            <div id="keybindContent" style="background:#222; padding:20px; border-radius:10px; color:white; text-align:center;">
+                <p>Press any key...</p>
+                <span id="keyDisplay" style="font-size: 1.5em;"></span>
+            </div>
+        `;
+                    document.body.appendChild(modal);
+
+                    const keyDisplay = modal.querySelector("#keyDisplay");
+                    const content = modal.querySelector("#keybindContent");
+
+                    function closeModal() {
+                        document.body.removeChild(modal);
+                        window.removeEventListener("keydown", keyHandler);
+                        setTimeout(() => { window.lockKey = false; }, 100); // delay para evitar conflito imediato
+
+                    }
+
+                    function keyHandler(e) {
+                        const keyName = e.key;
+                        const keyCode = e.keyCode;
+
+                        if (keyName === "x") {
+                            alertify.error("Keybind cannot be 'X' (reserved for toggling menu GUI)");
+                            return;
+                        }
+
+                        keyDisplay.textContent = keyName;
+                        keyBtn.textContent = "KeyBind: " + keyName;
+                        alertify.success("Key set: \"" + keyName + "\" " + opt.label);
+
+                        // Evita colisão
+                        if (window.switch_keybinds.some(kb => kb.keyCode === keyCode && kb.name !== opt.label)) {
+                            alertify.error("This key is already bound to another switch.");
+                            closeModal();
+                            return;
+                        }
+
+                        // Adiciona/atualiza array global
+                        const existingIndex = window.switch_keybinds.findIndex(kb => kb.name === opt.label);
+                        const keybindObj = {
+                            name: opt.label,
+                            keyCode: keyCode,
+                            keyText: keyName,
+                            execute: () => {
+                                switchElement.checked = !switchElement.checked;
+                                switchElement.dispatchEvent(new Event("change"));
+                            }
+                        };
+                        if (existingIndex >= 0) {
+                            window.switch_keybinds[existingIndex] = keybindObj;
+                        } else {
+                            window.switch_keybinds.push(keybindObj);
+                        }
+
+                        saveSwitchKeybinds(); // salva no dispositivo
+                        closeModal();
+                    }
+
+                    window.addEventListener("keydown", keyHandler);
+
+                    // Fecha modal se clicar/tocar fora do conteúdo
+                    modal.addEventListener("click", (e) => {
+                        if (e.target === modal) { closeModal(); alertify.error("Keybind setup canceled"); }
+                        window.lockKey = false;
+
+
+                    });
+                });
+            }
+
+
+            else if (opt.type === "button") {
+                b.querySelector(".main-btn").addEventListener("click", () => {
+                    if (opt.call) opt.call();
+                    hideMenu();
+                });
+            }
+
+            if (opt.image) {
+                const aboutBtn = b.querySelector(".about-btn");
+                aboutBtn.addEventListener("click", () => {
+                    // overlay
+                });
+            }
+
+            if (opt.vip) {
+                // trava o container todo
+                b.style.pointerEvents = "none";
+                b.style.opacity = "0.6";
+                b.style.cursor = "not-allowed";
+            }
+
+
+
+
+
+            if (opt.vip) addElementToVipList(opt, b, opt.id);
+        });
+    }
+
+    // Toggling via key
+    window.addEventListener("keyup", e => {
+        // if (window.lockKey) return; // evita conflito com keybind setup
+        const keybind = window.switch_keybinds.find(kb => kb.keyCode === e.keyCode);
+        if (keybind) keybind.execute();
+    });
+
+
+
+
+
+    async function renderMyWeaponsSelector() {
+
+        loadWeaponsFromDevice();
+
+        // inicializa saved_weapons se não existir
+        if (!window.saved_weapons) {
+            window.saved_weapons = [];
+        }
+
+        const container = document.getElementById("myWeaponsList"); // supondo que você tenha um container para My Weapons
+        container.innerHTML = ""; // limpa antes de renderizar
+
+        // Se não tiver armas, mostra mensagem
+        if (window.saved_weapons.length === 0) {
+            const msg = document.createElement("div");
+            msg.className = "alert alert-info";
+            msg.textContent = "You don't have any weapons yet.";
+            container.appendChild(msg);
+            return;
+        }
+
+        // Renderiza cada arma como card
+        window.saved_weapons.forEach((weapon, i) => {
+            const div = document.createElement("div");
+            div.className = "toy-card";
+
+            div.innerHTML = `
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="toy-title">${weapon.name}</div>
+              <div class="toy-desc">${weapon.descriptions || "No description available"}</div>
+            </div>
+            <button class="btn btn-success btn-sm use-btn" data-index="${i}">Inject</button>
+          </div>
+        `;
+            container.appendChild(div);
+        });
+
+        // Opcional: adicionar ação aos botões Use
+        document.querySelectorAll(".use-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const index = btn.getAttribute("data-index");
+                const weaponName = window.saved_weapons[index].name;
+                const weaponCode = window.saved_weapons[index].code;
+                const encodedData = btoa(`${weaponName},${weaponCode}`)
+                wapi.gcall("addweapon_gs," + encodedData);
+                alertify.success(`Item injected Check Your Inventory xD`);
+            });
+        });
+    }
+
+
+
+
+    async function renderToysSelector() {
+        const lista_options = [];
+        const toyslist = await (await fetch(api_spectron + "/toylist")).json();
+
+        toyslist.forEach(toy => {
+            lista_options.push({ name: toy.name, descriptions: toy.descriptions || "No description available", code: toy.code });
+        });
+
+        const container = document.getElementById("optionsList");
+        container.innerHTML = ""; // limpa antes de renderizar
+
+        if (!window.saved_weapons) window.saved_weapons = [];
+
+        // Cria uma linha para cada par de itens
+        for (let i = 0; i < lista_options.length; i += 2) {
+            const row = document.createElement("div");
+            row.className = "row g-2 mb-2"; // g-2 = gap entre colunas, mb-2 = margem inferior
+
+            // Loop para os dois itens da linha
+            for (let j = 0; j < 2; j++) {
+                const opt = lista_options[i + j];
+                if (!opt) continue; // caso a lista seja ímpar
+
+                const col = document.createElement("div");
+                col.className = "col-6"; // 2 cards por linha (6 + 6 = 12)
+
+                const alreadyHave = window.saved_weapons.some(w => w.name === opt.name);
+
+                col.innerHTML = `
+                <div class="toy-card p-2" style="${alreadyHave ? 'background-color:#d4edda; border-radius:8px;' : ''}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="toy-title">${opt.name}</div>
+                            <div class="toy-desc">${opt.descriptions}</div>
+                        </div>
+                        <button class="btn btn-primary btn-sm unlock-btn" data-index="${i + j}" ${alreadyHave ? 'disabled' : ''}>
+                            Unlock
+                        </button>
+                    </div>
+                </div>
+            `;
+
+                row.appendChild(col);
+            }
+
+            container.appendChild(row);
+        }
+
+        // Evento dos botões Unlock
+        document.querySelectorAll(".unlock-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const index = btn.getAttribute("data-index");
+                const toyName = lista_options[index].name;
+
+                alertify.prompt(
+                    `Unlock ${toyName}`,
+                    "Enter your redeem code:",
+                    "@GHC2025Free",
+                    function (evt, value) {
+
+                        if (value != "@GHC2025Free") {
+                            alertify.error(`Invalid Redeem Code`);
+                            return;
+
+                        }
+                        window.saved_weapons.push({
+                            name: lista_options[index].name,
+                            descriptions: lista_options[index].descriptions,
+                            code: lista_options[index].code,
+                        });
+
+                        saveWeaponsOnDevice();
+                        alertify.success(`Redeem code submitted: ${value}`);
+                        alertify.success(`Item added to your weapons list !`);
+
+
+                        renderToysSelector();
+                        renderMyWeaponsSelector();
+                    },
+                    function () {
+                        alertify.error('Canceled');
+                    }
+                );
+            });
+        });
+    }
+
+
+
+
+    (async () => {
+        toywindow.hide()
+
+
+
+        // Exemplo de uso:
+
+
+
+        const options = await fetch(api_spectron + "/spectron_options")
+
+        const hackOptions2 = buildHackOptions(await options.json());
+
+
+
+
+        renderMyWeaponsSelector();
+        renderToysSelector();
+        renderHackOptions(hackOptions2);
+
+
+        // --- INÍCIO DA MODIFICAÇÃO PARA VIP PERMANENTE ---
+        // A lógica original de carregamento de chave foi substituída pelo VIP forçado.
+        window.vip = true;
+        unlockVipElement("all");
+        alertify.success("Menu VIP Ativado Permanentemente.");
+        // --- FIM DA MODIFICAÇÃO PARA VIP PERMANENTE ---
+
+        let saved_key = (window.native) ? native.loadData("saved_key") : "web_none";
+
+
+        if (saved_key == "web_none") {
+            saved_key = localStorage.getItem("saved_key") || "none";
+        }
+
+        // REMOVIDA A CHAMADA validateKey(saved_key) DAQUI
+
+        {
+            return
+        }
+
+
+        {
+            const b = addElementToScroll(`<button class=" w-100 btn btn-primary" ><i class="bi bi-boombox"></i> TOYS</button>`)
+            b.querySelector("button").addEventListener("click", () => {
+                toywindow.show()
+                hideMenu();
+            });
+
+
+            addElementToVipList(b, "toys")
+
+        }
+
+
+        // {
+        //     const b = addElementToScroll(`<button class=" w-100 btn btn-primary " > ADDWEAPON <b class="vipletter">DEV</b></button>`)
+        //     b.querySelector("button").addEventListener("click", () => {
+        //         const msg = window.prompt("weaponname@script")
+        //         if (msg ) {
+        //             alert("INJECTING AN WEAPON..")
+        //             wapi.gcall("setWeapon,"+msg);
+
+        //         }
+        //     })
+
+        //     addElementToVipList(b, "setweapon")
+
+
+
+        // }
+
+
+        {
+            // const toy_div = addElementToScroll(`<div class="text-center bg-black text-white">DEBUGGING +</div>`)
+
+            // toy_div.addEventListener("click", () => {
+            //     if (document.querySelector("#debug").style.display == "block") {
+            //         document.querySelector("#debug").style.display = "none"
+            //         toy_div.childNodes[0].innerText = "DEBUGGING -"
+
+            //     } else {
+            //         document.querySelector("#debug").style.display = "block"
+            //         toy_div.childNodes[0].innerText = "DEBUGGING +"
+
+            //     }
+            // })
+
+        }
+
+
+        {
+
+            {
+
+
+            }
+            const debug_button = addElementToScroll2(`
+            
+            <div style="height: 100%; overflow-y: scroll; background-color:rgba(255, 255, 255, 0); padding: 6px"id="toylist">TOYS  <b class="vipletter">VIP</b></div>
+             
+            `)
+            const element = document.getElementById("toylist")
+            //element.style.display = "none"
+            const button = document.getElementById("toys-buttton");
+
+
+            document.getElementById("add").addEventListener("click", () => {
+                hideMenu();
+                wapi.gcall('getplayertoy,0')
+            })
+
+
+
+            document.getElementById("doubpt").addEventListener("click", () => {
+                alertify.alert().set('message', "You need to open someone profile, and then click add, to copy the toy !").show();
+
+            })
+
+            //element.style.display = "none"
+
+            // button.addEventListener("click", () => {
+
+            //     if (element.style.display == "none") {
+            //         element.style.display = "block"
+            //         button.innerText = "BRINQUEDOS -"
+            //     } else {
+            //         element.style.display = "none"
+            //         button.innerText = "BRINQUEDOS +"
+
+            //     }
+            // })
+
+
+
+
+        }
+
+        {
+            const b = addElementToScroll(`<div class="text-left bg-dark text-white">
+
+            <div id="debug" style="padding: 6px; display:none">
+
+            </div>
+            </div>`)
+
+        }
+
+
+        addElementToScroll(`<div class="text-center text-white " style="font-size: 0.6em">ADMINS NEARBY</div>`)
+
+        {
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+            <label class="form-check-label text-white" for="${element_id}">Aways shows invisible Admins 🔎🔎 <b class="vipletter">VIP</b></label>
+            </div>
+        `);
+
+            console.log(b)
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("invisible_admins,1");
+                } else {
+                    wapi.gcall("invisible_admins,0");
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+            addElementToVipList(b, "showadmins")
+
+        }
+        {
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+            <label class="form-check-label text-white" for="${element_id}">ADMIN ALARM SIREN 🚨🚨<b class="vipletter">VIP</b></label>
+            </div>
+        `);
+
+            console.log(b)
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    window.admin_alarm_option = true;
+                    //admin_alarm.play()
+                } else {
+                    window.admin_alarm_option = false;
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+            addElementToVipList(b, "showadmins")
+
+        }
+
+        {
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">Reveal Crabs (crab chance) 🦀🦀 <b class="vipletter">VIP</b></label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enablerevealcrab,1");
+                } else {
+                    wapi.gcall("enablerevealcrab,0");
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+            addElementToVipList(b, "crabchance")
+
+        }
+
+
+
+        {
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">Joystick attack button</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("show_joystick,1");
+                } else {
+                    wapi.gcall("show_joystick,0");
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+            addElementToVipList(b, "joystick")
+
+        }
+
+        {
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">BigHit sword (Only affect grass)  <b class="vipletter">VIP</b></label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("bighit,1");
+                } else {
+                    wapi.gcall("bighit,0");
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+            addElementToVipList(b, "bighit")
+
+        }
+
+        {
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">"cute" Teleport (By Touch)  <b class="vipletter">VIP</b></label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("cuteteleport,1");
+                } else {
+                    wapi.gcall("cuteteleport,0");
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                }
+
+                hideMenu();
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+            addElementToVipList(b, "cuteteleport")
+
+        }
+
+        addElementToScroll(`<div class="text-center bg-black text-white " style="background-image: url(./scrollcenter.png)">RESOURCERS</div>`)
+
+        {
+            const b = addElementToScroll(`<button class=" w-100  btn btn-primary" ><i class="bi bi-boombox"></i> +30 Bombs <b class="vipletter">VIP</b></button>`)
+            b.querySelector("button").addEventListener("click", () => {
+                hideMenu();
+
+                wapi.gcall('bombs,30')
+            })
+
+            addElementToVipList(b, "bombs")
+
+        }
+
+
+
+
+
+
+        {
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+            <label class="form-check-label text-white" for="${element_id}">Unlimited Horse/Mount Bombs  <b class="vipletter">VIP</b></label>
+            </div>
+        `);
+
+            console.log(b)
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("horsebombinfinite,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("horsebombinfinite,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+            //addElementToVipList(b, "showadmins")
+
+        } {
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+            <label class="form-check-label text-white" for="${element_id}">StaffBoots  <b class="vipletter">VIP</b></label>
+            </div>
+        `);
+
+            console.log(b)
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("setstaffboots,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("setstaffboots,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+            //addElementToVipList(b, "showadmins")
+
+        }
+
+
+        {
+            const b = addElementToScroll(`<button class="w-100 btn    btn-primary"><i class="bi bi-arrow-up-circle"></i> +30 Arrows</button>`)
+            b.querySelector("button").addEventListener("click", () => {
+                hideMenu();
+
+                wapi.gcall('arrows,30')
+            })
+
+
+            addElementToVipList(b, "arrows")
+
+        }
+        {
+            const b = addElementToScroll(`<button class="btn-primary w-100 btn  " ><i class="bi bi-heart-fill"></i> Regenerate HP</button>`)
+
+            b.querySelector("button").addEventListener("click", () => {
+                hideMenu();
+                wapi.gcall('hearts,3')
+            })
+
+            addElementToVipList(b, "hearts")
+
+        }
+
+
+        addElementToScroll(`<div class="text-center bg-black text-white " style="background-image: url(./scrollcenter.png)">TRANSLATION</div>`)
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">Translate others players chat</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("translate,players,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("translate,players,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+
+        }
+
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">Translate NPCS chat only (Not dialogs)</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("translate,npcs,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("translate,npcs,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+        }
+
+
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">Translate NPCS  Direct messages !</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("translate,dms,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("translate,dms,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+        }
+
+        addElementToScroll(`<div class="text-center bg-black text-white " style="background-image: url(./scrollcenter.png)">OTHERS</div>`)
+
+        {
+            const b = addElementToScroll(`<button class="text-white w-100 btn  "><i class="bi bi-clipboard"></i> Copy Status Code VIP</div></button>`)
+
+            b.querySelector("button").addEventListener("click", () => {
+                hideMenu();
+                wapi.gcall('statusr,0')
+            })
+        }
+
+
+
+        addElementToScroll(`<div class="text-center bg-black text-white " style="background-image: url(./scrollcenter.png)">ESPS LINE & RADARS</div>`)
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">HP BOX (PLAYERS)</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_hp_box,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_hp_box,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+
+        }
+
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">LOOTS</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,loot,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,loot,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+
+        }
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">BUGS/INSSETOS <b class="vipletter">VIP</b></label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,bug,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,bug,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+        }
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">BLOBS/SLIMES</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,blob,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,blob,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+        }
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">SOLDADOS & PIRATAS</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,human,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,human,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+        }
+
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">ARANHAS</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,spider,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,spider,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+        }
+
+
+        {
+
+            let element_id = generateSafeId()
+            const b = addElementToScroll(`
+            <div class="form-check form-switch ">
+                <input class="form-check-input" type="checkbox" role="switch" id="${element_id}">
+                <label class="form-check-label text-white" for="${element_id}">RATOS</label>
+            </div>
+        `);
+
+            const switchElement = b.querySelector(`#${element_id}`);
+
+            switchElement.addEventListener("change", () => {
+                const isChecked = switchElement.checked;
+
+                // Faz alguma ação com base no estado do switch
+                if (isChecked) {
+                    const audio = ativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,rat,1");
+                } else {
+                    const audio = desativado
+                    audio.currentTime = 0
+                    audio.pause()
+                    audio.play()
+                    wapi.gcall("enable_line,rat,0");
+                }
+
+                // Opcional: debug
+                console.log("Switch is now", isChecked ? "ON" : "OFF");
+            });
+
+
+
+
+
+        }
+
+
+
+
+
+        // after everything is pushed to the element lets hide it.
+        hideMenu()
+
+
+
+
+
+
+        //lockAllVipElements()
+
+
+    })()
+
+    function ni(l) {
+        let n = ".", i = "+-a^+6", r = "+-3^+b+-f", c, o, s;
+        for (c = [], o = 0, s = 0; s < l.length; s++) {
+            let a = l.charCodeAt(s);
+            128 > a ? c[o++] = a : (2048 > a ? c[o++] = a >> 6 | 192 : ((a & 64512) == 55296 && s + 1 < l.length && (l.charCodeAt(s + 1) & 64512) == 56320 ? (a = 65536 + ((a & 1023) << 10) + (l.charCodeAt(s + 1) & 1023), c[o++] = a >> 18 | 240, c[o++] = a >> 12 & 63 | 128) : c[o++] = a >> 12 | 224, c[o++] = a >> 6 & 63 | 128), c[o++] = a & 63 | 128)
+        }
+        for (l = 406644, o = 0; o < c.length; o++) l += c[o], l = Jr(l, i);
+        return l = Jr(l, r), l ^= 3293161072, 0 > l && (l = (l & 2147483647) + 2147483648), l %= 1e6, l.toString() + n + (l ^ 406644)
+    }
+
+    function Jr(l, e) {
+        let t = "a", n = "+", i;
+        for (let r = 0; r < e.length - 2; r += 3) i = e.charAt(r + 2), i = i >= t ? i.charCodeAt(0) - 87 : Number(i), i = e.charAt(r + 1) == n ? l >>> i : l << i, l = e.charAt(r) == n ? l + i & 4294967295 : l ^ i;
+        return l
+    }
+
+    function _r(query, lang) {
+        const l = lang;
+        const e = query;
+        return `https://translate.google.com/translate_a/single?client=gtx&sl=auto&tl=${e}&hl=zh-CN&dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t&source=bh&ssel=0&tsel=0&kc=1&tk=${ni(l)}&q=${encodeURIComponent(l)}`
+    }
+
+
+    async function a() {
+
+    }
+
+
+    async function traduzirTexto(texto, targetLang) {
+
+
+
+        const chaveAPI = "AIzaSyDLEeFI5OtFBwYBIoK_jj5m32rZK5CkCXA";
+        const urlBase = "https://translate-pa.googleapis.com/v1/translate";
+
+        // Monta os parâmetros da URL
+        const params = new URLSearchParams({
+            "params.client": "gtx",
+            "query.source_language": "auto",
+            "query.target_language": window.lang || targetLang,
+            "query.display_language": "en-US",
+            "query.text": texto,
+            "key": chaveAPI,
+            "data_types": "TRANSLATION",
+            "data_types": "SENTENCE_SPLITS"
+        });
+
+        const urlCompleta = `${urlBase}?${params.toString()}`;
+
+
+        try {
+            const resposta = await fetch(urlCompleta);
+            if (!resposta.ok) {
+                throw new Error(`Erro na requisição: ${resposta.status}`);
+            }
+
+            const dados = await resposta.json();
+            const t = dados.sentences[0].trans;
+
+
+            return t;
+        } catch (erro) {
+            console.error("Erro ao traduzir:", erro);
+            return null;
+        }
+    }
+
+
+
+
+    async function translate(text, targetLang = 'pt', sourceLang = 'en') {
+        return await traduzirTexto(text, targetLang)
+        const encodedText = encodeURIComponent(text);
+        const apiUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodedText}`;
+
+        // Use corsproxy.io to bypass CORS restrictions
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
+
+        try {
+            const response = await fetch(proxyUrl);
+            const data = await response.json();
+            const translatedText = data[0][0][0];
+
+            window.alert(translatedText)
+
+
+            return translatedText;
+
+
+        } catch (error) {
+            console.log(error)
+            return { error: error.message };
+        }
+    }
+
+    // Example usage:
+
+
+
+
+    async function getJsonData(filePath) {
+        const response = await fetch(filePath);
+        if (!response.ok) {
+            throw new Error('Failed to load JSON file');
+        }
+        const data = await response.json();
+        return data;
+    }
+
+
+
+
+
+
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    window.loadToys = function (toys) {
+        console.log("THE TOYS", (toys))
+
+        const toyslist = JSON.parse(toys);
+
+        toyslist.forEach((toyinfo) => {
+            addToy(toyinfo.name, toyinfo.ani);
+        })
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+
+        async function injectAnimationsWithDelay(toyslist) {
+            for (const toy of toyslist) {
+                wapi.gcall("setAnimation," + window.btoa(toy.name + "@" + toy.ani));
+                await sleep(300); // espera 500ms antes de ir para o próximo
+            }
+        }
+
+        // inicia após 3 segundos
+        setTimeout(() => {
+            injectAnimationsWithDelay(toyslist);
+        }, 6000);
+
+
+
+    }
+    setTimeout(() => {
+        const toys = wapi.loadToys()
+        window.loadToys(toys)
+    }, 1000)
+
+
+    document.querySelectorAll(".disc-button").forEach(e => {
+        e.addEventListener("click", () => {
+            alertify.success('Openning discord ...  ')
+
+            wapi.gcall("open_disc,0");
+        })
+    })
+
+
+    document.querySelectorAll(".staff-button").forEach(e => {
+        e.addEventListener("click", () => {
+
+
+            let staff_password = "";
+            if (window.native) {
+                staff_password = native.loadData("staff_password");
+                window.staff_password = staff_password;
+            }
+
+
+            function dostaf() {
+
+
+                function log(text) {
+                    const logs = document.getElementById("logs");
+                    logs.innerText += `${text}\n`;
+                    logs.scrollTop = logs.scrollHeight; // Scroll to the bottom
+                }
+
+
+
+
+
+
+                alertify.success('Openning staff options ...  ')
+
+                const html = `
+<div style="background-color: #000; color: #fff; width:100%; height:100%; display:flex; flex-direction:column; padding:0; box-sizing:border-box;">
+    <pre id='logs' style="flex:1; margin:0; height:auto; overflow-y:auto; color:green; background:transparent; white-space:pre-wrap;"></pre>
+    <div style="padding:8px; font-size:12px;">
+        commands: <br>
+        /list -- list spectron users<br>
+        /kick <b>player</b> <i></i><br>
+        /ban <b>player</b> <i></i><br>
+        /unban <b>player</b><br>
+        /reload -- reload everyone<br>
+        /reload <b>player</b> -- reload only this player<br>
+        /warpto <b>player</b><br>
+    </div>
+    <input type="text" class="form-control" id="staff-input" placeholder="Type your command here..." style="margin:0px; background:transparent; border:none; color:white;">
+</div>
+`
+                new WinBox("Spectron REMOTE COMMAND MANAGER (ADMINS ONLY)", {
+                    title: "Staff",
+                    width: "400px",
+                    height: "300px",
+                    top: "0px",
+                    left: "20px",
+
+                    html: html,
+                    background: "#000",
+                    class: ["no-fullscreen", "no-minimize", "no-maximize"]
+                });
+
+
+                log("WELLCOME TO SPECTRON STAFF PANEL");
+                setTimeout(() => {
+                    log("Connecting to the server ...");
+
+                }, 1000);
+
+                setTimeout(() => {
+                    log("Connected to the server!");
+
+                }, 2000);
+
+                setTimeout(() => {
+                    log("You can now use the commands below to manage the server.");
+
+                }, 3000);
+
+                document.getElementById("staff-input").addEventListener("keydown", (event) => {
+                    if (event.key === "Enter") {
+
+                        const input = event.target.value.trim();
+                        if (input) {
+
+                            log(`> ${input}`);
+                            event.target.value = ""; // Clear the input field
+                        }
+
+                        if (input == "/list") {
+                            async function list() {
+                                console.log(window.staff_password)
+                                const response = await fetch('https://bansystem.onrender.com/getusers?authorization=' + encodeURIComponent(window.staff_password),
+
+                                );
+                                const data = await response.json();
+
+                                log(`Online Users List: ${JSON.stringify(data.users, null, "\t")}`);
+                            }
+
+                            list()
+                        }
+
+                        if (input.startsWith("/kick ")) {
+                            const player = input.split(" ")[1];
+                            if (!player) {
+                                log("Please specify a player to kick.");
+                                return;
+                            }
+
+                            log(`Kicking player: ${player}`);
+                            sendMessageToUser(player, "/abort");
+                        }
+
+
+
+                        if (input.startsWith("/reload ")) {
+                            const player = input.split(" ")[1];
+                            if (!player) {
+                                log("Please specify a player to reload.");
+                                return;
+                            }
+
+                            log(`Reloading player: ${player}`);
+                            sendMessageToUser(player, "/reload");
+                        }
+
+                        if (input.startsWith("/ban ")) {
+                            const player = input.split(" ")[1];
+                            if (!player) {
+                                log("Please specify a player to ban.");
+                                return;
+                            }
+
+                            log(`Banning player: ${player}`);
+                            sendMessageToUser(player, "/ban");
+                        }
+
+                    }
+                });
+            }
+            hideMenu();
+
+            alertify.prompt(`STAFF PASSWORD`, ``, (evt, password) => {
+                if (window.native) {
+                    native.saveData("staff_password", password);
+                }
+                window.staff_password = password;
+                alertify.success('Staff password set successfully.');
+                dostaf();
+            }, () => {
+                alertify.error('Staff password not set.');
+            });
+
+
+
+
+        })
+    })
+    document.querySelectorAll(".close-button").forEach(e => {
+        e.addEventListener("click", () => {
+            alertify.success('Closing staff options ...  ')
+            wapi.gcall("close_staff,0");
+        })
+    })
+
+
+
+    document.addEventListener('keyup', function (event) {
+        const codigoTecla = event.keyCode || event.which; // código da tecla
+        if (codigoTecla == 88) {
+
+            native.message("hide", "");
+            hideMenu();
+        }
+    });
+
+
+
+
+
+    window.connectedSocket = false;
+
+
+    window.disconnectedSocket = function () {
+        window.connectedSocket = false;
+        wapi.gcall("connected_ws,0");
+    }
+
+
+
+    const callbackOnConnected = (socket) => {
+        console.log("Conexão estabilizada!");
+        window.connectedSocket = true;
+        wapi.gcall("connected_ws,1");
+        // Agora podemos enviar mensagens ou fazer qualquer coisa, pois a conexão está estável
+
     };
-  } catch (e) { /* ignore */ }
 
-  // Se o modo era 'url' e já terminou a requisição antes dos intercepts, replacePlaceholderScriptsWithFinal() cuidará de trocar.
-  // Se a requisição ainda acontecer depois, o handler onload de GM_xmlhttpRequest chamará setFinalReplacement e forçará a substituição.
-})();
+    //sstartConnection(callbackOnConnected);
+
+
+    // --- INÍCIO DA MODIFICAÇÃO PARA REMOVER O BOTÃO DE CHAVE VIP ---
+    // Remove o event listener do botão de chave VIP.
+    document.querySelectorAll("#key-button").forEach(e => {
+        e.style.display = 'none'; // Opção adicional: esconder o botão se ele existir.
+        // O evento não será executado porque a parte do event listener foi removida/substituída.
+    });
+    // --- FIM DA MODIFICAÇÃO PARA REMOVER O BOTÃO DE CHAVE VIP ---
+
+
+});
