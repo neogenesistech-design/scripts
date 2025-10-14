@@ -2,69 +2,12 @@
 let reconnectInterval = null;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 5;  // Limite de tentativas de reconexão
-let socket; // Declaração da variável socket no escopo global/módulo
-
-// ----------------------------------------------------
-// Funções Auxiliares para Geração de Dados Aleatórios (Para Teste)
-// ----------------------------------------------------
-
-/**
- * Gera um ID de usuário numérico aleatório entre 10000 e 99999.
- * @returns {string} O ID aleatório como string.
- */
-function generateRandomId() {
-    return String(Math.floor(Math.random() * (99999 - 10000 + 1)) + 10000);
-}
-
-/**
- * Gera um nome aleatório com um prefixo e um número.
- * @returns {string} O nome aleatório.
- */
-function generateRandomName() {
-    const names = ["Tester", "Bot", "User", "Player"];
-    const randomIndex = Math.floor(Math.random() * names.length);
-    const randomNumber = Math.floor(Math.random() * 1000);
-    return `${names[randomIndex]}${randomNumber}`;
-}
-
-/**
- * Gera um número de ponto flutuante aleatório dentro de um intervalo.
- * @param {number} min - O valor mínimo (inclusivo).
- * @param {number} max - O valor máximo (inclusivo).
- * @returns {number} O número de ponto flutuante aleatório.
- */
-function generateRandomFloat(min, max) {
-    return (Math.random() * (max - min) + min).toFixed(2); // Duas casas decimais
-}
-
-/**
- * Gera um array de strings aleatórias para "props".
- * @returns {string[]} Um array com 1 a 3 strings aleatórias.
- */
-function generateRandomProps() {
-    const allProps = ["admin", "moderator", "vip", "gold", "premium", "developer"];
-    const numberOfProps = Math.floor(Math.random() * 3) + 1; // 1 a 3 props
-    const selectedProps = [];
-    
-    // Seleciona 'numberOfProps' únicos
-    for (let i = 0; i < numberOfProps; i++) {
-        const remainingProps = allProps.filter(p => !selectedProps.includes(p));
-        if (remainingProps.length === 0) break;
-
-        const randomIndex = Math.floor(Math.random() * remainingProps.length);
-        selectedProps.push(remainingProps[randomIndex]);
-    }
-
-    return selectedProps;
-}
-
-// ----------------------------------------------------
-// Funções de Conexão e Reconexão (Mantidas)
-// ----------------------------------------------------
+let socket; // Variável para o objeto WebSocket, necessária para que login e outras funções a acessem.
 
 // Função para conectar ao servidor WebSocket
 function connect(callbackOnConnected) {
     const socket = new WebSocket("wss://bansystem.onrender.com/chat");
+
 
     socket.onopen = () => {
         console.log("Conectado ao servidor WebSocket.");
@@ -88,9 +31,10 @@ function connect(callbackOnConnected) {
                 onData(data);
             }
         } else {
-            if (window.broadCast){
-                window.broadCast(event.data);
-            }
+           if (window.broadCast){
+               window.broadCast(event.data);
+
+           }
             
         }
 
@@ -128,26 +72,30 @@ function handleReconnect(callbackOnConnected) {
     }
 }
 
-// ----------------------------------------------------
-// Funções de Envio de Dados - MODIFICADAS PARA DADOS ALEATÓRIOS
-// ----------------------------------------------------
-
-// Função para fazer o login do usuário - AGORA ENVIA ID E NOME ALEATÓRIOS
+// Função para fazer o login do usuário
 function login(id, name) {
-    // Gerando dados aleatórios para teste
-    const randomId = generateRandomId();
-    const randomName = generateRandomName();
-
     const payload = {
         type: "login",
-        id: randomId,
-        name: randomName
+        id: id, // Este é o 'login'
+        name: name // Este é o 'nome'
     };
+    
+    // --- ALTERAÇÃO AQUI: CAPTURAR E IMPRIMIR O PAYLOAD DE FORMA GRANDE NO CONSOLE ---
+    const bigStyle = 'font-size: 24px; font-weight: bold; color: white; background: #007bff; padding: 5px 10px; border-radius: 5px;';
+    const dataStyle = 'font-size: 20px; color: #17a2b8; font-weight: bold;';
+    
+    console.log(
+        `%cENVIANDO PAYLOAD LOGIN%c\nNome: ${payload.name} \nLogin (ID): ${payload.id} \nTipo: ${payload.type}`, 
+        bigStyle, 
+        dataStyle
+    );
+    // ---------------------------------------------------------------------------------
+    
     socket.send(JSON.stringify(payload));
-    console.log(`[ALEATÓRIO] Tentando login com ID: ${randomId} e nome: ${randomName}`);
+    console.log(`Tentando login com ID: ${id} e nome: ${name}`);
 }
 
-// Função para obter a lista de usuários conectados (Mantida)
+// Função para obter a lista de usuários conectados
 function getUserList() {
     const payload = {
         type: "getList"
@@ -156,39 +104,27 @@ function getUserList() {
     console.log("Solicitando lista de usuários conectados...");
 }
 
-// Função para atualizar o nível e as coordenadas (x, y) - AGORA ENVIA DADOS ALEATÓRIOS
+// Função para atualizar o nível e as coordenadas (x, y)
 function updateLevel(level, x, y) {
-    // Gerando dados aleatórios para teste
-    const randomLevel = String(Math.floor(Math.random() * 100) + 1); // Level entre 1 e 100
-    const randomX = generateRandomFloat(0, 1000); // X entre 0 e 1000
-    const randomY = generateRandomFloat(0, 1000); // Y entre 0 e 1000
-
     const payload = {
         type: "updateLevel",
-        level: randomLevel,
-        x: Number.parseFloat(randomX),
-        y: Number.parseFloat(randomY)
+        level: level,
+        x: Number.parseFloat(x),
+        y: Number.parseFloat(y)
     };
     socket.send(JSON.stringify(payload));
-    console.log(`[ALEATÓRIO] Atualizando level: ${randomLevel}, x: ${randomX}, y: ${randomY}`);
+    console.log(`Atualizando level: ${level}, x: ${x}, y: ${y}`);
 }
 
-// Função para atualizar as propriedades (props) - AGORA ENVIA PROPS ALEATÓRIOS
-function updateProps(props) {
-    // Gerando dados aleatórios para teste
-    const randomProps = generateRandomProps();
 
+function updateProps(props) {
     const payload = {
         type: "props",
-        props: randomProps
+        props: props
     };
     socket.send(JSON.stringify(payload));
-    console.log(`[ALEATÓRIO] Atualizando propriedades: ${randomProps.join(", ")}`);
+    console.log(`Atualizando propriedades: ${props.join(", ")}`);
 }
-
-// ----------------------------------------------------
-// Outras Funções (Mantidas)
-// ----------------------------------------------------
 
 // Função para enviar uma mensagem para um usuário específico
 function sendMessageToUser(userId, message) {
@@ -213,10 +149,8 @@ function sendMessageToAll(message) {
 
 // Função para fechar a conexão com o servidor WebSocket
 function closeConnection() {
-    if (socket) {
-        socket.close();
-        console.log("Conexão com o servidor fechada.");
-    }
+    socket.close();
+    console.log("Conexão com o servidor fechada.");
 }
 
 // Função onData (a ser definida pelo cliente)
@@ -236,65 +170,36 @@ function onData(data) {
         console.log("Tipo de mensagem desconhecido:", data);
     }
 
-    // Certifica-se de que window.onData existe antes de chamar
-    if (window.onData && typeof window.onData === "function") {
-        window.onData(data)
-    }
+
+    window.onData(data)
 }
 
 // Função para iniciar a conexão e tentar reconectar
 function startConnection(callbackOnConnected) {
-    // Atribui o socket retornado à variável global/módulo
-    socket = connect(callbackOnConnected); 
+    socket = connect(callbackOnConnected);
 }
 
-// ----------------------------------------------------
-// Exemplo de uso (Não alterado, mas irá usar os dados aleatórios)
-// ----------------------------------------------------
+// Exemplo de uso:
 
-/*
-// Exemplo de como usar:
-// Defina uma função de callback para quando a conexão estiver estável
-const onSocketConnected = (sock) => {
-    // sock é o objeto WebSocket
-    console.log("Conexão estável. Pronta para enviar dados de teste!");
+// Callback para ser executado assim que a conexão for estabilizada
 
-    // Chamadas de função de teste - ELAS AGORA ENVIARÃO DADOS ALEATÓRIOS
-    login("12345", "João"); // Os argumentos são ignorados
 
-    getUserList();
+// Inicia a conexão, fornecendo o callback para quando a conexão for estabilizada
 
-    updateLevel("2", 10.5, 20.3); // Os argumentos são ignorados
+// // Exemplo de login (id e nome do usuário)
+// // login("12345", "João");
 
-    updateProps(["vip"]); // Os argumentos são ignorados
+// // Solicitar lista de usuários conectados
+// // getUserList();
 
-    sendMessageToUser("ID_QUALQUER", "Mensagem de teste."); // Esta função não foi alterada para aleatório
+// // Atualizar nível e coordenadas
+// // updateLevel("2", 10.5, 20.3);
 
-    // Para demonstrar o envio contínuo de dados aleatórios, você pode
-    // chamar as funções em um intervalo:
-    // setInterval(() => {
-    //     updateLevel();
-    // }, 5000); 
-};
+// // Enviar mensagem para um usuário específico
+// // sendMessageToUser("12345", "Oi João, você está online!");
 
-// Inicia a conexão
-startConnection(onSocketConnected);
+// // Enviar mensagem para todos os usuários
+// // sendMessageToAll("Mensagem para todos os usuários!");
 
-// Para fechar a conexão após um tempo:
-// setTimeout(closeConnection, 60000); // Fecha após 60 segundos
-*/
-
-// Exportação/Disponibilização das funções (Se for um módulo ou ambiente específico)
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        startConnection,
-        login,
-        getUserList,
-        updateLevel,
-        updateProps,
-        sendMessageToUser,
-        sendMessageToAll,
-        closeConnection
-    };
-}
-// Se for em ambiente de navegador, as funções estão disponíveis no escopo global
+// Fechar a conexão com o servidor
+// // closeConnection();
