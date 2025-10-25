@@ -159,7 +159,7 @@ window.addEventListener("gameloaded", async () => {
         return true; // Simula sucesso de validação
     }
 
-    // A função validateKey é modificada para simplesmente ativar o VIP
+    // A função validateKey é modificada para simplesmente ativar o VIP.
     async function validateKey(key) {
         // IGNORANDO TODA A LÓGICA DE VALIDAÇÃO DE CHAVE E COMUNICAÇÃO COM O SERVIDOR
         console.log("Ignorando validação de chave. Ativando VIP.");
