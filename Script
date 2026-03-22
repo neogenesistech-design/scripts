@@ -21,42 +21,29 @@ function deleteCacheFiles() {
             const EXCLUDE_PATH = "files/levels/images/classiciphone";
 
             console.log("[deleteCacheFiles] Alvo: " + path);
-            console.log("[deleteCacheFiles] Exclusão Ignorada: Contém " + EXCLUDE_PATH);
 
             const targetDir = File.$new(path);
-            if (!targetDir.exists() || !targetDir.isDirectory()) {
-                console.log("[deleteCacheFiles] Pasta não existe ou não é diretório.");
-                return;
-            }
+            if (!targetDir.exists() || !targetDir.isDirectory()) return;
 
             const files = targetDir.listFiles();
-            if (!files || files.length === 0) {
-                console.log("[deleteCacheFiles] Nada para deletar.");
-                return;
-            }
+            if (!files || files.length === 0) return;
 
             for (let i = 0; i < files.length; i++) {
                 try {
                     const f = files[i];
                     const absolutePath = f.getAbsolutePath();
 
-                    // Verifica se o caminho contém a substring a ser excluída
                     if (absolutePath.includes(EXCLUDE_PATH)) {
-                        console.log("[deleteCacheFiles] PULANDO NÍVEL: " + absolutePath);
                         continue;
                     }
 
                     if (f.isDirectory()) {
                         deleteRecursive(f, EXCLUDE_PATH);
                     } else {
-                        const ok = f.delete();
-                        if (!ok) console.log("[deleteCacheFiles] Falha ao deletar file: " + absolutePath);
+                        f.delete();
                     }
-                } catch (err) {
-                    console.log("[deleteCacheFiles] Erro ao processar item: " + err);
-                }
+                } catch (err) {}
             }
-
             console.log("[deleteCacheFiles] Limpeza concluída.");
         } catch (e) {
             console.log("[deleteCacheFiles] Erro geral: " + e);
@@ -73,29 +60,20 @@ function deleteRecursive(file, excludePath) {
                     const f = sub[j];
                     const absolutePath = f.getAbsolutePath();
 
-                    if (absolutePath.includes(excludePath)) {
-                        console.log("[deleteRecursive] PARANDO RECURSÃO: " + absolutePath);
-                        continue;
-                    }
+                    if (absolutePath.includes(excludePath)) continue;
                     
                     if (f.isDirectory()) {
                         deleteRecursive(f, excludePath);
                     } else {
-                        const ok = f.delete();
-                        if (!ok) console.log("[deleteRecursive] Falha ao deletar file: " + absolutePath);
+                        f.delete();
                     }
-                } catch (err) {
-                    console.log("[deleteRecursive] Erro item: " + err);
-                }
+                } catch (err) {}
             }
         }
         if (!file.getAbsolutePath().includes(excludePath)) {
-            const okDir = file.delete();
-            if (!okDir) console.log("[deleteRecursive] Falha ao deletar pasta: " + file.getAbsolutePath());
+            file.delete();
         }
-    } catch (e) {
-        console.log("[deleteRecursive] Erro recursivo: " + e);
-    }
+    } catch (e) {}
 }
 
 deleteCacheFiles();
@@ -110,91 +88,116 @@ setTimeout(() => {
     // Variáveis de Estado de Cheats
     let unhit = false;
     let unhit_mode = 1; // 1: Null, 2: Arg 0
-    let showAdmins = true; // Agora controlável pelo botão
+    let showAdmins = true; 
     let autoOFF = false;
     let afkInterval = null;
     let autoOffHasTriggered = false;
     
-    // Controle de Spam do Toast de Admins
+    // Controle de Spam e Detecção de Admin
     let lastAdminToastTime = 0;
+    let lastAdminSeenTime = 0; // Grava a última vez que um admin esteve na tela
     
     // Variáveis que contêm as referências dos botões para o AutoOff
     let unhitM1Button, unhitM2Button, antiAfkButton, autoOffButton;
-    let autoOffButtons = []; // Lista para todos os botões que o AutoOff deve resetar
+    let autoOffButtons = []; 
 
-    // --- HOOK UNHIT (Lógica Mestra) ---
+    // --- FUNÇÕES NATIVAS (ALPHA E DANO) ---
     let hurtPlayer_orig = null;
+    const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
     
+    // Strings de configuração de Alpha (0.3 = quase fantasma, 1 = visível)
+    const alphaNormalStr = createTString('alpha=1');
+    const alphaFadedStr = createTString('alpha=0.3');
+
+    // --- HOOK UNHIT ---
     Java.perform(() => {
         const HURT_PLAYER_PTR_NAME = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
         const hurtPlayer_ptr = Module.findExportByName("libqplay.so", HURT_PLAYER_PTR_NAME);
         
         if (hurtPlayer_ptr) {
             hurtPlayer_orig = new NativeFunction(hurtPlayer_ptr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-        
             const unhit_master_callback = new NativeCallback((a, b, c, d, e, f) => {
-                if (!unhit) {
-                    return hurtPlayer_orig(a, b, c, d, e, f);
-                }
-
-                if (unhit_mode === 1) {
-                    return 0; 
-                } else if (unhit_mode === 2) {
-                    return hurtPlayer_orig(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
-                }
-
+                if (!unhit) return hurtPlayer_orig(a, b, c, d, e, f);
+                if (unhit_mode === 1) return 0; 
+                else if (unhit_mode === 2) return hurtPlayer_orig(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
             }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
 
             Interceptor.replace(hurtPlayer_ptr, unhit_master_callback);
-            console.log(`[Unhit Hook] Função de dano substituída.`);
-        } else {
-            console.error("[Unhit Hook] Não foi possível encontrar a função nativa 'hurtPlayer'.");
         }
     });
 
-    // --- HOOK SHOW ADMINS & AUTO-OFF POR ADMIN ---
-    // Envolto em um setTimeout de 7 segundos como solicitado
+    // --- HOOK SHOW ADMINS & MANIPULAÇÃO DE ALPHA ---
     setTimeout(() => {
         Java.perform(() => {
             const accRgx = /^(pc\:|graal\d+|guest.*)/;
             
             Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 
                 'onEnter': function(args) { 
-                    const props = getPlayerProperties(args[0]);
+                    const playerPtr = args[0];
+                    const props = getPlayerProperties(playerPtr);
+                    
+                    // Prevenção: Não alterar propriedades se for o próprio player (evitar bugar o seu personagem)
+                    if (playerPtr.toInt32() === activeplayer.toInt32()) return;
+
                     const account = props.account ? props.account.toLowerCase() : '';
 
-                    if (account !== '' && !accRgx.test(account)) { 
+                    if (account !== '') { 
+                        const isAdmin = !accRgx.test(account);
+                        const now = Date.now();
                         
-                        // Lógica do Auto-Off (Desativa cheats listados no array)
-                        if (autoOFF && !autoOffHasTriggered) { 
-                            autoOffHasTriggered = true; 
-                            
-                            Java.perform(() => {
-                                showToast('Admin Detectado. Desativando cheats.'); 
-                                Java.scheduleOnMainThread(() => { 
-                                    for (const button of autoOffButtons) { 
-                                        button.reset(); 
-                                    } 
-                                }); 
-                            });
-                        }
+                        // Lógica se for ADMIN
+                        if (isAdmin) { 
+                            lastAdminSeenTime = now; // Atualiza o radar de tempo
 
-                        // Lógica do Show Admins (Aviso a cada 5 segundos)
-                        if (showAdmins) {
-                            const now = Date.now();
-                            if (now - lastAdminToastTime > 5000) {
-                                lastAdminToastTime = now;
-                                showToast(`Admin Próximo: ${props.nick}`, 0);
+                            // 1. Auto-Off
+                            if (autoOFF && !autoOffHasTriggered) { 
+                                autoOffHasTriggered = true; 
+                                Java.perform(() => {
+                                    showToast('Admin Detectado. Desativando cheats.'); 
+                                    Java.scheduleOnMainThread(() => { 
+                                        for (const button of autoOffButtons) { button.reset(); } 
+                                    }); 
+                                });
+                            }
+
+                            // 2. Manipulação de Alpha do Admin + Toast
+                            if (showAdmins) {
+                                // Força o admin a ficar visível se ele estiver invisível
+                                if (props.alpha < 1.0) {
+                                    setVarValue(playerPtr, alphaNormalStr);
+                                }
+
+                                if (now - lastAdminToastTime > 5000) {
+                                    lastAdminToastTime = now;
+                                    showToast(`ADM REVELADO: ${props.nick}`, 0);
+                                }
+                            }
+                        } 
+                        // Lógica se for JOGADOR COMUM
+                        else {
+                            if (showAdmins) {
+                                // Se um admin foi visto nos últimos 6 segundos, aplica o modo fantasma nos comuns
+                                if (now - lastAdminSeenTime < 6000) {
+                                    // Só aplica se o player comum estiver visível (Evita spam de comandos na memória)
+                                    if (props.alpha > 0.9) {
+                                        setVarValue(playerPtr, alphaFadedStr);
+                                    }
+                                } else {
+                                    // Sem admin por perto. Restaura jogadores normais.
+                                    // Só aplica se o player estiver com o alpha enfraquecido por NÓS (0.3)
+                                    if (props.alpha > 0.25 && props.alpha < 0.35) {
+                                        setVarValue(playerPtr, alphaNormalStr);
+                                    }
+                                }
                             }
                         }
                     }
                 } 
             });
-            console.log(`[Show Admins Hook] Monitoramento de admins iniciado.`);
         });
     }, 7000);
 
-    // Funções de Baixo Nível (MANTIDAS EXATAMENTE IGUAIS)
+    // --- FUNÇÕES DE BAIXO NÍVEL E UTILITÁRIOS ---
     function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
     function createTString(str) { 
         var str_pointer = malloc(4); 
@@ -215,9 +218,12 @@ setTimeout(() => {
         } 
         return ""; 
     }
+    
     const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    
     function getPlayerProperties(p) { 
         return { 
+            "alpha": Memory.readFloat(p.add(356)), // Adicionado leitura do Alpha para a nova lógica
             "nick": readTString(p.add(464)), 
             "account": readTString(p.add(696)), 
             "x": Memory.readDouble(p.add(0x238)), 
@@ -225,7 +231,7 @@ setTimeout(() => {
         }; 
     }
 
-    // --- FUNÇÕES UTILITÁRIAS ANDROID (MANTIDAS EXATAMENTE IGUAIS) ---
+    // --- FUNÇÕES UTILITÁRIAS ANDROID ---
     function getClassLoader() {
         return {
             Gravity: Java.use("android.view.Gravity"),
@@ -262,32 +268,19 @@ setTimeout(() => {
         });
     }
 
-    // --- FUNÇÃO CLICK SIMPLES (MANTIDA EXATAMENTE IGUAL) ---
+    // --- FUNÇÃO CLICK SIMPLES (ANTI AFK) ---
     const call_antiAfk = { 
-        on() { 
-            console.log("[AntiAfk] Ativado."); 
-            if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); 
-        }, 
-        off() { 
-            if (afkInterval) { 
-                clearInterval(afkInterval); 
-                afkInterval = null; 
-                console.log("[AntiAfk] Desativado.");
-            } 
-        } 
+        on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); }, 
+        off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } } 
     };
     function click() { 
         Java.perform(() => 
             Java.scheduleOnMainThread(() => { 
                 const classLoader = getClassLoader();
                 const mainActivity = getMainActivity(classLoader);
-                const targetX = 1; 
-                const targetY = 1; 
-                
                 let time = Java.use("android.os.SystemClock").uptimeMillis(); 
-                let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, targetX, targetY, 0); 
+                let event = Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0); 
                 mainActivity.dispatchTouchEvent(event); 
-                showToast("Anti-AFK: Click enviado.");
             })
         ); 
     }
@@ -302,19 +295,12 @@ setTimeout(() => {
         off() { unhit = false; showToast("Unhit Desativado."); } 
     };
     const call_autoOFF = { 
-        on() { 
-            autoOFF = true; 
-            autoOffHasTriggered = false; 
-            showToast("Auto-Off por Admin Ativo."); 
-        }, 
-        off() { 
-            autoOFF = false; 
-            showToast("Auto-Off por Admin Desativado."); 
-        } 
+        on() { autoOFF = true; autoOffHasTriggered = false; showToast("Auto-Off por Admin Ativo."); }, 
+        off() { autoOFF = false; showToast("Auto-Off por Admin Desativado."); } 
     };
     const call_showAdmins = { 
-        on() { showAdmins = true; showToast("Alertas de Admin Ativados."); }, 
-        off() { showAdmins = false; showToast("Alertas de Admin Desativados."); } 
+        on() { showAdmins = true; showToast("Alertas Visuais Ativados."); }, 
+        off() { showAdmins = false; showToast("Alertas Visuais Desativados."); } 
     };
 
     // --- INICIALIZAÇÃO DA UI ---
@@ -330,7 +316,6 @@ setTimeout(() => {
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
 
-            // Função de UI Original
             function createToggleButton(text, callbacks, startOn = false) {
                 const button = classLoader.TextView.$new(mainActivity);
                 let isOn = startOn;
@@ -373,7 +358,7 @@ setTimeout(() => {
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
             mainBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             mainBarLayout.setGravity(Gravity.CENTER.value);
-            mainBarLayout.setVisibility(View.GONE.value); // Oculto no início
+            mainBarLayout.setVisibility(View.GONE.value); 
             
             const bottomLayout = classLoader.LinearLayout.$new(mainActivity);
             const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
@@ -396,7 +381,7 @@ setTimeout(() => {
             topLayout.setGravity(Gravity.TOP.value | Gravity.CENTER_HORIZONTAL.value);
             topLayout.addView(topBarLayout); 
 
-            // Botão de Ocultar/Mostrar
+            // Botão de Ocultar/Mostrar Menu
             const call_hideCheats = {
                 on() { mainBarLayout.setVisibility(View.VISIBLE.value); },
                 off() { mainBarLayout.setVisibility(View.GONE.value); }
@@ -418,7 +403,7 @@ setTimeout(() => {
             topBarLayout.addView(hideCheatsButton.view);
             topBarLayout.addView(topInfoTextView);
 
-            // Função para adicionar botões normais e registrar no AutoOff
+            // Adiciona botões normais e registrar no AutoOff
             const addToggle = (text, callbacks, startOn = false) => {
                 const button = createToggleButton(text, callbacks, startOn);
                 mainBarLayout.addView(button.view);
@@ -432,16 +417,14 @@ setTimeout(() => {
             antiAfkButton = addToggle("Anti Afk", call_antiAfk, false);
             autoOffButton = addToggle("Auto Off", call_autoOFF, false);
             
-            // Botão Revelar ADM (Adicionado fora da função addToggle para não ir para o autoOffButtons)
+            // Botão Revelar ADM (Fica fora da lista do autoOffButtons propositalmente)
             const showAdminsButton = createToggleButton("Revelar ADM", call_showAdmins, true);
             mainBarLayout.addView(showAdminsButton.view);
-            // NOTA: showAdminsButton NÃO entra no array autoOffButtons!
 
-            // Adiciona os layouts principais na tela
             mainActivity.addContentView(topLayout, topParams);
             mainActivity.addContentView(bottomLayout, bottomParams);
 
-            // Lógica de atualização do texto de info
+            // Lógica de atualização do texto de info do seu personagem
             setInterval(() => {
                 try {
                     const props = getPlayerProperties(activeplayer);
@@ -449,9 +432,7 @@ setTimeout(() => {
                         const infoText = `  Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
                         topInfoTextView.setText(classLoader.String.$new(infoText));
                     });
-                } catch(e) {
-                    // Ignora erros caso o jogador ainda não esteja no mapa
-                }
+                } catch(e) {}
             }, 500);
         });
     });
