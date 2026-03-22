@@ -87,25 +87,33 @@ setTimeout(() => {
 
     // Variáveis de Estado de Cheats
     let unhit = false;
-    let unhit_mode = 1; // 1: Null, 2: Arg 0
+    let unhit_mode = 1; 
     let showAdmins = true; 
     let autoOFF = false;
     let afkInterval = null;
     let autoOffHasTriggered = false;
+    let wallhack = false;
     
+    // Variáveis de Explosão
+    let canExplode = false;
+    let explosionsInterval = null;
+    let explosionRadius = 90;
+
     // Controle de Spam e Detecção de Admin
     let lastAdminToastTime = 0;
-    let lastAdminSeenTime = 0; // Grava a última vez que um admin esteve na tela
+    let lastAdminSeenTime = 0; 
     
-    // Variáveis que contêm as referências dos botões para o AutoOff
-    let unhitM1Button, unhitM2Button, antiAfkButton, autoOffButton;
     let autoOffButtons = []; 
 
-    // --- FUNÇÕES NATIVAS (ALPHA E DANO) ---
+    // --- FUNÇÕES NATIVAS, ALPHAS E EXPLOSÕES ---
     let hurtPlayer_orig = null;
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
     
-    // Strings de configuração de Alpha (0.3 = quase fantasma, 1 = visível)
+    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
+    const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
+    const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
+
     const alphaNormalStr = createTString('alpha=1');
     const alphaFadedStr = createTString('alpha=0.3');
 
@@ -126,6 +134,44 @@ setTimeout(() => {
         }
     });
 
+    // --- HOOK WALLHACK ---
+    Java.perform(() => {
+        const wallhack_ptr = Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb");
+        if (wallhack_ptr) {
+            Interceptor.attach(wallhack_ptr, { 
+                'onLeave': function(ret) { 
+                    if (wallhack) ret.replace(0); 
+                } 
+            });
+        }
+    });
+
+    // --- HOOK EXPLOSÃO ---
+    Java.perform(() => {
+        const explode_trigger_ptr = Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd");
+        if(explode_trigger_ptr) {
+            Interceptor.attach(explode_trigger_ptr, { 
+                onEnter: function(args) { 
+                    if (!canExplode) return; 
+                    canExplode = false; 
+                    makeExplosion(args[0], explosionRadius); 
+                } 
+            });
+        }
+    });
+
+    function makeExplosion(level, radius) { 
+        if (!level) return; 
+        const playerX = getlocalx(activeplayer); 
+        const playerY = getlocaly(activeplayer); 
+        const offset = Math.floor(radius / 2); 
+        for (let i = 0; i < radius; i++) { 
+            for (let j = 0; j < radius; j++) { 
+                putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); 
+            } 
+        } 
+    }
+
     // --- HOOK SHOW ADMINS & MANIPULAÇÃO DE ALPHA ---
     setTimeout(() => {
         Java.perform(() => {
@@ -136,7 +182,6 @@ setTimeout(() => {
                     const playerPtr = args[0];
                     const props = getPlayerProperties(playerPtr);
                     
-                    // Prevenção: Não alterar propriedades se for o próprio player (evitar bugar o seu personagem)
                     if (playerPtr.toInt32() === activeplayer.toInt32()) return;
 
                     const account = props.account ? props.account.toLowerCase() : '';
@@ -145,11 +190,9 @@ setTimeout(() => {
                         const isAdmin = !accRgx.test(account);
                         const now = Date.now();
                         
-                        // Lógica se for ADMIN
                         if (isAdmin) { 
-                            lastAdminSeenTime = now; // Atualiza o radar de tempo
+                            lastAdminSeenTime = now; 
 
-                            // 1. Auto-Off
                             if (autoOFF && !autoOffHasTriggered) { 
                                 autoOffHasTriggered = true; 
                                 Java.perform(() => {
@@ -160,34 +203,20 @@ setTimeout(() => {
                                 });
                             }
 
-                            // 2. Manipulação de Alpha do Admin + Toast
                             if (showAdmins) {
-                                // Força o admin a ficar visível se ele estiver invisível
-                                if (props.alpha < 1.0) {
-                                    setVarValue(playerPtr, alphaNormalStr);
-                                }
-
+                                if (props.alpha < 1.0) setVarValue(playerPtr, alphaNormalStr);
                                 if (now - lastAdminToastTime > 5000) {
                                     lastAdminToastTime = now;
                                     showToast(`ADM REVELADO: ${props.nick}`, 0);
                                 }
                             }
                         } 
-                        // Lógica se for JOGADOR COMUM
                         else {
                             if (showAdmins) {
-                                // Se um admin foi visto nos últimos 6 segundos, aplica o modo fantasma nos comuns
                                 if (now - lastAdminSeenTime < 6000) {
-                                    // Só aplica se o player comum estiver visível (Evita spam de comandos na memória)
-                                    if (props.alpha > 0.9) {
-                                        setVarValue(playerPtr, alphaFadedStr);
-                                    }
+                                    if (props.alpha > 0.9) setVarValue(playerPtr, alphaFadedStr);
                                 } else {
-                                    // Sem admin por perto. Restaura jogadores normais.
-                                    // Só aplica se o player estiver com o alpha enfraquecido por NÓS (0.3)
-                                    if (props.alpha > 0.25 && props.alpha < 0.35) {
-                                        setVarValue(playerPtr, alphaNormalStr);
-                                    }
+                                    if (props.alpha > 0.25 && props.alpha < 0.35) setVarValue(playerPtr, alphaNormalStr);
                                 }
                             }
                         }
@@ -219,11 +248,9 @@ setTimeout(() => {
         return ""; 
     }
     
-    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
-    
     function getPlayerProperties(p) { 
         return { 
-            "alpha": Memory.readFloat(p.add(356)), // Adicionado leitura do Alpha para a nova lógica
+            "alpha": Memory.readFloat(p.add(356)), 
             "nick": readTString(p.add(464)), 
             "account": readTString(p.add(696)), 
             "x": Memory.readDouble(p.add(0x238)), 
@@ -268,7 +295,7 @@ setTimeout(() => {
         });
     }
 
-    // --- FUNÇÃO CLICK SIMPLES (ANTI AFK) ---
+    // --- CALLBACKS PARA OS BOTÕES ---
     const call_antiAfk = { 
         on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); }, 
         off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } } 
@@ -284,23 +311,14 @@ setTimeout(() => {
             })
         ); 
     }
-
-    // --- CALLBACKS PARA OS BOTÕES ---
-    const call_unhit_m1 = { 
-        on() { unhit = true; unhit_mode = 1; showToast("Unhit Ativo (Modo: Null)."); }, 
-        off() { unhit = false; showToast("Unhit Desativado."); } 
-    };
-    const call_unhit_m2 = { 
-        on() { unhit = true; unhit_mode = 2; showToast("Unhit Ativo (Modo: Zero Args)."); }, 
-        off() { unhit = false; showToast("Unhit Desativado."); } 
-    };
-    const call_autoOFF = { 
-        on() { autoOFF = true; autoOffHasTriggered = false; showToast("Auto-Off por Admin Ativo."); }, 
-        off() { autoOFF = false; showToast("Auto-Off por Admin Desativado."); } 
-    };
-    const call_showAdmins = { 
-        on() { showAdmins = true; showToast("Alertas Visuais Ativados."); }, 
-        off() { showAdmins = false; showToast("Alertas Visuais Desativados."); } 
+    const call_unhit_m1 = { on() { unhit = true; unhit_mode = 1; showToast("Unhit (M1) Ativo."); }, off() { unhit = false; } };
+    const call_unhit_m2 = { on() { unhit = true; unhit_mode = 2; showToast("Unhit (M2) Ativo."); }, off() { unhit = false; } };
+    const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; showToast("Auto-Off Ativo."); }, off() { autoOFF = false; } };
+    const call_showAdmins = { on() { showAdmins = true; showToast("Radar Visual Ativo."); }, off() { showAdmins = false; showToast("Radar Visual Desativado."); } };
+    const call_wallhack = { on() { wallhack = true; showToast("Wallhack Ativo."); }, off() { wallhack = false; showToast("Wallhack Desativado."); } };
+    const call_explode = { 
+        on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 200); }, 
+        off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } 
     };
 
     // --- INICIALIZAÇÃO DA UI ---
@@ -354,19 +372,57 @@ setTimeout(() => {
                 return { view: button, reset: reset };
             }
 
+            function createHoldButton(text, action) { 
+                const button = classLoader.TextView.$new(mainActivity); 
+                let holdInterval = null; 
+                button.setText(classLoader.String.$new(text)); 
+                button.setTextColor(classLoader.Color.WHITE.value); 
+                button.setBackgroundColor(COLOR_OFF); 
+                button.setPadding(PADDING, PADDING, PADDING, PADDING); 
+                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); 
+                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); 
+                button.setLayoutParams(layoutParams); 
+                button.setOnTouchListener(Java.registerClass({ 
+                    name: "com.example.TouchListener" + Math.random().toString(36).substring(2), 
+                    implements: [classLoader.View_OnTouchListener], 
+                    methods: { 
+                        onTouch(v, event) { 
+                            switch (event.getAction()) { 
+                                case classLoader.MotionEvent.ACTION_DOWN.value: action(); holdInterval = setInterval(action, 100); return true; 
+                                case classLoader.MotionEvent.ACTION_UP.value: if (holdInterval) clearInterval(holdInterval); holdInterval = null; return true; 
+                            } 
+                            return false; 
+                        } 
+                    } 
+                }).$new()); 
+                return button; 
+            }
+
             // Layouts
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
-            mainBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             mainBarLayout.setGravity(Gravity.CENTER.value);
             mainBarLayout.setVisibility(View.GONE.value); 
             
+            // Sub-barras para organizar os botões
+            const row1 = classLoader.LinearLayout.$new(mainActivity);
+            row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            row1.setGravity(Gravity.CENTER.value);
+            
+            const row2 = classLoader.LinearLayout.$new(mainActivity);
+            row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            row2.setGravity(Gravity.CENTER.value);
+
+            mainBarLayout.addView(row1);
+            mainBarLayout.addView(row2);
+
             const bottomLayout = classLoader.LinearLayout.$new(mainActivity);
             const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
             bottomLayout.setLayoutParams(bottomParams);
             bottomLayout.setGravity(Gravity.BOTTOM.value | Gravity.CENTER_HORIZONTAL.value);
             bottomLayout.addView(mainBarLayout);
 
-            // Layout da Barra Superior
+            // Barra Superior
             const topInfoTextView = classLoader.TextView.$new(mainActivity);
             topInfoTextView.setTextColor(classLoader.Color.WHITE.value);
             topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
@@ -381,7 +437,6 @@ setTimeout(() => {
             topLayout.setGravity(Gravity.TOP.value | Gravity.CENTER_HORIZONTAL.value);
             topLayout.addView(topBarLayout); 
 
-            // Botão de Ocultar/Mostrar Menu
             const call_hideCheats = {
                 on() { mainBarLayout.setVisibility(View.VISIBLE.value); },
                 off() { mainBarLayout.setVisibility(View.GONE.value); }
@@ -403,28 +458,40 @@ setTimeout(() => {
             topBarLayout.addView(hideCheatsButton.view);
             topBarLayout.addView(topInfoTextView);
 
-            // Adiciona botões normais e registrar no AutoOff
-            const addToggle = (text, callbacks, startOn = false) => {
+            const addToggle = (row, text, callbacks, startOn = false) => {
                 const button = createToggleButton(text, callbacks, startOn);
-                mainBarLayout.addView(button.view);
+                row.addView(button.view);
                 autoOffButtons.push(button);
-                return button;
             };
             
             // --- INSERÇÃO DOS BOTÕES ---
-            unhitM1Button = addToggle("Unhit (M1)", call_unhit_m1, false);
-            unhitM2Button = addToggle("Unhit (M2)", call_unhit_m2, false);
-            antiAfkButton = addToggle("Anti Afk", call_antiAfk, false);
-            autoOffButton = addToggle("Auto Off", call_autoOFF, false);
+            addToggle(row1, "Unhit (M1)", call_unhit_m1, false);
+            addToggle(row1, "Anti Afk", call_antiAfk, false);
+            addToggle(row1, "Wall Hack", call_wallhack, false);
+            addToggle(row1, "Auto Off", call_autoOFF, false);
             
-            // Botão Revelar ADM (Fica fora da lista do autoOffButtons propositalmente)
-            const showAdminsButton = createToggleButton("Revelar ADM", call_showAdmins, true);
-            mainBarLayout.addView(showAdminsButton.view);
+            // Botão Revelar ADM (Fica fora da lista autoOffButtons propositalmente)
+            const showAdminsButton = createToggleButton("Radar ADM", call_showAdmins, true);
+            row2.addView(showAdminsButton.view);
+
+            // Controles de Explosão na Row 2
+            const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
+            explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            explosionControlLayout.setGravity(Gravity.CENTER.value);
+            const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode);
+            autoOffButtons.push(explosionButton);
+            const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`)));
+            const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); };
+            const increaseAction = () => { explosionRadius = Math.min(100, explosionRadius + 1); updateRadiusText(); };
+            explosionControlLayout.addView(createHoldButton("<", decreaseAction));
+            explosionControlLayout.addView(explosionButton.view);
+            explosionControlLayout.addView(createHoldButton(">", increaseAction));
+            
+            row2.addView(explosionControlLayout);
 
             mainActivity.addContentView(topLayout, topParams);
             mainActivity.addContentView(bottomLayout, bottomParams);
 
-            // Lógica de atualização do texto de info do seu personagem
             setInterval(() => {
                 try {
                     const props = getPlayerProperties(activeplayer);
