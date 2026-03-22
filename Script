@@ -465,11 +465,13 @@ setTimeout(() => {
             };
             
             // --- INSERÇÃO DOS BOTÕES ---
-            addToggle(row1, "Unhit (M1)", call_unhit_m1, false);
+            addToggle(row1, "Unhit(M1)", call_unhit_m1, false);
+            addToggle(row1, "Unhit(M2)", call_unhit_m2, false);
             addToggle(row1, "Anti Afk", call_antiAfk, false);
-            addToggle(row1, "Wall Hack", call_wallhack, false);
             addToggle(row1, "Auto Off", call_autoOFF, false);
             
+            addToggle(row2, "Wall Hack", call_wallhack, false);
+
             // Botão Revelar ADM (Fica fora da lista autoOffButtons propositalmente)
             const showAdminsButton = createToggleButton("Radar ADM", call_showAdmins, true);
             row2.addView(showAdminsButton.view);
