@@ -1,274 +1,212 @@
-// O código é envolto em um setTimeout para garantir que o processo do jogo
-// e todas as suas bibliotecas nativas (como a libqplay.so) estejam totalmente carregadas.
-
 // ========================================================================
-// FUNÇÕES DE LIMPEZA DE CACHE COM FILTRO DE EXCLUSÃO
+// 1. LIMPEZA DE CACHE (Executa imediatamente)
 // ========================================================================
-
 function deleteCacheFiles() {
     Java.perform(() => {
         try {
             const ActivityThread = Java.use("android.app.ActivityThread");
             const context = ActivityThread.currentApplication().getApplicationContext();
             const pkgName = context.getPackageName();
-            const Environment = Java.use("android.os.Environment");
             const File = Java.use("java.io.File");
-
-            const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
-            const path = externalPath + "/Android/data/" + pkgName + "/";
+            const env = Java.use("android.os.Environment");
             
-            const EXCLUDE_PATH = "files/levels/images/classiciphone";
-
-            console.log("[deleteCacheFiles] Alvo: " + path);
+            const path = env.getExternalStorageDirectory().getAbsolutePath() + "/Android/data/" + pkgName + "/";
+            const EXCLUDE = "files/levels/images/classiciphone";
 
             const targetDir = File.$new(path);
-            if (!targetDir.exists() || !targetDir.isDirectory()) return;
-
-            const files = targetDir.listFiles();
-            if (!files || files.length === 0) return;
-
-            for (let i = 0; i < files.length; i++) {
-                const f = files[i];
-                const absolutePath = f.getAbsolutePath();
-                if (absolutePath.includes(EXCLUDE_PATH)) continue;
-
-                if (f.isDirectory()) {
-                    deleteRecursive(f, EXCLUDE_PATH);
-                } else {
-                    f.delete();
+            if (targetDir.exists() && targetDir.isDirectory()) {
+                const files = targetDir.listFiles();
+                if (files) {
+                    for (let i = 0; i < files.length; i++) {
+                        if (!files[i].getAbsolutePath().includes(EXCLUDE)) {
+                            // Deleta arquivos e chama recursão simplificada se for pasta
+                            if (files[i].isDirectory()) {
+                                // Recursão simples para não travar
+                                const sub = files[i].listFiles();
+                                if (sub) { for (let j=0; j<sub.length; j++) { if (!sub[j].getAbsolutePath().includes(EXCLUDE)) sub[j].delete(); } }
+                            }
+                            files[i].delete();
+                        }
+                    }
                 }
             }
-            console.log("[deleteCacheFiles] Limpeza concluída.");
-        } catch (e) {
-            console.log("[deleteCacheFiles] Erro: " + e);
-        }
+            console.log("[Cache] Limpeza concluída ou ignorada.");
+        } catch (e) { console.log("[Cache] Erro: " + e); }
     });
 }
 
-function deleteRecursive(file, excludePath) {
-    try {
-        const sub = file.listFiles();
-        if (sub && sub.length > 0) {
-            for (let j = 0; j < sub.length; j++) {
-                const f = sub[j];
-                if (f.getAbsolutePath().includes(excludePath)) continue;
-                if (f.isDirectory()) deleteRecursive(f, excludePath);
-                else f.delete();
-            }
-        }
-        if (!file.getAbsolutePath().includes(excludePath)) file.delete();
-    } catch (e) {}
-}
-
-// Executa limpeza imediata ao injetar
 deleteCacheFiles();
 
+// ========================================================================
+// 2. NÚCLEO DO SCRIPT (Com delay de segurança)
+// ========================================================================
 setTimeout(() => {
-    // --- VARIÁVEIS DE ESTADO ---
-    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
-    let unhit = false;
-    let unhit_mode = 1; 
-    let showAdminsEnabled = true; // Controla se o aviso visual está ativo
-    let autoOFF = false;
-    let afkInterval = null;
-    let autoOffHasTriggered = false;
-    
-    let lastAdminToastTime = 0; // Controle de tempo para o Toast (Debounce)
-    let autoOffButtons = []; 
-
-    // --- HOOK UNHIT ---
-    let hurtPlayer_orig = null;
     Java.perform(() => {
-        const hurtPlayer_ptr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy");
-        if (hurtPlayer_ptr) {
-            hurtPlayer_orig = new NativeFunction(hurtPlayer_ptr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-            const unhit_master_callback = new NativeCallback((a, b, c, d, e, f) => {
-                if (!unhit) return hurtPlayer_orig(a, b, c, d, e, f);
-                if (unhit_mode === 1) return 0; 
-                if (unhit_mode === 2) return hurtPlayer_orig(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
-            }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-            Interceptor.replace(hurtPlayer_ptr, unhit_master_callback);
+        console.log("[System] Iniciando Hooks nativos...");
+
+        // --- VARIÁVEIS DE ESTADO ---
+        let unhit = false;
+        let unhit_mode = 1; 
+        let showAdminsEnabled = true;
+        let autoOFF = false;
+        let autoOffHasTriggered = false;
+        let lastAdminToastTime = 0;
+        let afkInterval = null;
+        let autoOffButtons = []; 
+
+        const lib = "libqplay.so";
+        const malloc = new NativeFunction(Module.findExportByName("libc.so", "malloc"), "pointer", ["int"]);
+
+        // --- FUNÇÕES DE LEITURA DE MEMÓRIA (SEGURAS) ---
+        function readTString(strPtr) { 
+            if (strPtr.isNull()) return "";
+            try {
+                const pstr = strPtr.readPointer(); 
+                if (pstr.isNull()) return "";
+                const len = pstr.readInt();
+                return (len > 0 && len < 500) ? pstr.add(8).readCString(len) : "";
+            } catch(e) { return ""; }
         }
-    });
 
-    // --- HOOK SHOW ADMINS & AUTO-OFF (Com Delay de 7s) ---
-    setTimeout(() => {
-        console.log("[System] Iniciando monitoramento de Admins...");
-        Java.perform(() => {
-            const accRgx = /^(pc\:|graal\d+|guest.*)/;
-            const updatePropsPtr = Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF");
-            
-            if (updatePropsPtr) {
-                Interceptor.attach(updatePropsPtr, { 
-                    'onEnter': function(args) { 
-                        const props = getPlayerProperties(args[0]);
-                        const account = props.account ? props.account.toLowerCase() : '';
+        function getPlayerProps(p) { 
+            if (p.isNull()) return { nick: "---", account: "---", x: 0, y: 0 };
+            try {
+                return { 
+                    nick: readTString(p.add(464)), 
+                    account: readTString(p.add(696)), 
+                    x: p.add(0x238).readDouble(), 
+                    y: p.add(0x240).readDouble() 
+                }; 
+            } catch(e) { return { nick: "Erro", account: "Erro", x: 0, y: 0 }; }
+        }
 
-                        // Se NÃO for conta normal (ou seja, for Admin)
-                        if (account !== '' && !accRgx.test(account)) { 
-                            const now = Date.now();
+        function showToast(text) {
+            Java.scheduleOnMainThread(() => {
+                const context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+                Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new(text), 0).show();
+            });
+        }
 
-                            // Lógica de Auto-OFF (Desativa outros cheats)
-                            if (autoOFF && !autoOffHasTriggered) { 
-                                autoOffHasTriggered = true; 
-                                Java.scheduleOnMainThread(() => { 
-                                    showToast('ADMIN DETECTADO! Desativando cheats...'); 
-                                    for (const btn of autoOffButtons) { btn.reset(); } 
-                                }); 
+        // --- HOOK UNHIT ---
+        const hurtPtr = Module.findExportByName(lib, "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy");
+        if (hurtPtr) {
+            const origHurt = new NativeFunction(hurtPtr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
+            Interceptor.replace(hurtPtr, new NativeCallback((a, b, c, d, e, f) => {
+                if (!unhit) return origHurt(a, b, c, d, e, f);
+                return (unhit_mode === 1) ? 0 : origHurt(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
+            }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
+        }
+
+        // --- HOOK ADMIN (Com ativação após 7s internos) ---
+        setTimeout(() => {
+            const updatePtr = Module.findExportByName(lib, "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF");
+            if (updatePtr) {
+                const accRgx = /^(pc\:|graal\d+|guest.*)/;
+                Interceptor.attach(updatePtr, {
+                    onEnter: function(args) {
+                        const p = getPlayerProps(args[0]);
+                        const acc = p.account.toLowerCase();
+                        if (acc !== "" && !accRgx.test(acc)) {
+                            if (autoOFF && !autoOffHasTriggered) {
+                                autoOffHasTriggered = true;
+                                showToast("ADMIN! Desativando cheats...");
+                                Java.scheduleOnMainThread(() => { autoOffButtons.forEach(b => b.reset()); });
                             }
-
-                            // Lógica de Toast do Show Admins (A cada 5 segundos para não travar)
+                            const now = Date.now();
                             if (showAdminsEnabled && (now - lastAdminToastTime > 5000)) {
                                 lastAdminToastTime = now;
-                                showToast(`ADMIN PRÓXIMO: ${props.nick} (${account})`, 0);
-                                console.log(`[Admin Alert] ${props.nick} detectado.`);
+                                showToast("ADM PRÓXIMO: " + p.nick);
                             }
                         }
-                    } 
+                    }
                 });
             }
-        });
-    }, 7000); // Aguarda 7 segundos após o script principal rodar
+        }, 7000);
 
-    // --- FUNÇÕES AUXILIARES ---
-    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
-    function createTString(str) { 
-        var str_pointer = malloc(4); 
-        var str_struct = malloc(str.length + 8); 
-        str_pointer.writePointer(str_struct); 
-        str_struct.writeInt(str.length); 
-        ptr(parseInt(str_struct) + 4).writeInt(1); 
-        ptr(parseInt(str_struct) + 8).writeUtf8String(str); 
-        return str_pointer; 
-    }
-    function readTString(str) { 
-        if (!str.isNull() && parseInt(str) != 0) { 
-            var pstr = str.readPointer(); 
-            if (!pstr.isNull()) { 
-                var strlen = pstr.readInt(); 
-                if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); 
-            } 
-        } 
-        return ""; 
-    }
-    
-    function getPlayerProperties(p) { 
-        try {
-            return { 
-                "nick": readTString(p.add(464)), 
-                "account": readTString(p.add(696)), 
-                "x": Memory.readDouble(p.add(0x238)), 
-                "y": Memory.readDouble(p.add(0x240)) 
-            }; 
-        } catch(e) { return { "nick": "err", "account": "" }; }
-    }
-
-    function showToast(text, time = 0) { 
-        Java.perform(() => {
-            Java.scheduleOnMainThread(() => {
-                var toast = Java.use("android.widget.Toast");
-                var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
-                toast.makeText(context, Java.use("java.lang.String").$new(text), time).show();
-            });
-        });
-    }
-
-    // --- INTERFACE GRÁFICA ---
-    Java.perform(() => {
+        // --- INTERFACE GRÁFICA ---
         Java.scheduleOnMainThread(() => {
             const ActivityThread = Java.use("android.app.ActivityThread");
-            const mainActivity = ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0).activity.value;
-            const classLoader = {
-                Gravity: Java.use("android.view.Gravity"),
-                TextView: Java.use("android.widget.TextView"),
-                LinearLayout: Java.use("android.widget.LinearLayout"),
-                LP: Java.use("android.widget.LinearLayout$LayoutParams"),
-                Color: Java.use("android.graphics.Color"),
-                String: Java.use("java.lang.String"),
-                View: Java.use("android.view.View")
-            };
+            const app = ActivityThread.currentApplication();
+            const activity = ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0).activity.value;
+            
+            const LinearLayout = Java.use("android.widget.LinearLayout");
+            const TextView = Java.use("android.widget.TextView");
+            const Color = Java.use("android.graphics.Color");
+            const LP = Java.use("android.widget.LinearLayout$LayoutParams");
 
-            const COLOR_OFF = classLoader.Color.parseColor("#BB000000");
-            const COLOR_ON = classLoader.Color.parseColor("#FF008000");
-            const metrics = mainActivity.getResources().getDisplayMetrics();
-            const dp = (v) => parseInt(v * metrics.density.value);
+            const dp = (v) => parseInt(v * activity.getResources().getDisplayMetrics().density.value);
 
-            function createBtn(text, callbacks, isPersistent = false) {
-                const tv = classLoader.TextView.$new(mainActivity);
-                let active = false;
-                tv.setText(classLoader.String.$new(text));
-                tv.setTextColor(-1);
-                tv.setBackgroundColor(COLOR_OFF);
-                tv.setPadding(dp(8), dp(8), dp(8), dp(8));
-                const lp = classLoader.LP.$new(-2, -2);
-                lp.setMargins(dp(2), dp(2), dp(2), dp(2));
-                tv.setLayoutParams(lp);
+            // Container Principal (Fundo)
+            const menu = LinearLayout.$new(activity);
+            menu.setOrientation(1);
+            menu.setVisibility(8);
+            menu.setBackgroundColor(Color.parseColor("#CC000000"));
 
-                const toggle = (forceOff = false) => {
-                    if (forceOff) active = false; else active = !active;
-                    tv.setBackgroundColor(active ? COLOR_ON : COLOR_OFF);
-                    if (active) callbacks.on(); else callbacks.off();
+            function createToggle(text, onCall, offCall, isPersistent = false) {
+                const btn = TextView.$new(activity);
+                let state = false;
+                btn.setText(text);
+                btn.setPadding(dp(10), dp(10), dp(10), dp(10));
+                btn.setTextColor(-1);
+                
+                const updateStyle = () => btn.setBackgroundColor(state ? Color.GREEN() : Color.DKGRAY());
+                updateStyle();
+
+                const exec = (forceOff = false) => {
+                    if (forceOff) state = false; else state = !state;
+                    updateStyle();
+                    if (state) onCall(); else offCall();
                 };
 
-                tv.setOnClickListener(Java.registerClass({
-                    name: "BtnClick_" + Math.random().toString(36).substr(2),
+                btn.setOnClickListener(Java.registerClass({
+                    name: "Btn_" + Math.random().toString(36).substr(5),
                     implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: { onClick(v) { toggle(); } }
+                    methods: { onClick: (v) => exec() }
                 }).$new());
 
-                const obj = { view: tv, reset: () => { active = true; toggle(true); } };
-                if (!isPersistent) autoOffButtons.push(obj);
-                return obj;
+                const res = { view: btn, reset: () => exec(true) };
+                if (!isPersistent) autoOffButtons.push(res);
+                return res;
             }
 
-            const mainBar = classLoader.LinearLayout.$new(mainActivity);
-            mainBar.setVisibility(classLoader.View.GONE.value);
-
             // Botões
-            const bUnhit1 = createBtn("Unhit M1", { on:()=> { unhit=true; unhit_mode=1; }, off:()=>unhit=false });
-            const bUnhit2 = createBtn("Unhit M2", { on:()=> { unhit=true; unhit_mode=2; }, off:()=>unhit=false });
-            const bAfk = createBtn("Anti-AFK", { 
-                on:() => { if(!afkInterval) afkInterval = setInterval(()=> showToast("AFK Click"), 240000); }, 
-                off:() => { clearInterval(afkInterval); afkInterval=null; } 
-            });
-            const bAuto = createBtn("Auto-OFF", { on:()=> { autoOFF=true; autoOffHasTriggered=false; }, off:()=>autoOFF=false });
+            const bUnhit1 = createToggle("Unhit M1 (Null)", () => { unhit=true; unhit_mode=1; }, () => unhit=false);
+            const bUnhit2 = createToggle("Unhit M2 (Zero)", () => { unhit=true; unhit_mode=2; }, () => unhit=false);
+            const bAfk = createToggle("Anti-AFK", () => { afkInterval = setInterval(() => showToast("Anti-AFK Click"), 240000); }, () => { clearInterval(afkInterval); afkInterval=null; });
+            const bAuto = createToggle("Auto-OFF Admin", () => { autoOFF=true; autoOffHasTriggered=false; }, () => autoOFF=false);
+            const bShow = createToggle("Show Admins", () => { showAdminsEnabled=true; }, () => { showAdminsEnabled=false; }, true);
+
+            [bUnhit1, bUnhit2, bAfk, bAuto, bShow].forEach(b => menu.addView(b.view));
+
+            // Barra de Info e Toggle Menu
+            const infoBar = LinearLayout.$new(activity);
+            const infoText = TextView.$new(activity);
+            infoText.setTextColor(-1);
+            infoText.setText(" Carregando...");
+
+            const menuToggle = createToggle("[MENU]", () => menu.setVisibility(0), () => menu.setVisibility(8), true);
             
-            // Botão Show Admins (Persistent = true, não é resetado pelo Auto-OFF)
-            const bShowAdm = createBtn("Show Admins", { 
-                on:() => { showAdminsEnabled = true; showToast("Avisos de Admin Ativos"); }, 
-                off:() => { showAdminsEnabled = false; showToast("Avisos de Admin Ocultos"); } 
-            }, true);
+            infoBar.addView(menuToggle.view);
+            infoBar.addView(infoText);
 
-            [bUnhit1, bUnhit2, bAfk, bAuto, bShowAdm].forEach(b => mainBar.addView(b.view));
-
-            const rootBottom = classLoader.LinearLayout.$new(mainActivity);
-            rootBottom.setGravity(classLoader.Gravity.BOTTOM.value | classLoader.Gravity.CENTER_HORIZONTAL.value);
-            rootBottom.addView(mainBar);
-
-            // Top Bar Info
-            const infoTv = classLoader.TextView.$new(mainActivity);
-            infoTv.setTextColor(-1);
-            const topBar = classLoader.LinearLayout.$new(mainActivity);
-            topBar.setGravity(classLoader.Gravity.TOP.value | classLoader.Gravity.CENTER_HORIZONTAL.value);
+            activity.addContentView(infoBar, LP.$new(-1, -2));
             
-            const toggleMenu = createBtn("[Menu]", { 
-                on:()=> mainBar.setVisibility(0), 
-                off:()=> mainBar.setVisibility(8) 
-            }, true);
-            
-            topBar.addView(toggleMenu.view);
-            topBar.addView(infoTv);
+            const bottomParams = LP.$new(-1, -2);
+            bottomParams.setMargins(0, dp(50), 0, 0); // Evita sobrepor a barra de info
+            activity.addContentView(menu, bottomParams);
 
-            mainActivity.addContentView(rootBottom, classLoader.LP.$new(-1, -1));
-            mainActivity.addContentView(topBar, classLoader.LP.$new(-1, -1));
-
+            // Loop de Atualização de Info
             setInterval(() => {
-                const p = getPlayerProperties(Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer());
-                Java.scheduleOnMainThread(() => {
-                    infoTv.setText(classLoader.String.$new(` | ${p.nick} | ${p.account} |`));
-                });
+                try {
+                    const pPtr = Module.findExportByName(lib, "dkCHgaGRiF").readPointer();
+                    const p = getPlayerProps(pPtr);
+                    Java.scheduleOnMainThread(() => {
+                        infoText.setText(` | ${p.nick} | ${p.account} |`);
+                    });
+                } catch(e) {}
             }, 1000);
+
+            showToast("Script Carregado!");
         });
     });
-
 }, 8000);
