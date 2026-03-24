@@ -105,7 +105,7 @@ setTimeout(() => {
     
     let autoOffButtons = []; 
 
-    // --- FUNÇÕES NATIVAS, ALPHAS E EXPLOSÕES ---
+    // --- FUNÇÕES NATIVAS, ALPHAS, ZOOM E EXPLOSÕES ---
     let hurtPlayer_orig = null;
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
     
@@ -116,6 +116,8 @@ setTimeout(() => {
 
     const alphaNormalStr = createTString('alpha=1');
     const alphaFadedStr = createTString('alpha=0.3');
+    // Adicionada a string para restaurar o zoom do admin
+    const zoomNormalStr = createTString('zoom=1');
 
     // --- HOOK UNHIT ---
     Java.perform(() => {
@@ -172,7 +174,7 @@ setTimeout(() => {
         } 
     }
 
-    // --- HOOK SHOW ADMINS & MANIPULAÇÃO DE ALPHA ---
+    // --- HOOK SHOW ADMINS & MANIPULAÇÃO DE ALPHA/ZOOM ---
     setTimeout(() => {
         Java.perform(() => {
             const accRgx = /^(pc\:|graal\d+|guest.*)/;
@@ -204,7 +206,10 @@ setTimeout(() => {
                             }
 
                             if (showAdmins) {
+                                // Força o alpha e o zoom para 1 para revelar o admin completamente
                                 if (props.alpha < 1.0) setVarValue(playerPtr, alphaNormalStr);
+                                if (props.zoom < 1.0) setVarValue(playerPtr, zoomNormalStr);
+                                
                                 if (now - lastAdminToastTime > 5000) {
                                     lastAdminToastTime = now;
                                     showToast(`ADM REVELADO: ${props.nick}`, 0);
@@ -251,6 +256,8 @@ setTimeout(() => {
     function getPlayerProperties(p) { 
         return { 
             "alpha": Memory.readFloat(p.add(356)), 
+            // Adicionado a leitura do zoom para saber se o admin está invisível por tamanho
+            "zoom": Memory.readFloat(p.add(0x138)), 
             "nick": readTString(p.add(464)), 
             "account": readTString(p.add(696)), 
             "x": Memory.readDouble(p.add(0x238)), 
