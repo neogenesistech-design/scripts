@@ -99,8 +99,8 @@ setTimeout(() => {
     let autoOffButtons = []; 
 
     // --- VARIÁVEIS DO SMART SCANNER & REPLAY ATTACK ---
-    let scanMode = 0; // 0: Desligado, 1: Calibrando (Bloqueando lixo), 2: Escutando (Pronto)
-    let blacklistedFunctions = new Set(); // Lista negra do lixo de fundo
+    let scanMode = 0; // 0: Desligado, 1: Calibrando, 2: Escutando
+    let blacklistedFunctions = new Set(); 
     let smartListLogs = []; 
     let currentTargetIndex = 0;
     let interceptedData = {}; 
@@ -128,7 +128,6 @@ setTimeout(() => {
             
             let refIndex = exports.findIndex(e => e.name === referenceName);
             if (refIndex !== -1) {
-                // Expandi a busca para 30 vizinhos pra frente e pra trás
                 let startIdx = Math.max(0, refIndex - 30);
                 let endIdx = Math.min(exports.length - 1, refIndex + 30);
 
@@ -138,20 +137,17 @@ setTimeout(() => {
                         try {
                             Interceptor.attach(exp.address, {
                                 onEnter: function(args) {
-                                    if (scanMode === 0) return; // Scanner desligado
+                                    if (scanMode === 0) return;
                                     
-                                    // FASE 1: CALIBRAÇÃO (Bloqueia tudo que for chamado agora)
                                     if (scanMode === 1) {
                                         blacklistedFunctions.add(exp.name);
                                         return;
                                     }
 
-                                    // FASE 2: ESCUTANDO AÇÕES NOVAS
                                     if (scanMode === 2) {
-                                        // Se a função estiver na lista negra de lixo de fundo, ignora
                                         if (blacklistedFunctions.has(exp.name)) return;
 
-                                        // Função nova detectada!
+                                        // Atualiza a memória capturada
                                         interceptedData[exp.name] = {
                                             address: exp.address,
                                             args: [args[0], args[1], args[2], args[3]]
@@ -159,7 +155,7 @@ setTimeout(() => {
 
                                         if (!smartListLogs.includes(exp.name)) {
                                             smartListLogs.push(exp.name);
-                                            if (smartListLogs.length > 5) smartListLogs.shift();
+                                            if (smartListLogs.length > 8) smartListLogs.shift(); // Mantém 8 recentes para a lista
                                         }
                                     }
                                 }
@@ -167,7 +163,7 @@ setTimeout(() => {
                         } catch(e) {}
                     }
                 }
-                console.log("[Smart Scanner] 60 funções vizinhas anexadas.");
+                console.log("[Smart Scanner] 60 funções vizinhas anexadas com filtro de calibração.");
             }
         } catch(e) { console.log("Erro no Scanner: " + e); }
     });
@@ -363,21 +359,21 @@ setTimeout(() => {
     // Callback do Smart Scanner com Calibração
     const call_smartScan = { 
         on() { 
-            scanMode = 1; // Fase de Calibração (Lê e ignora lixo)
+            scanMode = 1; 
             smartListLogs = []; 
+            currentTargetIndex = 0;
             blacklistedFunctions.clear();
             showToast("Calibrando Scanner... FIQUE PARADO!"); 
             
-            // Depois de 3 segundos, ativa a escuta real
             setTimeout(() => {
-                if (scanMode === 1) { // Garante que o usuário não desligou nesse meio tempo
-                    scanMode = 2; // Fase de Escuta
-                    showToast("Scanner Pronto! Faça a ação no jogo.");
+                if (scanMode === 1) { 
+                    scanMode = 2; 
+                    showToast("Scanner Pronto! Faça a ação.");
                 }
             }, 3000);
         }, 
         off() { 
-            scanMode = 0; // Desliga tudo
+            scanMode = 0; 
             showToast("Scanner Pausado."); 
         } 
     };
@@ -393,16 +389,14 @@ setTimeout(() => {
             const COLOR_OFF = classLoader.Color.parseColor("#80000000");
             const COLOR_ON = classLoader.Color.parseColor("#80008000");
             const COLOR_ACTION = classLoader.Color.parseColor("#CC880000");
+            const COLOR_SAVE = classLoader.Color.parseColor("#CC000088"); // Azul escuro
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
 
             function createToggleButton(text, callbacks, startOn = false) {
                 const button = classLoader.TextView.$new(mainActivity);
                 let isOn = startOn;
-                
-                const reset = () => {
-                    if (isOn) { isOn = false; button.setBackgroundColor(COLOR_OFF); if (callbacks.off) callbacks.off(); }
-                };
+                const reset = () => { if (isOn) { isOn = false; button.setBackgroundColor(COLOR_OFF); if (callbacks.off) callbacks.off(); } };
                 
                 button.setText(classLoader.String.$new(text));
                 button.setTextColor(classLoader.Color.WHITE.value);
@@ -455,7 +449,158 @@ setTimeout(() => {
                 return button; 
             }
 
-            // Layouts Base
+            // ========================================================================
+            // PAINEL FIXO TOP-RIGHT (ALVO, EXECUTAR, LIMPAR, SAVE)
+            // ========================================================================
+            const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
+            topRightContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+            topRightContainer.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
+            
+            const trRootLayout = classLoader.LinearLayout.$new(mainActivity);
+            const trRootParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
+            trRootLayout.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
+            // Adiciona uma margem superior para não sobrepor a barra de informações (Top Left)
+            trRootLayout.setPadding(0, PADDING * 4, 0, 0); 
+
+            // Botão Alvo
+            const targetButton = classLoader.TextView.$new(mainActivity);
+            targetButton.setText(classLoader.String.$new("[ > Alvo ]"));
+            targetButton.setTextColor(classLoader.Color.WHITE.value);
+            targetButton.setBackgroundColor(COLOR_OFF);
+            targetButton.setPadding(PADDING, PADDING, PADDING, PADDING);
+            const btnLP = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
+            btnLP.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
+            targetButton.setLayoutParams(btnLP);
+            
+            targetButton.setOnClickListener(Java.registerClass({
+                name: "com.example.TargetClick" + Math.random().toString(36).substring(2),
+                implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        if (smartListLogs.length > 0) {
+                            currentTargetIndex = (currentTargetIndex + 1) % smartListLogs.length;
+                            showToast("Alvo alterado!");
+                        } else {
+                            showToast("Lista vazia.");
+                        }
+                    }
+                }
+            }).$new());
+            topRightContainer.addView(targetButton);
+
+            // Botão Executar
+            const executeButton = classLoader.TextView.$new(mainActivity);
+            executeButton.setText(classLoader.String.$new("[ EXECUTAR ]"));
+            executeButton.setTextColor(classLoader.Color.WHITE.value);
+            executeButton.setBackgroundColor(COLOR_ACTION);
+            executeButton.setPadding(PADDING, PADDING, PADDING, PADDING);
+            executeButton.setLayoutParams(btnLP);
+            
+            executeButton.setOnClickListener(Java.registerClass({
+                name: "com.example.ExecuteClick" + Math.random().toString(36).substring(2),
+                implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        if (smartListLogs.length > 0) {
+                            try {
+                                const targetName = smartListLogs[currentTargetIndex];
+                                const data = interceptedData[targetName];
+                                if (data) {
+                                    showToast("Executando: " + targetName.substring(0, 10));
+                                    const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
+                                    Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
+                                }
+                            } catch(e) { showToast("Crash evitado!"); }
+                        }
+                    }
+                }
+            }).$new());
+            topRightContainer.addView(executeButton);
+
+            // Botão Limpar
+            const clearButton = classLoader.TextView.$new(mainActivity);
+            clearButton.setText(classLoader.String.$new("[ Limpar ]"));
+            clearButton.setTextColor(classLoader.Color.WHITE.value);
+            clearButton.setBackgroundColor(COLOR_OFF);
+            clearButton.setPadding(PADDING, PADDING, PADDING, PADDING);
+            clearButton.setLayoutParams(btnLP);
+            
+            clearButton.setOnClickListener(Java.registerClass({
+                name: "com.example.ClearClick" + Math.random().toString(36).substring(2),
+                implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        smartListLogs = [];
+                        interceptedData = {};
+                        currentTargetIndex = 0;
+                        showToast("Lista do Scanner limpa!");
+                    }
+                }
+            }).$new());
+            topRightContainer.addView(clearButton);
+
+            // Botão Save (TXT)
+            const saveButton = classLoader.TextView.$new(mainActivity);
+            saveButton.setText(classLoader.String.$new("[ Save TXT ]"));
+            saveButton.setTextColor(classLoader.Color.WHITE.value);
+            saveButton.setBackgroundColor(COLOR_SAVE);
+            saveButton.setPadding(PADDING, PADDING, PADDING, PADDING);
+            saveButton.setLayoutParams(btnLP);
+            
+            saveButton.setOnClickListener(Java.registerClass({
+                name: "com.example.SaveClick" + Math.random().toString(36).substring(2),
+                implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        Java.perform(() => {
+                            try {
+                                const ActivityThread = Java.use("android.app.ActivityThread");
+                                const context = ActivityThread.currentApplication().getApplicationContext();
+                                const pkgName = context.getPackageName();
+                                const Environment = Java.use("android.os.Environment");
+                                const File = Java.use("java.io.File");
+                                const FileOutputStream = Java.use("java.io.FileOutputStream");
+                                const OutputStreamWriter = Java.use("java.io.OutputStreamWriter");
+
+                                const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
+                                const filePath = externalPath + "/Android/data/" + pkgName + "/saved_functions.txt";
+                                
+                                let file = File.$new(filePath);
+                                let fos = FileOutputStream.$new(file, true); // true = faz append no arquivo
+                                let osw = OutputStreamWriter.$new(fos);
+
+                                osw.write("\n=== DUMP DE FUNÇÕES (" + new Date().toLocaleString() + ") ===\n");
+                                if (smartListLogs.length === 0) {
+                                    osw.write("Nenhuma função na memória para salvar.\n");
+                                } else {
+                                    for (let i = 0; i < smartListLogs.length; i++) {
+                                        let fName = smartListLogs[i];
+                                        let data = interceptedData[fName];
+                                        if (data) {
+                                            osw.write(`[Função]: ${fName}\n`);
+                                            osw.write(`[Endereço]: ${data.address.toString()}\n`);
+                                            osw.write(`[Args]: ${data.args[0]}, ${data.args[1]}, ${data.args[2]}, ${data.args[3]}\n`);
+                                            osw.write(`----------------------------------------\n`);
+                                        }
+                                    }
+                                }
+                                osw.close();
+                                fos.close();
+                                showToast("TXT salvo na pasta Android/data do jogo!");
+                            } catch(e) {
+                                showToast("Erro ao criar TXT: " + e);
+                            }
+                        });
+                    }
+                }
+            }).$new());
+            topRightContainer.addView(saveButton);
+
+            trRootLayout.addView(topRightContainer);
+
+            // ========================================================================
+            // PAINEL DE CHEATS INFERIOR (Ocultável)
+            // ========================================================================
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
             mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             mainBarLayout.setGravity(Gravity.CENTER.value);
@@ -469,12 +614,10 @@ setTimeout(() => {
             row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             row2.setGravity(Gravity.CENTER.value);
 
-            // Row 3: Scanner Controls
             const row3 = classLoader.LinearLayout.$new(mainActivity);
             row3.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             row3.setGravity(Gravity.CENTER.value);
 
-            // Row 4: Log Output
             const row4 = classLoader.LinearLayout.$new(mainActivity);
             row4.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             row4.setGravity(Gravity.CENTER.value);
@@ -491,6 +634,7 @@ setTimeout(() => {
             bottomLayout.setGravity(Gravity.BOTTOM.value | Gravity.CENTER_HORIZONTAL.value);
             bottomLayout.addView(mainBarLayout);
 
+            // Barra Superior de Info
             const topInfoTextView = classLoader.TextView.$new(mainActivity);
             topInfoTextView.setTextColor(classLoader.Color.WHITE.value);
             topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
@@ -502,24 +646,23 @@ setTimeout(() => {
             const topLayout = classLoader.LinearLayout.$new(mainActivity);
             const topParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
             topLayout.setLayoutParams(topParams);
-            topLayout.setGravity(Gravity.TOP.value | Gravity.CENTER_HORIZONTAL.value);
+            topLayout.setGravity(Gravity.TOP.value | Gravity.LEFT.value); // Alinhado a esquerda para não bater nos botões
             topLayout.addView(topBarLayout); 
 
             const call_hideCheats = {
                 on() { mainBarLayout.setVisibility(View.VISIBLE.value); },
                 off() { mainBarLayout.setVisibility(View.GONE.value); }
             };
-            const hideCheatsButton = createToggleButton("[v]", call_hideCheats, false); 
-            hideCheatsButton.view.setText(classLoader.String.$new("[v]"));
-
+            const hideCheatsButton = createToggleButton("[ Menu ]", call_hideCheats, false); 
+            
             hideCheatsButton.view.setOnClickListener(Java.registerClass({
                 name: "com.example.HideClickListener" + Math.random().toString(36).substring(2),
                 implements: [Java.use("android.view.View$OnClickListener")],
                 methods: {
                     onClick(v) {
                         const isVisible = mainBarLayout.getVisibility() == View.VISIBLE.value;
-                        if (isVisible) { call_hideCheats.off(); v.setText(classLoader.String.$new("[v]")); } 
-                        else { call_hideCheats.on(); v.setText(classLoader.String.$new("[^]")); }
+                        if (isVisible) { call_hideCheats.off(); v.setBackgroundColor(COLOR_OFF); } 
+                        else { call_hideCheats.on(); v.setBackgroundColor(COLOR_ON); }
                     }
                 }
             }).$new());
@@ -554,67 +697,9 @@ setTimeout(() => {
             explosionControlLayout.addView(createHoldButton(">", increaseAction));
             row2.addView(explosionControlLayout);
 
-            // --- UI DO SMART SCANNER & REPLAY ---
-            const scanButton = createToggleButton("SCAN", call_smartScan, false);
+            // Botão Scanner na Row 3
+            const scanButton = createToggleButton("SMART SCAN", call_smartScan, false);
             row3.addView(scanButton.view);
-
-            const targetButton = classLoader.TextView.$new(mainActivity);
-            targetButton.setText(classLoader.String.$new("[ > Alvo ]"));
-            targetButton.setTextColor(classLoader.Color.WHITE.value);
-            targetButton.setBackgroundColor(COLOR_OFF);
-            targetButton.setPadding(PADDING, PADDING, PADDING, PADDING);
-            const targetLP = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-            targetLP.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
-            targetButton.setLayoutParams(targetLP);
-            
-            targetButton.setOnClickListener(Java.registerClass({
-                name: "com.example.TargetClick" + Math.random().toString(36).substring(2),
-                implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        if (smartListLogs.length > 0) {
-                            currentTargetIndex = (currentTargetIndex + 1) % smartListLogs.length;
-                            showToast("Alvo: " + currentTargetIndex);
-                        } else {
-                            showToast("Nenhuma função detectada ainda.");
-                        }
-                    }
-                }
-            }).$new());
-            row3.addView(targetButton);
-
-            const executeButton = classLoader.TextView.$new(mainActivity);
-            executeButton.setText(classLoader.String.$new("EXECUTAR"));
-            executeButton.setTextColor(classLoader.Color.WHITE.value);
-            executeButton.setBackgroundColor(COLOR_ACTION);
-            executeButton.setPadding(PADDING, PADDING, PADDING, PADDING);
-            executeButton.setLayoutParams(targetLP);
-            
-            executeButton.setOnClickListener(Java.registerClass({
-                name: "com.example.ExecuteClick" + Math.random().toString(36).substring(2),
-                implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        if (smartListLogs.length > 0) {
-                            try {
-                                const targetName = smartListLogs[currentTargetIndex];
-                                const data = interceptedData[targetName];
-                                
-                                if (data) {
-                                    showToast("Executando: " + targetName.substring(0, 10));
-                                    const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-                                    Java.perform(() => {
-                                        injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]);
-                                    });
-                                }
-                            } catch(e) {
-                                showToast("Crash evitado! Função incompatível.");
-                            }
-                        }
-                    }
-                }
-            }).$new());
-            row3.addView(executeButton);
 
             const scanLogView = classLoader.TextView.$new(mainActivity);
             scanLogView.setTextColor(classLoader.Color.YELLOW.value);
@@ -622,14 +707,16 @@ setTimeout(() => {
             scanLogView.setText(classLoader.String.$new("..."));
             row4.addView(scanLogView);
 
-            mainActivity.addContentView(topLayout, topParams);
-            mainActivity.addContentView(bottomLayout, bottomParams);
+            // Adiciona Layouts à Activity
+            mainActivity.addContentView(trRootLayout, trRootParams); // Top Right (Fixo)
+            mainActivity.addContentView(topLayout, topParams); // Top Left (Info e Menu toggle)
+            mainActivity.addContentView(bottomLayout, bottomParams); // Bottom Menu
 
             setInterval(() => {
                 try {
                     const props = getPlayerProperties(activeplayer);
                     Java.scheduleOnMainThread(function() {
-                        const infoText = `  Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
+                        const infoText = ` Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
                         topInfoTextView.setText(classLoader.String.$new(infoText));
                         
                         if (scanMode === 1) {
@@ -639,7 +726,7 @@ setTimeout(() => {
                                 let shortName = name.substring(0, 25) + "...";
                                 return (idx === currentTargetIndex ? "🎯 " : "   ") + shortName;
                             });
-                            if (displayTexts.length === 0) displayTexts.push("Faça uma ação no jogo...");
+                            if (displayTexts.length === 0) displayTexts.push("Nenhuma ação capturada.");
                             scanLogView.setText(classLoader.String.$new(displayTexts.join("\n")));
                         } else {
                             scanLogView.setText(classLoader.String.$new("Scan Desligado"));
