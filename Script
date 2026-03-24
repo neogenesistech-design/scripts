@@ -17,7 +17,6 @@ function deleteCacheFiles() {
             const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
             const path = externalPath + "/Android/data/" + pkgName + "/";
             
-            // CAMINHO QUE DEVE SER PRESERVADO
             const EXCLUDE_PATH = "files/levels/images/classiciphone";
 
             console.log("[deleteCacheFiles] Alvo: " + path);
@@ -85,7 +84,6 @@ setTimeout(() => {
     // --- VARIÁVEIS DE ESTADO E FUNÇÕES ESSENCIAIS ---
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
-    // Variáveis de Estado de Cheats
     let unhit = false;
     let unhit_mode = 1; 
     let showAdmins = true; 
@@ -94,18 +92,21 @@ setTimeout(() => {
     let autoOffHasTriggered = false;
     let wallhack = false;
     
-    // Variáveis de Explosão
     let canExplode = false;
     let explosionsInterval = null;
     let explosionRadius = 90;
 
-    // Controle de Spam e Detecção de Admin
     let lastAdminToastTime = 0;
     let lastAdminSeenTime = 0; 
-    
     let autoOffButtons = []; 
 
-    // --- FUNÇÕES NATIVAS, ALPHAS, ZOOM E EXPLOSÕES ---
+    // --- VARIÁVEIS DO SMART SCANNER ---
+    let smartScanActive = false;
+    let smartListLogs = ["Aguardando ação..."];
+    let hookedNeighbors = {}; // Armazena estado de spam das funções vizinhas
+    let lastScanReset = Date.now();
+
+    // --- FUNÇÕES NATIVAS ---
     let hurtPlayer_orig = null;
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
     
@@ -116,14 +117,70 @@ setTimeout(() => {
 
     const alphaNormalStr = createTString('alpha=1');
     const alphaFadedStr = createTString('alpha=0.3');
-    // Adicionada a string para restaurar o zoom do admin
     const zoomNormalStr = createTString('zoom=1');
+
+    // --- PREPARAÇÃO DO SMART SCANNER (Mapeamento de Proximidade) ---
+    Java.perform(() => {
+        try {
+            const exports = Module.enumerateExports("libqplay.so");
+            const referenceName = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"; // hurtPlayer
+            
+            // Ordena funções por endereço na memória
+            exports.sort((a, b) => a.address.compare(b.address));
+            
+            let refIndex = exports.findIndex(e => e.name === referenceName);
+            if (refIndex !== -1) {
+                // Pega 20 funções antes e 20 depois do hurtPlayer
+                let startIdx = Math.max(0, refIndex - 20);
+                let endIdx = Math.min(exports.length - 1, refIndex + 20);
+
+                for (let i = startIdx; i <= endIdx; i++) {
+                    let exp = exports[i];
+                    if (exp.type === 'function' && exp.name !== referenceName) {
+                        try {
+                            Interceptor.attach(exp.address, {
+                                onEnter: function(args) {
+                                    if (!smartScanActive) return;
+                                    
+                                    let now = Date.now();
+                                    // Reseta a contagem de spam a cada 1 segundo
+                                    if (now - lastScanReset > 1000) {
+                                        for (let k in hookedNeighbors) {
+                                            if (!hookedNeighbors[k].isSpam) hookedNeighbors[k].count = 0;
+                                        }
+                                        lastScanReset = now;
+                                    }
+
+                                    if (!hookedNeighbors[exp.name]) hookedNeighbors[exp.name] = { count: 0, isSpam: false };
+                                    if (hookedNeighbors[exp.name].isSpam) return;
+
+                                    hookedNeighbors[exp.name].count++;
+                                    
+                                    // Se chamou mais de 5 vezes por segundo, é engine loop. Silencia.
+                                    if (hookedNeighbors[exp.name].count > 5) {
+                                        hookedNeighbors[exp.name].isSpam = true;
+                                        return;
+                                    }
+
+                                    // Função isolada detectada! Adiciona na fila da UI.
+                                    let shortName = exp.name.substring(0, 30) + "...";
+                                    if (!smartListLogs.includes(shortName)) {
+                                        smartListLogs.push(shortName);
+                                        if (smartListLogs.length > 3) smartListLogs.shift(); // Mantém apenas os 3 últimos logs
+                                    }
+                                }
+                            });
+                        } catch(e) {}
+                    }
+                }
+                console.log("[Smart Scanner] 40 funções vizinhas anexadas com sucesso.");
+            }
+        } catch(e) { console.log("Erro no Scanner: " + e); }
+    });
 
     // --- HOOK UNHIT ---
     Java.perform(() => {
-        const HURT_PLAYER_PTR_NAME = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy";
-        const hurtPlayer_ptr = Module.findExportByName("libqplay.so", HURT_PLAYER_PTR_NAME);
-        
+        const hurtPlayer_ptr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy");
         if (hurtPlayer_ptr) {
             hurtPlayer_orig = new NativeFunction(hurtPlayer_ptr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
             const unhit_master_callback = new NativeCallback((a, b, c, d, e, f) => {
@@ -131,7 +188,6 @@ setTimeout(() => {
                 if (unhit_mode === 1) return 0; 
                 else if (unhit_mode === 2) return hurtPlayer_orig(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
             }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-
             Interceptor.replace(hurtPlayer_ptr, unhit_master_callback);
         }
     });
@@ -140,11 +196,7 @@ setTimeout(() => {
     Java.perform(() => {
         const wallhack_ptr = Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb");
         if (wallhack_ptr) {
-            Interceptor.attach(wallhack_ptr, { 
-                'onLeave': function(ret) { 
-                    if (wallhack) ret.replace(0); 
-                } 
-            });
+            Interceptor.attach(wallhack_ptr, { 'onLeave': function(ret) { if (wallhack) ret.replace(0); } });
         }
     });
 
@@ -168,24 +220,20 @@ setTimeout(() => {
         const playerY = getlocaly(activeplayer); 
         const offset = Math.floor(radius / 2); 
         for (let i = 0; i < radius; i++) { 
-            for (let j = 0; j < radius; j++) { 
-                putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); 
-            } 
+            for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } 
         } 
     }
 
-    // --- HOOK SHOW ADMINS & MANIPULAÇÃO DE ALPHA/ZOOM ---
+    // --- HOOK SHOW ADMINS ---
     setTimeout(() => {
         Java.perform(() => {
             const accRgx = /^(pc\:|graal\d+|guest.*)/;
-            
             Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 
                 'onEnter': function(args) { 
                     const playerPtr = args[0];
                     const props = getPlayerProperties(playerPtr);
                     
                     if (playerPtr.toInt32() === activeplayer.toInt32()) return;
-
                     const account = props.account ? props.account.toLowerCase() : '';
 
                     if (account !== '') { 
@@ -194,22 +242,16 @@ setTimeout(() => {
                         
                         if (isAdmin) { 
                             lastAdminSeenTime = now; 
-
                             if (autoOFF && !autoOffHasTriggered) { 
                                 autoOffHasTriggered = true; 
                                 Java.perform(() => {
                                     showToast('Admin Detectado. Desativando cheats.'); 
-                                    Java.scheduleOnMainThread(() => { 
-                                        for (const button of autoOffButtons) { button.reset(); } 
-                                    }); 
+                                    Java.scheduleOnMainThread(() => { for (const button of autoOffButtons) { button.reset(); } }); 
                                 });
                             }
-
                             if (showAdmins) {
-                                // Força o alpha e o zoom para 1 para revelar o admin completamente
                                 if (props.alpha < 1.0) setVarValue(playerPtr, alphaNormalStr);
                                 if (props.zoom < 1.0) setVarValue(playerPtr, zoomNormalStr);
-                                
                                 if (now - lastAdminToastTime > 5000) {
                                     lastAdminToastTime = now;
                                     showToast(`ADM REVELADO: ${props.nick}`, 0);
@@ -256,7 +298,6 @@ setTimeout(() => {
     function getPlayerProperties(p) { 
         return { 
             "alpha": Memory.readFloat(p.add(356)), 
-            // Adicionado a leitura do zoom para saber se o admin está invisível por tamanho
             "zoom": Memory.readFloat(p.add(0x138)), 
             "nick": readTString(p.add(464)), 
             "account": readTString(p.add(696)), 
@@ -265,7 +306,6 @@ setTimeout(() => {
         }; 
     }
 
-    // --- FUNÇÕES UTILITÁRIAS ANDROID ---
     function getClassLoader() {
         return {
             Gravity: Java.use("android.view.Gravity"),
@@ -302,7 +342,6 @@ setTimeout(() => {
         });
     }
 
-    // --- CALLBACKS PARA OS BOTÕES ---
     const call_antiAfk = { 
         on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); }, 
         off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } } 
@@ -318,14 +357,19 @@ setTimeout(() => {
             })
         ); 
     }
+    
+    // Callbacks do UI
     const call_unhit_m1 = { on() { unhit = true; unhit_mode = 1; showToast("Unhit (M1) Ativo."); }, off() { unhit = false; } };
     const call_unhit_m2 = { on() { unhit = true; unhit_mode = 2; showToast("Unhit (M2) Ativo."); }, off() { unhit = false; } };
     const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; showToast("Auto-Off Ativo."); }, off() { autoOFF = false; } };
     const call_showAdmins = { on() { showAdmins = true; showToast("Radar Visual Ativo."); }, off() { showAdmins = false; showToast("Radar Visual Desativado."); } };
     const call_wallhack = { on() { wallhack = true; showToast("Wallhack Ativo."); }, off() { wallhack = false; showToast("Wallhack Desativado."); } };
-    const call_explode = { 
-        on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 200); }, 
-        off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } 
+    const call_explode = { on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 200); }, off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } };
+    
+    // Callback do Scanner
+    const call_smartScan = { 
+        on() { smartScanActive = true; smartListLogs = ["Escutando ações..."]; showToast("Scanner Monitorando!"); }, 
+        off() { smartScanActive = false; smartListLogs = ["Scanner Pausado."]; showToast("Scanner Desativado."); } 
     };
 
     // --- INICIALIZAÇÃO DA UI ---
@@ -346,11 +390,7 @@ setTimeout(() => {
                 let isOn = startOn;
                 
                 const reset = () => {
-                    if (isOn) {
-                        isOn = false; 
-                        button.setBackgroundColor(COLOR_OFF);
-                        if (callbacks.off) callbacks.off();
-                    }
+                    if (isOn) { isOn = false; button.setBackgroundColor(COLOR_OFF); if (callbacks.off) callbacks.off(); }
                 };
                 
                 button.setText(classLoader.String.$new(text));
@@ -369,8 +409,7 @@ setTimeout(() => {
                         onClick(v) {
                             isOn = !isOn;
                             v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
-                            if (isOn) { if (callbacks.on) callbacks.on(); }
-                            else { if (callbacks.off) callbacks.off(); }
+                            if (isOn) { if (callbacks.on) callbacks.on(); } else { if (callbacks.off) callbacks.off(); }
                         }
                     }
                 }).$new());
@@ -405,13 +444,12 @@ setTimeout(() => {
                 return button; 
             }
 
-            // Layouts
+            // Layouts Base
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
             mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             mainBarLayout.setGravity(Gravity.CENTER.value);
             mainBarLayout.setVisibility(View.GONE.value); 
             
-            // Sub-barras para organizar os botões
             const row1 = classLoader.LinearLayout.$new(mainActivity);
             row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             row1.setGravity(Gravity.CENTER.value);
@@ -420,8 +458,15 @@ setTimeout(() => {
             row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             row2.setGravity(Gravity.CENTER.value);
 
+            // Row 3: Para o log do Smart Scanner
+            const row3 = classLoader.LinearLayout.$new(mainActivity);
+            row3.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+            row3.setGravity(Gravity.CENTER.value);
+            row3.setBackgroundColor(classLoader.Color.parseColor("#90000044")); // Fundo escuro azulado
+
             mainBarLayout.addView(row1);
             mainBarLayout.addView(row2);
+            mainBarLayout.addView(row3);
 
             const bottomLayout = classLoader.LinearLayout.$new(mainActivity);
             const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
@@ -429,7 +474,6 @@ setTimeout(() => {
             bottomLayout.setGravity(Gravity.BOTTOM.value | Gravity.CENTER_HORIZONTAL.value);
             bottomLayout.addView(mainBarLayout);
 
-            // Barra Superior
             const topInfoTextView = classLoader.TextView.$new(mainActivity);
             topInfoTextView.setTextColor(classLoader.Color.WHITE.value);
             topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
@@ -471,19 +515,17 @@ setTimeout(() => {
                 autoOffButtons.push(button);
             };
             
-            // --- INSERÇÃO DOS BOTÕES ---
+            // INSERÇÃO DOS BOTÕES
             addToggle(row1, "Unhit(M1)", call_unhit_m1, false);
             addToggle(row1, "Unhit(M2)", call_unhit_m2, false);
             addToggle(row1, "Anti Afk", call_antiAfk, false);
             addToggle(row1, "Auto Off", call_autoOFF, false);
             
             addToggle(row2, "Wall Hack", call_wallhack, false);
-
-            // Botão Revelar ADM (Fica fora da lista autoOffButtons propositalmente)
             const showAdminsButton = createToggleButton("Radar ADM", call_showAdmins, true);
             row2.addView(showAdminsButton.view);
 
-            // Controles de Explosão na Row 2
+            // Explosão na Row 2
             const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
             explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             explosionControlLayout.setGravity(Gravity.CENTER.value);
@@ -495,18 +537,36 @@ setTimeout(() => {
             explosionControlLayout.addView(createHoldButton("<", decreaseAction));
             explosionControlLayout.addView(explosionButton.view);
             explosionControlLayout.addView(createHoldButton(">", increaseAction));
-            
             row2.addView(explosionControlLayout);
+
+            // --- UI DO SMART SCANNER (Row 3) ---
+            const scanButton = createToggleButton("SMART SCAN", call_smartScan, false);
+            row3.addView(scanButton.view);
+
+            const scanLogView = classLoader.TextView.$new(mainActivity);
+            scanLogView.setTextColor(classLoader.Color.YELLOW.value);
+            scanLogView.setPadding(PADDING, PADDING, PADDING, PADDING);
+            scanLogView.setText(classLoader.String.$new("Aguardando ativação..."));
+            row3.addView(scanLogView);
 
             mainActivity.addContentView(topLayout, topParams);
             mainActivity.addContentView(bottomLayout, bottomParams);
 
+            // Lógica de atualização dupla (Player Info + Smart Scanner UI)
             setInterval(() => {
                 try {
+                    // Atualiza texto do Radar
                     const props = getPlayerProperties(activeplayer);
                     Java.scheduleOnMainThread(function() {
                         const infoText = `  Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
                         topInfoTextView.setText(classLoader.String.$new(infoText));
+                        
+                        // Atualiza logs do Smart Scanner no painel
+                        if (smartScanActive) {
+                            scanLogView.setText(classLoader.String.$new(smartListLogs.join("\n")));
+                        } else {
+                            scanLogView.setText(classLoader.String.$new("Scanner Pausado."));
+                        }
                     });
                 } catch(e) {}
             }, 500);
