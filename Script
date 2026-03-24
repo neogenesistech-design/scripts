@@ -99,12 +99,11 @@ setTimeout(() => {
     let autoOffButtons = []; 
 
     // --- VARIÁVEIS DO SMART SCANNER & REPLAY ATTACK ---
-    let smartScanActive = false;
-    let smartListLogs = []; // Guarda os nomes completos
-    let hookedNeighbors = {}; 
-    let lastScanReset = Date.now();
+    let scanMode = 0; // 0: Desligado, 1: Calibrando (Bloqueando lixo), 2: Escutando (Pronto)
+    let blacklistedFunctions = new Set(); // Lista negra do lixo de fundo
+    let smartListLogs = []; 
     let currentTargetIndex = 0;
-    let interceptedData = {}; // Guarda os argumentos e endereço para o Replay
+    let interceptedData = {}; 
 
     // --- FUNÇÕES NATIVAS ---
     let hurtPlayer_orig = null;
@@ -119,7 +118,7 @@ setTimeout(() => {
     const alphaFadedStr = createTString('alpha=0.3');
     const zoomNormalStr = createTString('zoom=1');
 
-    // --- PREPARAÇÃO DO SMART SCANNER (Mapeamento e Armazenamento) ---
+    // --- PREPARAÇÃO DO SMART SCANNER (Mapeamento de Proximidade) ---
     Java.perform(() => {
         try {
             const exports = Module.enumerateExports("libqplay.so");
@@ -129,8 +128,9 @@ setTimeout(() => {
             
             let refIndex = exports.findIndex(e => e.name === referenceName);
             if (refIndex !== -1) {
-                let startIdx = Math.max(0, refIndex - 20);
-                let endIdx = Math.min(exports.length - 1, refIndex + 20);
+                // Expandi a busca para 30 vizinhos pra frente e pra trás
+                let startIdx = Math.max(0, refIndex - 30);
+                let endIdx = Math.min(exports.length - 1, refIndex + 30);
 
                 for (let i = startIdx; i <= endIdx; i++) {
                     let exp = exports[i];
@@ -138,43 +138,36 @@ setTimeout(() => {
                         try {
                             Interceptor.attach(exp.address, {
                                 onEnter: function(args) {
-                                    if (!smartScanActive) return;
+                                    if (scanMode === 0) return; // Scanner desligado
                                     
-                                    let now = Date.now();
-                                    if (now - lastScanReset > 1000) {
-                                        for (let k in hookedNeighbors) {
-                                            if (!hookedNeighbors[k].isSpam) hookedNeighbors[k].count = 0;
-                                        }
-                                        lastScanReset = now;
-                                    }
-
-                                    if (!hookedNeighbors[exp.name]) hookedNeighbors[exp.name] = { count: 0, isSpam: false };
-                                    if (hookedNeighbors[exp.name].isSpam) return;
-
-                                    hookedNeighbors[exp.name].count++;
-                                    
-                                    if (hookedNeighbors[exp.name].count > 5) {
-                                        hookedNeighbors[exp.name].isSpam = true;
+                                    // FASE 1: CALIBRAÇÃO (Bloqueia tudo que for chamado agora)
+                                    if (scanMode === 1) {
+                                        blacklistedFunctions.add(exp.name);
                                         return;
                                     }
 
-                                    // SALVA OS DADOS PARA O REPLAY ATTACK (Até 4 registradores)
-                                    interceptedData[exp.name] = {
-                                        address: exp.address,
-                                        args: [args[0], args[1], args[2], args[3]]
-                                    };
+                                    // FASE 2: ESCUTANDO AÇÕES NOVAS
+                                    if (scanMode === 2) {
+                                        // Se a função estiver na lista negra de lixo de fundo, ignora
+                                        if (blacklistedFunctions.has(exp.name)) return;
 
-                                    // Adiciona na UI
-                                    if (!smartListLogs.includes(exp.name)) {
-                                        smartListLogs.push(exp.name);
-                                        if (smartListLogs.length > 5) smartListLogs.shift(); // Mantém 5 recentes
+                                        // Função nova detectada!
+                                        interceptedData[exp.name] = {
+                                            address: exp.address,
+                                            args: [args[0], args[1], args[2], args[3]]
+                                        };
+
+                                        if (!smartListLogs.includes(exp.name)) {
+                                            smartListLogs.push(exp.name);
+                                            if (smartListLogs.length > 5) smartListLogs.shift();
+                                        }
                                     }
                                 }
                             });
                         } catch(e) {}
                     }
                 }
-                console.log("[Smart Scanner] 40 funções vizinhas prontas para interceptação e Replay.");
+                console.log("[Smart Scanner] 60 funções vizinhas anexadas.");
             }
         } catch(e) { console.log("Erro no Scanner: " + e); }
     });
@@ -367,10 +360,26 @@ setTimeout(() => {
     const call_wallhack = { on() { wallhack = true; showToast("Wallhack Ativo."); }, off() { wallhack = false; showToast("Wallhack Desativado."); } };
     const call_explode = { on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 200); }, off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } };
     
-    // Callbacks do Smart Scanner
+    // Callback do Smart Scanner com Calibração
     const call_smartScan = { 
-        on() { smartScanActive = true; smartListLogs = []; showToast("Scanner Monitorando!"); }, 
-        off() { smartScanActive = false; showToast("Scanner Pausado."); } 
+        on() { 
+            scanMode = 1; // Fase de Calibração (Lê e ignora lixo)
+            smartListLogs = []; 
+            blacklistedFunctions.clear();
+            showToast("Calibrando Scanner... FIQUE PARADO!"); 
+            
+            // Depois de 3 segundos, ativa a escuta real
+            setTimeout(() => {
+                if (scanMode === 1) { // Garante que o usuário não desligou nesse meio tempo
+                    scanMode = 2; // Fase de Escuta
+                    showToast("Scanner Pronto! Faça a ação no jogo.");
+                }
+            }, 3000);
+        }, 
+        off() { 
+            scanMode = 0; // Desliga tudo
+            showToast("Scanner Pausado."); 
+        } 
     };
 
     // --- INICIALIZAÇÃO DA UI ---
@@ -383,7 +392,7 @@ setTimeout(() => {
 
             const COLOR_OFF = classLoader.Color.parseColor("#80000000");
             const COLOR_ON = classLoader.Color.parseColor("#80008000");
-            const COLOR_ACTION = classLoader.Color.parseColor("#CC880000"); // Cor especial para o botão Execute
+            const COLOR_ACTION = classLoader.Color.parseColor("#CC880000");
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
 
@@ -460,12 +469,12 @@ setTimeout(() => {
             row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             row2.setGravity(Gravity.CENTER.value);
 
-            // Row 3: Para os botões do Smart Scanner (Scan, Alvo, Executar)
+            // Row 3: Scanner Controls
             const row3 = classLoader.LinearLayout.$new(mainActivity);
             row3.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             row3.setGravity(Gravity.CENTER.value);
 
-            // Row 4: Log de funções capturadas
+            // Row 4: Log Output
             const row4 = classLoader.LinearLayout.$new(mainActivity);
             row4.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             row4.setGravity(Gravity.CENTER.value);
@@ -523,7 +532,6 @@ setTimeout(() => {
                 autoOffButtons.push(button);
             };
             
-            // INSERÇÃO DOS BOTÕES PADRÃO
             addToggle(row1, "Unhit(M1)", call_unhit_m1, false);
             addToggle(row1, "Unhit(M2)", call_unhit_m2, false);
             addToggle(row1, "Anti Afk", call_antiAfk, false);
@@ -550,7 +558,6 @@ setTimeout(() => {
             const scanButton = createToggleButton("SCAN", call_smartScan, false);
             row3.addView(scanButton.view);
 
-            // Botão de Selecionar Alvo (Cicla pelo Array)
             const targetButton = classLoader.TextView.$new(mainActivity);
             targetButton.setText(classLoader.String.$new("[ > Alvo ]"));
             targetButton.setTextColor(classLoader.Color.WHITE.value);
@@ -576,7 +583,6 @@ setTimeout(() => {
             }).$new());
             row3.addView(targetButton);
 
-            // Botão de Executar Replay
             const executeButton = classLoader.TextView.$new(mainActivity);
             executeButton.setText(classLoader.String.$new("EXECUTAR"));
             executeButton.setTextColor(classLoader.Color.WHITE.value);
@@ -595,18 +601,14 @@ setTimeout(() => {
                                 const data = interceptedData[targetName];
                                 
                                 if (data) {
-                                    // REPLAY ATTACK: Força a chamada genérica passando 4 argumentos salvos
                                     showToast("Executando: " + targetName.substring(0, 10));
                                     const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-                                    
-                                    // Dispara a função na thread nativa
                                     Java.perform(() => {
                                         injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]);
                                     });
                                 }
                             } catch(e) {
                                 showToast("Crash evitado! Função incompatível.");
-                                console.log("Erro no Replay: " + e);
                             }
                         }
                     }
@@ -614,7 +616,6 @@ setTimeout(() => {
             }).$new());
             row3.addView(executeButton);
 
-            // Painel de Logs
             const scanLogView = classLoader.TextView.$new(mainActivity);
             scanLogView.setTextColor(classLoader.Color.YELLOW.value);
             scanLogView.setPadding(PADDING, PADDING, PADDING, PADDING);
@@ -624,7 +625,6 @@ setTimeout(() => {
             mainActivity.addContentView(topLayout, topParams);
             mainActivity.addContentView(bottomLayout, bottomParams);
 
-            // Loop de atualização UI
             setInterval(() => {
                 try {
                     const props = getPlayerProperties(activeplayer);
@@ -632,7 +632,9 @@ setTimeout(() => {
                         const infoText = `  Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
                         topInfoTextView.setText(classLoader.String.$new(infoText));
                         
-                        if (smartScanActive || smartListLogs.length > 0) {
+                        if (scanMode === 1) {
+                            scanLogView.setText(classLoader.String.$new("...Calibrando (Fique Parado)..."));
+                        } else if (scanMode === 2 || smartListLogs.length > 0) {
                             let displayTexts = smartListLogs.map((name, idx) => {
                                 let shortName = name.substring(0, 25) + "...";
                                 return (idx === currentTargetIndex ? "🎯 " : "   ") + shortName;
@@ -640,7 +642,7 @@ setTimeout(() => {
                             if (displayTexts.length === 0) displayTexts.push("Faça uma ação no jogo...");
                             scanLogView.setText(classLoader.String.$new(displayTexts.join("\n")));
                         } else {
-                            scanLogView.setText(classLoader.String.$new("Scan Desativado"));
+                            scanLogView.setText(classLoader.String.$new("Scan Desligado"));
                         }
                     });
                 } catch(e) {}
