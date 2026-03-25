@@ -1,5 +1,5 @@
 // ========================================================================
-// SCRIPT DEFINITIVO: SMART SCANNER - EM BUSCA DO RENDERIZADOR VISUAL
+// SCRIPT DEFINITIVO: SMART SCANNER - CAÇADA AO ITEM SPAWNER (FIX UI)
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -64,21 +64,19 @@ setTimeout(() => {
     let explosionRadius = 90, lastAdminToastTime = 0, lastAdminSeenTime = 0; 
     let autoOffButtons = []; 
 
-    // --- VARIÁVEIS DO SCANNER E FORÇADOR ---
+    // --- VARIÁVEIS DO SCANNER ---
     let scanMode = 0; 
     let blacklistedFunctions = new Set(); 
     let smartListLogs = []; 
     let currentTargetIndex = 0;
     let interceptedData = {}; 
     let saveCounter = 1; 
-    
-    let handItemId = 1; 
 
     // --- FUNÇÕES NATIVAS ---
     let hurtPlayer_orig = null;
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
     
-    const activeplayerPtr = Module.findExportByName("libqplay.so", "dkCHgaGRiF");
+    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
     const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
     const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
     const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
@@ -88,12 +86,14 @@ setTimeout(() => {
     const zoomNormalStr = createTString('zoom=1');
 
 
-    // --- PREPARAÇÃO DO SMART SCANNER (NOVA ÂNCORA) ---
+    // --- PREPARAÇÃO DO SMART SCANNER ---
     Java.perform(() => {
         try {
             const exports = Module.enumerateExports("libqplay.so");
-            // A âncora agora é o Input Dispatcher. A função de levantar textura estará nos vizinhos!
-            const referenceName = "_ZN10W6NzgawMJy10TqFCwaot82Ei"; 
+            
+            // Âncora: A função de Invocar Projétil. 
+            // Os vizinhos dela (50 para cima e 50 para baixo) serão monitorados.
+            const referenceName = "_ZN10W6NzgawMJy10UwflwasGuPEv"; 
             
             exports.sort((a, b) => a.address.compare(b.address));
             let refIndex = exports.findIndex(e => e.name === referenceName);
@@ -162,7 +162,6 @@ setTimeout(() => {
 
     function makeExplosion(level, radius) { 
         if (!level) return; 
-        const activeplayer = activeplayerPtr.readPointer();
         const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); 
         const offset = Math.floor(radius / 2); 
         for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } 
@@ -175,7 +174,6 @@ setTimeout(() => {
             Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 
                 'onEnter': function(args) { 
                     const playerPtr = args[0];
-                    const activeplayer = activeplayerPtr.readPointer();
                     const props = getPlayerProperties(playerPtr);
                     
                     if (playerPtr.toInt32() === activeplayer.toInt32()) return;
@@ -297,7 +295,6 @@ setTimeout(() => {
             const COLOR_ON = classLoader.Color.parseColor("#80008000");
             const COLOR_ACTION = classLoader.Color.parseColor("#CC880000");
             const COLOR_SAVE = classLoader.Color.parseColor("#CC000088"); 
-            const COLOR_FIRE = classLoader.Color.parseColor("#CCFF8C00"); 
             
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
@@ -341,7 +338,7 @@ setTimeout(() => {
             // PAINEL FIXO TOP-RIGHT
             // ========================================================================
             const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
-            topRightContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value); 
+            topRightContainer.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); 
             topRightContainer.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
             
             const trRootLayout = classLoader.LinearLayout.$new(mainActivity);
@@ -352,18 +349,13 @@ setTimeout(() => {
             const btnLP = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
             btnLP.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
 
-            // --- LINHA 1: SCANNER ---
-            const rowScanner = classLoader.LinearLayout.$new(mainActivity);
-            rowScanner.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            rowScanner.setGravity(Gravity.RIGHT.value);
-
             const targetButton = classLoader.TextView.$new(mainActivity);
             targetButton.setText(classLoader.String.$new("[ > Alvo ]")); targetButton.setTextColor(classLoader.Color.WHITE.value); targetButton.setBackgroundColor(COLOR_OFF); targetButton.setPadding(PADDING, PADDING, PADDING, PADDING); targetButton.setLayoutParams(btnLP);
             targetButton.setOnClickListener(Java.registerClass({
                 name: "com.example.TargetClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: { onClick(v) { if (smartListLogs.length > 0) { currentTargetIndex = (currentTargetIndex + 1) % smartListLogs.length; showToast("Alvo alterado!"); } else showToast("Lista vazia."); } }
             }).$new());
-            rowScanner.addView(targetButton);
+            topRightContainer.addView(targetButton);
 
             const executeButton = classLoader.TextView.$new(mainActivity);
             executeButton.setText(classLoader.String.$new("[ EXECUTAR ]")); executeButton.setTextColor(classLoader.Color.WHITE.value); executeButton.setBackgroundColor(COLOR_ACTION); executeButton.setPadding(PADDING, PADDING, PADDING, PADDING); executeButton.setLayoutParams(btnLP);
@@ -385,62 +377,8 @@ setTimeout(() => {
                     }
                 }
             }).$new());
-            rowScanner.addView(executeButton);
-            
-            topRightContainer.addView(rowScanner);
+            topRightContainer.addView(executeButton);
 
-            // --- LINHA 2: MEMORY STATE FORCER ---
-            const rowForcer = classLoader.LinearLayout.$new(mainActivity);
-            rowForcer.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            rowForcer.setGravity(Gravity.RIGHT.value);
-
-            const decHandBtn = classLoader.TextView.$new(mainActivity);
-            decHandBtn.setText(classLoader.String.$new("[ < ]")); decHandBtn.setTextColor(classLoader.Color.WHITE.value); decHandBtn.setBackgroundColor(COLOR_OFF); decHandBtn.setPadding(PADDING, PADDING, PADDING, PADDING); decHandBtn.setLayoutParams(btnLP);
-            
-            const displayHandBtn = classLoader.TextView.$new(mainActivity);
-            displayHandBtn.setText(classLoader.String.$new("[ Estado ID: " + handItemId + " ]")); displayHandBtn.setTextColor(classLoader.Color.WHITE.value); displayHandBtn.setBackgroundColor(COLOR_OFF); displayHandBtn.setPadding(PADDING, PADDING, PADDING, PADDING); displayHandBtn.setLayoutParams(btnLP);
-            
-            const incHandBtn = classLoader.TextView.$new(mainActivity);
-            incHandBtn.setText(classLoader.String.$new("[ > ]")); incHandBtn.setTextColor(classLoader.Color.WHITE.value); incHandBtn.setBackgroundColor(COLOR_OFF); incHandBtn.setPadding(PADDING, PADDING, PADDING, PADDING); incHandBtn.setLayoutParams(btnLP);
-
-            const updateHandDisplay = () => { Java.scheduleOnMainThread(() => { displayHandBtn.setText(classLoader.String.$new("[ Estado ID: " + handItemId + " ]")); }); };
-
-            decHandBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.DecHandClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { handItemId = Math.max(0, handItemId - 1); updateHandDisplay(); } }
-            }).$new());
-            
-            incHandBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.IncHandClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { handItemId = Math.min(20, handItemId + 1); updateHandDisplay(); } }
-            }).$new());
-
-            const forceHandBtn = classLoader.TextView.$new(mainActivity);
-            forceHandBtn.setText(classLoader.String.$new("[ Forçar Mão ]")); forceHandBtn.setTextColor(classLoader.Color.WHITE.value); forceHandBtn.setBackgroundColor(COLOR_FIRE); forceHandBtn.setPadding(PADDING, PADDING, PADDING, PADDING); forceHandBtn.setLayoutParams(btnLP);
-            forceHandBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.ForceHandClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { 
-                    onClick(v) { 
-                        const activeplayer = activeplayerPtr.readPointer();
-                        if (!activeplayer.isNull()) {
-                            try {
-                                activeplayer.add(0x6a0).writeU32(handItemId); 
-                                activeplayer.add(0x1a80).writeU32(handItemId);
-                                showToast("Injetado Estado " + handItemId + " na animação!");
-                            } catch(e) {
-                                showToast("Erro de injeção na memória.");
-                            }
-                        }
-                    } 
-                }
-            }).$new());
-
-            rowForcer.addView(decHandBtn);
-            rowForcer.addView(displayHandBtn);
-            rowForcer.addView(incHandBtn);
-            rowForcer.addView(forceHandBtn);
-
-            topRightContainer.addView(rowForcer);
             trRootLayout.addView(topRightContainer);
 
             // ========================================================================
@@ -539,21 +477,25 @@ setTimeout(() => {
             mainActivity.addContentView(topLayout, topParams); 
             mainActivity.addContentView(bottomLayout, bottomParams);
 
+            // ATUALIZADOR VISUAL ISOLADO (CORREÇÃO DE BUG)
             setInterval(() => {
-                try {
-                    const props = getPlayerProperties(activeplayer);
-                    Java.scheduleOnMainThread(function() {
+                Java.scheduleOnMainThread(function() {
+                    try {
+                        const props = getPlayerProperties(activeplayer);
                         const infoText = ` Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
                         topInfoTextView.setText(classLoader.String.$new(infoText));
-                        
-                        if (scanMode === 1) scanLogView.setText(classLoader.String.$new("...Calibrando (Fique Parado)..."));
-                        else if (scanMode === 2 || smartListLogs.length > 0) {
-                            let displayTexts = smartListLogs.map((name, idx) => { return (idx === currentTargetIndex ? "🎯 " : "   ") + name.substring(0, 25) + "..."; });
-                            if (displayTexts.length === 0) displayTexts.push("Nenhuma ação capturada.");
-                            scanLogView.setText(classLoader.String.$new(displayTexts.join("\n")));
-                        } else scanLogView.setText(classLoader.String.$new("Scan Desligado"));
-                    });
-                } catch(e) {}
+                    } catch(e) {}
+                    
+                    if (scanMode === 1) {
+                        scanLogView.setText(classLoader.String.$new("...Calibrando (Fique Parado)..."));
+                    } else if (scanMode === 2 || smartListLogs.length > 0) {
+                        let displayTexts = smartListLogs.map((name, idx) => { return (idx === currentTargetIndex ? "🎯 " : "   ") + name.substring(0, 25) + "..."; });
+                        if (displayTexts.length === 0) displayTexts.push("Nenhuma ação capturada.");
+                        scanLogView.setText(classLoader.String.$new(displayTexts.join("\n")));
+                    } else {
+                        scanLogView.setText(classLoader.String.$new("Scan Desligado"));
+                    }
+                });
             }, 500);
         });
     });
