@@ -1,5 +1,5 @@
 // ========================================================================
-// SCRIPT DEFINITIVO: SMART SCANNER + ITEM SWAPPER (POINTER MATH FIX)
+// SCRIPT DEFINITIVO: SMART SCANNER + SIMULADOR DE AÇÕES (GLOVE HACK)
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -76,7 +76,7 @@ setTimeout(() => {
     let lastAdminSeenTime = 0; 
     let autoOffButtons = []; 
 
-    // --- VARIÁVEIS DO SCANNER E SWAPPER ---
+    // --- VARIÁVEIS DO SCANNER E CONTROLADOR ---
     let scanMode = 0; 
     let blacklistedFunctions = new Set(); 
     let smartListLogs = []; 
@@ -84,8 +84,7 @@ setTimeout(() => {
     let interceptedData = {}; 
     let saveCounter = 1; 
     
-    let currentProjectileId = 3; 
-    let overrideProjectile = false; 
+    let currentActionParam = 5; // O parâmetro (param_1) que vimos no seu código
 
     // --- FUNÇÕES NATIVAS ---
     let hurtPlayer_orig = null;
@@ -96,31 +95,14 @@ setTimeout(() => {
     const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
     const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
 
-    const spawnFuncPtr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10UwflwasGuPEv");
-    const launchProjectile = spawnFuncPtr ? new NativeFunction(spawnFuncPtr, "void", ["pointer"]) : null;
-
-    const constructorPtr = Module.findExportByName("libqplay.so", "_ZN10fJ8VgaKXwR10fJ8VgaKXwRP10zF9VgaBKxR");
+    // NOVA FUNÇÃO DESCOBERTA POR VOCÊ (Input Dispatcher)
+    const actionDispatcherPtr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10TqFCwaot82Ei");
+    const dispatchAction = actionDispatcherPtr ? new NativeFunction(actionDispatcherPtr, "void", ["pointer", "int"]) : null;
 
     const alphaNormalStr = createTString('alpha=1');
     const alphaFadedStr = createTString('alpha=0.3');
     const zoomNormalStr = createTString('zoom=1');
 
-    // --- HOOK DO ITEM SWAPPER CORRIGIDO (Matemática de Ponteiros) ---
-    if (constructorPtr) {
-        Interceptor.attach(constructorPtr, {
-            onLeave: function(retval) {
-                if (overrideProjectile) {
-                    try {
-                        const obj = retval; 
-                        // O Ghidra disse: this[0xe] = 0x3;
-                        // 0xe (14) * 4 bytes = 56 bytes de distância. Em Hex = 0x38.
-                        obj.add(0x38).writeInt(currentProjectileId);
-                    } catch(e) {}
-                    overrideProjectile = false; 
-                }
-            }
-        });
-    }
 
     // --- PREPARAÇÃO DO SMART SCANNER ---
     Java.perform(() => {
@@ -316,7 +298,7 @@ setTimeout(() => {
         off() { scanMode = 0; showToast("Scanner Pausado."); } 
     };
 
-    // --- INICIALIZAÇÃO DA UI (SEGURA COM NOMES COMPLETOS DE CLASSES) ---
+    // --- INICIALIZAÇÃO DA UI ---
     Java.perform(function () {
         Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
@@ -420,58 +402,59 @@ setTimeout(() => {
             
             topRightContainer.addView(rowScanner);
 
-            // --- LINHA 2 (SWAPPER DE ITENS) ---
-            const rowSwapper = classLoader.LinearLayout.$new(mainActivity);
-            rowSwapper.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            rowSwapper.setGravity(Gravity.RIGHT.value);
+            // --- LINHA 2 (O CÉREBRO: ACTION DISPATCHER) ---
+            const rowDispatcher = classLoader.LinearLayout.$new(mainActivity);
+            rowDispatcher.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            rowDispatcher.setGravity(Gravity.RIGHT.value);
 
-            const decIdBtn = classLoader.TextView.$new(mainActivity);
-            decIdBtn.setText(classLoader.String.$new("[ < ]")); decIdBtn.setTextColor(classLoader.Color.WHITE.value); decIdBtn.setBackgroundColor(COLOR_OFF); decIdBtn.setPadding(PADDING, PADDING, PADDING, PADDING); decIdBtn.setLayoutParams(btnLP);
+            const decParamBtn = classLoader.TextView.$new(mainActivity);
+            decParamBtn.setText(classLoader.String.$new("[ < ]")); decParamBtn.setTextColor(classLoader.Color.WHITE.value); decParamBtn.setBackgroundColor(COLOR_OFF); decParamBtn.setPadding(PADDING, PADDING, PADDING, PADDING); decParamBtn.setLayoutParams(btnLP);
             
-            const displayIdBtn = classLoader.TextView.$new(mainActivity);
-            displayIdBtn.setText(classLoader.String.$new("[ ID: " + currentProjectileId + " ]")); displayIdBtn.setTextColor(classLoader.Color.WHITE.value); displayIdBtn.setBackgroundColor(COLOR_OFF); displayIdBtn.setPadding(PADDING, PADDING, PADDING, PADDING); displayIdBtn.setLayoutParams(btnLP);
+            const displayParamBtn = classLoader.TextView.$new(mainActivity);
+            displayParamBtn.setText(classLoader.String.$new("[ Param: " + currentActionParam + " ]")); displayParamBtn.setTextColor(classLoader.Color.WHITE.value); displayParamBtn.setBackgroundColor(COLOR_OFF); displayParamBtn.setPadding(PADDING, PADDING, PADDING, PADDING); displayParamBtn.setLayoutParams(btnLP);
             
-            const incIdBtn = classLoader.TextView.$new(mainActivity);
-            incIdBtn.setText(classLoader.String.$new("[ > ]")); incIdBtn.setTextColor(classLoader.Color.WHITE.value); incIdBtn.setBackgroundColor(COLOR_OFF); incIdBtn.setPadding(PADDING, PADDING, PADDING, PADDING); incIdBtn.setLayoutParams(btnLP);
+            const incParamBtn = classLoader.TextView.$new(mainActivity);
+            incParamBtn.setText(classLoader.String.$new("[ > ]")); incParamBtn.setTextColor(classLoader.Color.WHITE.value); incParamBtn.setBackgroundColor(COLOR_OFF); incParamBtn.setPadding(PADDING, PADDING, PADDING, PADDING); incParamBtn.setLayoutParams(btnLP);
 
-            const updateIdDisplay = () => { Java.scheduleOnMainThread(() => { displayIdBtn.setText(classLoader.String.$new("[ ID: " + currentProjectileId + " ]")); }); };
+            const updateParamDisplay = () => { Java.scheduleOnMainThread(() => { displayParamBtn.setText(classLoader.String.$new("[ Param: " + currentActionParam + " ]")); }); };
 
-            decIdBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.DecIdClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { currentProjectileId = Math.max(1, currentProjectileId - 1); updateIdDisplay(); } }
+            decParamBtn.setOnClickListener(Java.registerClass({
+                name: "com.example.DecParamClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { onClick(v) { currentActionParam = Math.max(1, currentActionParam - 1); updateParamDisplay(); } }
             }).$new());
             
-            incIdBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.IncIdClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { currentProjectileId = Math.min(100, currentProjectileId + 1); updateIdDisplay(); } }
+            incParamBtn.setOnClickListener(Java.registerClass({
+                name: "com.example.IncParamClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { onClick(v) { currentActionParam = Math.min(20, currentActionParam + 1); updateParamDisplay(); } }
             }).$new());
 
-            const fireProjBtn = classLoader.TextView.$new(mainActivity);
-            fireProjBtn.setText(classLoader.String.$new("[ Disparar ]")); fireProjBtn.setTextColor(classLoader.Color.WHITE.value); fireProjBtn.setBackgroundColor(COLOR_FIRE); fireProjBtn.setPadding(PADDING, PADDING, PADDING, PADDING); fireProjBtn.setLayoutParams(btnLP);
-            fireProjBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.FireClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+            const fireActionBtn = classLoader.TextView.$new(mainActivity);
+            fireActionBtn.setText(classLoader.String.$new("[ Forçar Ação ]")); fireActionBtn.setTextColor(classLoader.Color.WHITE.value); fireActionBtn.setBackgroundColor(COLOR_FIRE); fireActionBtn.setPadding(PADDING, PADDING, PADDING, PADDING); fireActionBtn.setLayoutParams(btnLP);
+            fireActionBtn.setOnClickListener(Java.registerClass({
+                name: "com.example.FireActionClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: { 
                     onClick(v) { 
-                        if (launchProjectile && !activeplayer.isNull()) {
-                            overrideProjectile = true; 
-                            launchProjectile(activeplayer);
+                        if (dispatchAction && !activeplayer.isNull()) {
+                            showToast("Forçando ação: " + currentActionParam);
+                            // Chama o "Cérebro" do C++ passando o botão virtual
+                            dispatchAction(activeplayer, currentActionParam);
                         } else {
-                            showToast("Função de projétil não encontrada.");
+                            showToast("Função Dispatcher não encontrada.");
                         }
                     } 
                 }
             }).$new());
 
-            rowSwapper.addView(decIdBtn);
-            rowSwapper.addView(displayIdBtn);
-            rowSwapper.addView(incIdBtn);
-            rowSwapper.addView(fireProjBtn);
+            rowDispatcher.addView(decParamBtn);
+            rowDispatcher.addView(displayParamBtn);
+            rowDispatcher.addView(incParamBtn);
+            rowDispatcher.addView(fireActionBtn);
 
-            topRightContainer.addView(rowSwapper);
+            topRightContainer.addView(rowDispatcher);
             trRootLayout.addView(topRightContainer);
 
             // ========================================================================
-            // PAINEL INFERIOR (GAVETA DE MENU)
+            // PAINEL INFERIOR E GAVETA DE MENU (MANTIDOS INTACTOS)
             // ========================================================================
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
             const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
