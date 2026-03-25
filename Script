@@ -155,7 +155,7 @@ setTimeout(() => {
     Java.perform(() => {
         try {
             const exports = Module.enumerateExports("libqplay.so");
-            const referenceName = "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"; 
+            const referenceName = "_ZN10W6NzgawMJy10UwflwasGuPEv"; 
             
             exports.sort((a, b) => a.address.compare(b.address));
             let refIndex = exports.findIndex(e => e.name === referenceName);
