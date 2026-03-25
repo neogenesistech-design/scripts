@@ -1,8 +1,5 @@
-// O código é envolto em um setTimeout para garantir que o processo do jogo
-// e todas as suas bibliotecas nativas (como a libqplay.so) estejam totalmente carregadas.
-
 // ========================================================================
-// FUNÇÕES DE LIMPEZA DE CACHE COM FILTRO DE EXCLUSÃO
+// SCRIPT: CONTROLE TOTAL DE PROJÉTEIS (ITEM SWAPPER)
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -11,551 +8,123 @@ function deleteCacheFiles() {
             const ActivityThread = Java.use("android.app.ActivityThread");
             const context = ActivityThread.currentApplication().getApplicationContext();
             const pkgName = context.getPackageName();
-            const Environment = Java.use("android.os.Environment");
             const File = Java.use("java.io.File");
-
-            const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
-            const path = externalPath + "/Android/data/" + pkgName + "/";
-            
-            // AGORA É UMA LISTA (ARRAY) DE CAMINHOS/ARQUIVOS PROTEGIDOS
-            const EXCLUDE_PATHS = [
-                "files/levels/images/classiciphone",
-                "saved_functions.txt"
-            ];
-
-            console.log("[deleteCacheFiles] Alvo: " + path);
-
+            const path = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath() + "/Android/data/" + pkgName + "/";
+            const EXCLUDE_PATHS = ["files/levels/images/classiciphone", "saved_functions.txt"];
             const targetDir = File.$new(path);
             if (!targetDir.exists() || !targetDir.isDirectory()) return;
-
             const files = targetDir.listFiles();
-            if (!files || files.length === 0) return;
-
             for (let i = 0; i < files.length; i++) {
                 try {
                     const f = files[i];
-                    const absolutePath = f.getAbsolutePath();
-
-                    // Verifica se o arquivo atual está na lista de protegidos
-                    let shouldExclude = false;
-                    for (let k = 0; k < EXCLUDE_PATHS.length; k++) {
-                        if (absolutePath.includes(EXCLUDE_PATHS[k])) {
-                            shouldExclude = true;
-                            break;
-                        }
-                    }
-
-                    if (shouldExclude) continue;
-
-                    if (f.isDirectory()) {
-                        deleteRecursive(f, EXCLUDE_PATHS);
-                    } else {
-                        f.delete();
-                    }
+                    let exclude = false;
+                    for (let k = 0; k < EXCLUDE_PATHS.length; k++) if (f.getAbsolutePath().includes(EXCLUDE_PATHS[k])) exclude = true;
+                    if (exclude) continue;
+                    if (f.isDirectory()) deleteRecursive(f, EXCLUDE_PATHS); else f.delete();
                 } catch (err) {}
             }
-            console.log("[deleteCacheFiles] Limpeza concluída.");
-        } catch (e) {
-            console.log("[deleteCacheFiles] Erro geral: " + e);
-        }
+        } catch (e) {}
     });
 }
-
-function deleteRecursive(file, excludePaths) {
-    try {
-        const sub = file.listFiles();
-        if (sub && sub.length > 0) {
-            for (let j = 0; j < sub.length; j++) {
-                try {
-                    const f = sub[j];
-                    const absolutePath = f.getAbsolutePath();
-
-                    let shouldExclude = false;
-                    for (let k = 0; k < excludePaths.length; k++) {
-                        if (absolutePath.includes(excludePaths[k])) {
-                            shouldExclude = true;
-                            break;
-                        }
-                    }
-
-                    if (shouldExclude) continue;
-                    
-                    if (f.isDirectory()) {
-                        deleteRecursive(f, excludePaths);
-                    } else {
-                        f.delete();
-                    }
-                } catch (err) {}
-            }
-        }
-        
-        // Verifica se a própria pasta que ficou vazia não é uma das protegidas
-        let dirShouldExclude = false;
-        const dirAbsolutePath = file.getAbsolutePath();
-        for (let k = 0; k < excludePaths.length; k++) {
-            if (dirAbsolutePath.includes(excludePaths[k])) {
-                dirShouldExclude = true;
-                break;
-            }
-        }
-        
-        if (!dirShouldExclude) {
-            file.delete();
-        }
-    } catch (e) {}
-}
-
+function deleteRecursive(f, e) { try { const sub = f.listFiles(); if (sub) for (let j = 0; j < sub.length; j++) { let ex = false; for (let k = 0; k < e.length; k++) if (sub[j].getAbsolutePath().includes(e[k])) ex = true; if (ex) continue; if (sub[j].isDirectory()) deleteRecursive(sub[j], e); else sub[j].delete(); } f.delete(); } catch (err) {} }
 deleteCacheFiles();
 
-// ========================================================================
-// DELAY PRINCIPAL DO SCRIPT PARA CARREGAMENTO
-// ========================================================================
 setTimeout(() => {
-    // --- VARIÁVEIS DE ESTADO E FUNÇÕES ESSENCIAIS ---
-    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
+    // --- VARIÁVEIS DE CONTROLE ---
+    let projectileTypeOverride = 3; // O padrão que vimos no código (0x3)
+    let isOverrideActive = false;
 
-    let unhit = false;
-    let unhit_mode = 1; 
-    let showAdmins = true; 
-    let autoOFF = false;
-    let afkInterval = null;
-    let autoOffHasTriggered = false;
-    let wallhack = false;
-    
-    let canExplode = false;
-    let explosionsInterval = null;
-    let explosionRadius = 90;
-
-    let lastAdminToastTime = 0;
-    let lastAdminSeenTime = 0; 
-    let autoOffButtons = []; 
-
-    // --- VARIÁVEIS DO SMART SCANNER & REPLAY ATTACK ---
-    let scanMode = 0; // 0: Desligado, 1: Calibrando, 2: Escutando
-    let blacklistedFunctions = new Set(); 
-    let smartListLogs = []; 
-    let currentTargetIndex = 0;
-    let interceptedData = {}; // Guarda a função e seus args para o Replay Attack
-    let saveCounter = 1; // Contador para numerar as funções salvas no TXT
-
-    // --- FUNÇÕES NATIVAS ---
-    let hurtPlayer_orig = null;
-    const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
-    
+    // --- ENDEREÇOS ---
     const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
-    const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
-    const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
-    const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
+    const spawnFuncPtr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10UwflwasGuPEv");
+    const launchProjectile = spawnFuncPtr ? new NativeFunction(spawnFuncPtr, "void", ["pointer"]) : null;
 
-    const alphaNormalStr = createTString('alpha=1');
-    const alphaFadedStr = createTString('alpha=0.3');
-    const zoomNormalStr = createTString('zoom=1');
+    // Construtor que você enviou
+    const constructorPtr = Module.findExportByName("libqplay.so", "_ZN10fJ8VgaKXwR10fJ8VgaKXwRP10zF9VgaBKxR");
 
-    // --- PREPARAÇÃO DO SMART SCANNER ---
-    Java.perform(() => {
-        try {
-            const exports = Module.enumerateExports("libqplay.so");
-            const referenceName = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"; 
-            
-            exports.sort((a, b) => a.address.compare(b.address));
-            let refIndex = exports.findIndex(e => e.name === referenceName);
-            if (refIndex !== -1) {
-//Mudar aqui baixo 30>60 30>60
-                let startIdx = Math.max(0, refIndex - 34);
-                let endIdx = Math.min(exports.length - 1, refIndex + 34);
-
-                for (let i = startIdx; i <= endIdx; i++) {
-                    let exp = exports[i];
-                    if (exp.type === 'function' && exp.name !== referenceName) {
-                        try {
-                            Interceptor.attach(exp.address, {
-                                onEnter: function(args) {
-                                    if (scanMode === 0) return;
-                                    if (scanMode === 1) { blacklistedFunctions.add(exp.name); return; }
-
-                                    if (scanMode === 2) {
-                                        if (blacklistedFunctions.has(exp.name)) return;
-
-                                        // Salva o endereço e os argumentos originais para não crashar ao EXECUTAR
-                                        interceptedData[exp.name] = {
-                                            address: exp.address,
-                                            args: [args[0], args[1], args[2], args[3]]
-                                        };
-
-                                        if (!smartListLogs.includes(exp.name)) {
-                                            smartListLogs.push(exp.name);
-                                            if (smartListLogs.length > 8) smartListLogs.shift(); 
-                                        }
-                                    }
-                                }
-                            });
-                        } catch(e) {}
+    // --- HOOK NO CONSTRUTOR (A MÁGICA DA TROCA) ---
+    if (constructorPtr) {
+        Interceptor.attach(constructorPtr, {
+            onLeave: function(retval) {
+                if (isOverrideActive) {
+                    const obj = retval; // O 'this' retornado pelo construtor
+                    // No código: this[0xe] = 0x3. No Frida, offsets em objetos C++ 
+                    // dependem do alinhamento. Vamos tentar o offset 0xe diretamente.
+                    try {
+                        obj.add(0xe).writeU8(projectileTypeOverride);
+                    } catch(e) {
+                        console.log("Erro ao sobrescrever tipo: " + e);
                     }
                 }
             }
-        } catch(e) {}
-    });
-
-    // --- HOOK UNHIT ---
-    Java.perform(() => {
-        const hurtPlayer_ptr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy");
-        if (hurtPlayer_ptr) {
-            hurtPlayer_orig = new NativeFunction(hurtPlayer_ptr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-            const unhit_master_callback = new NativeCallback((a, b, c, d, e, f) => {
-                if (!unhit) return hurtPlayer_orig(a, b, c, d, e, f);
-                if (unhit_mode === 1) return 0; 
-                else if (unhit_mode === 2) return hurtPlayer_orig(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
-            }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-            Interceptor.replace(hurtPlayer_ptr, unhit_master_callback);
-        }
-    });
-
-    // --- HOOK WALLHACK ---
-    Java.perform(() => {
-        const wallhack_ptr = Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb");
-        if (wallhack_ptr) Interceptor.attach(wallhack_ptr, { 'onLeave': function(ret) { if (wallhack) ret.replace(0); } });
-    });
-
-    // --- HOOK EXPLOSÃO ---
-    Java.perform(() => {
-        const explode_trigger_ptr = Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd");
-        if(explode_trigger_ptr) {
-            Interceptor.attach(explode_trigger_ptr, { onEnter: function(args) { if (!canExplode) return; canExplode = false; makeExplosion(args[0], explosionRadius); } });
-        }
-    });
-
-    function makeExplosion(level, radius) { 
-        if (!level) return; 
-        const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); 
-        const offset = Math.floor(radius / 2); 
-        for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } 
-    }
-
-    // --- HOOK SHOW ADMINS ---
-    setTimeout(() => {
-        Java.perform(() => {
-            const accRgx = /^(pc\:|graal\d+|guest.*)/;
-            Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 
-                'onEnter': function(args) { 
-                    const playerPtr = args[0];
-                    const props = getPlayerProperties(playerPtr);
-                    
-                    if (playerPtr.toInt32() === activeplayer.toInt32()) return;
-                    const account = props.account ? props.account.toLowerCase() : '';
-
-                    if (account !== '') { 
-                        const isAdmin = !accRgx.test(account);
-                        const now = Date.now();
-                        
-                        if (isAdmin) { 
-                            lastAdminSeenTime = now; 
-                            if (autoOFF && !autoOffHasTriggered) { 
-                                autoOffHasTriggered = true; 
-                                Java.perform(() => {
-                                    showToast('Admin Detectado. Desativando cheats.'); 
-                                    Java.scheduleOnMainThread(() => { for (const button of autoOffButtons) { button.reset(); } }); 
-                                });
-                            }
-                            if (showAdmins) {
-                                if (props.alpha < 1.0) setVarValue(playerPtr, alphaNormalStr);
-                                if (props.zoom < 1.0) setVarValue(playerPtr, zoomNormalStr);
-                                if (now - lastAdminToastTime > 5000) { lastAdminToastTime = now; showToast(`ADM REVELADO: ${props.nick}`, 0); }
-                            }
-                        } else {
-                            if (showAdmins) {
-                                if (now - lastAdminSeenTime < 6000) { if (props.alpha > 0.9) setVarValue(playerPtr, alphaFadedStr); } 
-                                else { if (props.alpha > 0.25 && props.alpha < 0.35) setVarValue(playerPtr, alphaNormalStr); }
-                            }
-                        }
-                    }
-                } 
-            });
-        });
-    }, 7000);
-
-    // --- FUNÇÕES DE BAIXO NÍVEL E UTILITÁRIOS ---
-    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
-    function createTString(str) { 
-        var str_pointer = malloc(4); var str_struct = malloc(str.length + 8); 
-        str_pointer.writePointer(str_struct); str_struct.writeInt(str.length); 
-        ptr(parseInt(str_struct) + 4).writeInt(1); ptr(parseInt(str_struct) + 8).writeUtf8String(str); 
-        return str_pointer; 
-    }
-    function readTString(str) { 
-        if (!str.isNull() && parseInt(str) != 0) { 
-            var pstr = str.readPointer(); 
-            if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } 
-        } 
-        return ""; 
-    }
-    
-    function getPlayerProperties(p) { 
-        return { 
-            "alpha": Memory.readFloat(p.add(356)), "zoom": Memory.readFloat(p.add(0x138)), 
-            "nick": readTString(p.add(464)), "account": readTString(p.add(696)), 
-            "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)) 
-        }; 
-    }
-
-    function getClassLoader() {
-        return {
-            Gravity: Java.use("android.view.Gravity"), TextView: Java.use("android.widget.TextView"),
-            LinearLayout: Java.use("android.widget.LinearLayout"), LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-            Color: Java.use("android.graphics.Color"), ActivityThread: Java.use("android.app.ActivityThread"),
-            View_OnTouchListener: Java.use("android.view.View$OnTouchListener"), MotionEvent: Java.use("android.view.MotionEvent"),
-            String: Java.use("java.lang.String"), View: Java.use("android.view.View"),
-            DisplayMetrics: Java.use("android.util.DisplayMetrics"), Point: Java.use("android.graphics.Point"),
-        };
-    }
-    function getMainActivity(classLoader) { 
-        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-        const activityClientRecord = Java.cast(activityThread.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
-        return activityClientRecord.activity.value;
-    }
-    function pixelDensityToPixels(context, dp) { return parseInt(dp * context.getResources().getDisplayMetrics().density.value); }
-    function showToast(text, time = 0) { 
-        Java.perform(() => {
-            Java.scheduleOnMainThread(function() {
-                var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
-                Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new(text), time).show();
-            });
         });
     }
 
-    const call_antiAfk = { on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); }, off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } } };
-    function click() { 
-        Java.perform(() => Java.scheduleOnMainThread(() => { 
-            const mainActivity = getMainActivity(getClassLoader());
-            let time = Java.use("android.os.SystemClock").uptimeMillis(); 
-            mainActivity.dispatchTouchEvent(Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0)); 
-        })); 
-    }
-    
-    // Callbacks Base
-    const call_unhit_m1 = { on() { unhit = true; unhit_mode = 1; showToast("Unhit (M1) Ativo."); }, off() { unhit = false; } };
-    const call_unhit_m2 = { on() { unhit = true; unhit_mode = 2; showToast("Unhit (M2) Ativo."); }, off() { unhit = false; } };
-    const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; showToast("Auto-Off Ativo."); }, off() { autoOFF = false; } };
-    const call_showAdmins = { on() { showAdmins = true; showToast("Radar Visual Ativo."); }, off() { showAdmins = false; showToast("Radar Visual Desativado."); } };
-    const call_wallhack = { on() { wallhack = true; showToast("Wallhack Ativo."); }, off() { wallhack = false; showToast("Wallhack Desativado."); } };
-    const call_explode = { on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 200); }, off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } };
-    
-    const call_smartScan = { 
-        on() { 
-            scanMode = 1; smartListLogs = []; currentTargetIndex = 0; blacklistedFunctions.clear(); showToast("Calibrando Scanner... FIQUE PARADO!"); 
-            setTimeout(() => { if (scanMode === 1) { scanMode = 2; showToast("Scanner Pronto! Faça a ação."); } }, 3000);
-        }, 
-        off() { scanMode = 0; showToast("Scanner Pausado."); } 
-    };
+    // --- UI E CONTROLE ---
+    let smartListLogs = [], currentTargetIndex = 0, interceptedData = {}, scanMode = 0, saveCounter = 1;
 
-    // --- INICIALIZAÇÃO DA UI ---
     Java.perform(function () {
         Java.scheduleOnMainThread(function () {
-            const classLoader = getClassLoader();
-            const mainActivity = getMainActivity(classLoader);
+            const classLoader = getgetClassLoader(), mainActivity = getMainActivity(classLoader);
             const Gravity = classLoader.Gravity;
-            const View = classLoader.View;
+            const PADDING = pixelDensityToPixels(mainActivity, 8), MARGIN = pixelDensityToPixels(mainActivity, 2);
 
-            const COLOR_OFF = classLoader.Color.parseColor("#80000000");
-            const COLOR_ON = classLoader.Color.parseColor("#80008000");
-            const COLOR_ACTION = classLoader.Color.parseColor("#CC880000");
-            const COLOR_SAVE = classLoader.Color.parseColor("#CC000088"); 
-            const PADDING = pixelDensityToPixels(mainActivity, 8);
-            const MARGIN = pixelDensityToPixels(mainActivity, 2);
+            // --- PAINEL TOP RIGHT ---
+            const trRoot = classLoader.LinearLayout.$new(mainActivity); trRoot.setOrientation(0); trRoot.setGravity(Gravity.RIGHT | Gravity.TOP); trRoot.setPadding(0, PADDING*4, 0, 0);
+            const lpBtn = classLoader.LinearLayout_LayoutParams.$new(-2,-2); lpBtn.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
 
-            function createToggleButton(text, callbacks, startOn = false) {
-                const button = classLoader.TextView.$new(mainActivity);
-                let isOn = startOn;
-                const reset = () => { if (isOn) { isOn = false; button.setBackgroundColor(COLOR_OFF); if (callbacks.off) callbacks.off(); } };
-                button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value);
-                button.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING);
-                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); button.setLayoutParams(layoutParams);
-                button.setOnClickListener(Java.registerClass({
-                    name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
-                    implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: { onClick(v) { isOn = !isOn; v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF); if (isOn) { if (callbacks.on) callbacks.on(); } else { if (callbacks.off) callbacks.off(); } } }
-                }).$new());
-                if (startOn) { if (callbacks.on) callbacks.on(); }
-                return { view: button, reset: reset };
-            }
-
-            function createHoldButton(text, action) { 
-                const button = classLoader.TextView.$new(mainActivity); let holdInterval = null; 
-                button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value); button.setBackgroundColor(COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING); 
-                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); button.setLayoutParams(layoutParams); 
-                button.setOnTouchListener(Java.registerClass({ 
-                    name: "com.example.TouchListener" + Math.random().toString(36).substring(2), implements: [classLoader.View_OnTouchListener], 
-                    methods: { 
-                        onTouch(v, event) { 
-                            switch (event.getAction()) { 
-                                case classLoader.MotionEvent.ACTION_DOWN.value: action(); holdInterval = setInterval(action, 100); return true; 
-                                case classLoader.MotionEvent.ACTION_UP.value: if (holdInterval) clearInterval(holdInterval); holdInterval = null; return true; 
-                            } return false; 
-                        } 
-                    } 
-                }).$new()); 
-                return button; 
-            }
-
-            // ========================================================================
-            // PAINEL FIXO TOP-RIGHT
-            // ========================================================================
-            const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
-            topRightContainer.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            topRightContainer.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
-            
-            const trRootLayout = classLoader.LinearLayout.$new(mainActivity);
-            const trRootParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
-            trRootLayout.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
-            trRootLayout.setPadding(0, PADDING * 4, 0, 0); 
-
-            const btnLP = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-            btnLP.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
-
-            const targetButton = classLoader.TextView.$new(mainActivity);
-            targetButton.setText(classLoader.String.$new("[ > Alvo ]")); targetButton.setTextColor(classLoader.Color.WHITE.value); targetButton.setBackgroundColor(COLOR_OFF); targetButton.setPadding(PADDING, PADDING, PADDING, PADDING); targetButton.setLayoutParams(btnLP);
-            targetButton.setOnClickListener(Java.registerClass({
-                name: "com.example.TargetClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { if (smartListLogs.length > 0) { currentTargetIndex = (currentTargetIndex + 1) % smartListLogs.length; showToast("Alvo alterado!"); } else showToast("Lista vazia."); } }
+            // BOTÃO: DISPARAR (Usa o override se ativo)
+            const fireBtn = classLoader.TextView.$new(mainActivity);
+            fireBtn.setText(classLoader.String.$new("[ DISPARAR ]"));
+            fireBtn.setBackgroundColor(classLoader.Color.parseColor("#CCFF4500"));
+            fireBtn.setTextColor(-1); fireBtn.setPadding(PADDING, PADDING, PADDING, PADDING); fireBtn.setLayoutParams(lpBtn);
+            fireBtn.setOnClickListener(Java.registerClass({
+                name: "FireBtn", implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { onClick(v) { if (launchProjectile) launchProjectile(activeplayer); } }
             }).$new());
-            topRightContainer.addView(targetButton);
+            trRoot.addView(fireBtn);
 
-            const executeButton = classLoader.TextView.$new(mainActivity);
-            executeButton.setText(classLoader.String.$new("[ EXECUTAR ]")); executeButton.setTextColor(classLoader.Color.WHITE.value); executeButton.setBackgroundColor(COLOR_ACTION); executeButton.setPadding(PADDING, PADDING, PADDING, PADDING); executeButton.setLayoutParams(btnLP);
-            executeButton.setOnClickListener(Java.registerClass({
-                name: "com.example.ExecuteClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        if (smartListLogs.length > 0) {
-                            try {
-                                const targetName = smartListLogs[currentTargetIndex];
-                                const data = interceptedData[targetName];
-                                if (data) {
-                                    showToast("Executando: " + targetName.substring(0, 10));
-                                    const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-                                    Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
-                                }
-                            } catch(e) { showToast("Crash evitado!"); }
-                        }
-                    }
-                }
+            // BOTÃO: TIPO++
+            const typeBtn = classLoader.TextView.$new(mainActivity);
+            typeBtn.setText(classLoader.String.$new("Tipo: " + projectileTypeOverride));
+            typeBtn.setBackgroundColor(-16777216); typeBtn.setTextColor(-1); typeBtn.setPadding(PADDING, PADDING, PADDING, PADDING); typeBtn.setLayoutParams(lpBtn);
+            typeBtn.setOnClickListener(Java.registerClass({
+                name: "TypeBtn", implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { onClick(v) { 
+                    projectileTypeOverride++; 
+                    if(projectileTypeOverride > 20) projectileTypeOverride = 1; // Cicla os IDs
+                    v.setText(classLoader.String.$new("Tipo: " + projectileTypeOverride));
+                } }
             }).$new());
-            topRightContainer.addView(executeButton);
+            trRoot.addView(typeBtn);
 
-            trRootLayout.addView(topRightContainer);
+            // --- GAVETA INFERIOR ---
+            const mainBar = classLoader.LinearLayout.$new(mainActivity); mainBar.setOrientation(1); mainBar.setVisibility(8);
+            const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(0); row1.setGravity(Gravity.CENTER); mainBar.addView(row1);
 
-            // ========================================================================
-            // PAINEL INFERIOR (GAVETA)
-            // ========================================================================
-            const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
-            const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
-            const row2 = classLoader.LinearLayout.$new(mainActivity); row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row2.setGravity(Gravity.CENTER.value);
-            const row3 = classLoader.LinearLayout.$new(mainActivity); row3.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row3.setGravity(Gravity.CENTER.value);
-            const row4 = classLoader.LinearLayout.$new(mainActivity); row4.setOrientation(classLoader.LinearLayout.VERTICAL.value); row4.setGravity(Gravity.CENTER.value); row4.setBackgroundColor(classLoader.Color.parseColor("#90000044")); 
+            const addToggle = (r, t, on, off) => {
+                const b = classLoader.TextView.$new(mainActivity); let isOn = false; b.setText(classLoader.String.$new(t)); b.setBackgroundColor(-16777216); b.setTextColor(-1); b.setPadding(PADDING,PADDING,PADDING,PADDING); b.setLayoutParams(lpBtn);
+                b.setOnClickListener(Java.registerClass({ name: "B"+Math.random().toString(36).substring(7), implements:[Java.use("android.view.View$OnClickListener")], methods:{ onClick(v){ isOn=!isOn; v.setBackgroundColor(isOn?classLoader.Color.parseColor("#80008000"):-16777216); if(isOn)on(); else off(); } } }).$new());
+                r.addView(b);
+            };
 
-            mainBarLayout.addView(row1); mainBarLayout.addView(row2); mainBarLayout.addView(row3); mainBarLayout.addView(row4);
+            addToggle(row1, "SWAPPER ON", ()=>{isOverrideActive=true;}, ()=>{isOverrideActive=false;});
+            addToggle(row1, "SCAN", ()=>{scanMode=1; smartListLogs=[]; setTimeout(()=>{if(scanMode===1)scanMode=2;},3000);}, ()=>{scanMode=0;});
 
-            const bottomLayout = classLoader.LinearLayout.$new(mainActivity); const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1); bottomLayout.setLayoutParams(bottomParams); bottomLayout.setGravity(Gravity.BOTTOM.value | Gravity.CENTER_HORIZONTAL.value); bottomLayout.addView(mainBarLayout);
+            // Re-adiciona as outras views...
+            const bottomLayout = classLoader.LinearLayout.$new(mainActivity); bottomLayout.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL); bottomLayout.addView(mainBar);
+            const topLayout = classLoader.LinearLayout.$new(mainActivity); topLayout.setGravity(Gravity.TOP | Gravity.LEFT);
+            const menuToggle = classLoader.TextView.$new(mainActivity); menuToggle.setText(classLoader.String.$new("[ Menu ]")); menuToggle.setBackgroundColor(-16777216); menuToggle.setTextColor(-1); menuToggle.setPadding(PADDING,PADDING,PADDING,PADDING);
+            let menuOn = false; menuToggle.setOnClickListener(Java.registerClass({ name: "M", implements:[Java.use("android.view.View$OnClickListener")], methods:{ onClick(v){ menuOn=!menuOn; mainBar.setVisibility(menuOn?0:8); v.setBackgroundColor(menuOn?classLoader.Color.parseColor("#80008000"):-16777216); } } }).$new());
+            topLayout.addView(menuToggle);
 
-            const topInfoTextView = classLoader.TextView.$new(mainActivity); topInfoTextView.setTextColor(classLoader.Color.WHITE.value); topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
-            const topBarLayout = classLoader.LinearLayout.$new(mainActivity); topBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); topBarLayout.setGravity(Gravity.CENTER_VERTICAL.value);
-            const topLayout = classLoader.LinearLayout.$new(mainActivity); const topParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1); topLayout.setLayoutParams(topParams); topLayout.setGravity(Gravity.TOP.value | Gravity.LEFT.value); topLayout.addView(topBarLayout); 
-
-            const call_hideCheats = { on() { mainBarLayout.setVisibility(View.VISIBLE.value); }, off() { mainBarLayout.setVisibility(View.GONE.value); } };
-            const hideCheatsButton = createToggleButton("[ Menu ]", call_hideCheats, false); 
-            hideCheatsButton.view.setOnClickListener(Java.registerClass({
-                name: "com.example.HideClickListener" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { const isVisible = mainBarLayout.getVisibility() == View.VISIBLE.value; if (isVisible) { call_hideCheats.off(); v.setBackgroundColor(COLOR_OFF); } else { call_hideCheats.on(); v.setBackgroundColor(COLOR_ON); } } }
-            }).$new());
-            topBarLayout.addView(hideCheatsButton.view); topBarLayout.addView(topInfoTextView);
-
-            const addToggle = (row, text, callbacks, startOn = false) => { const button = createToggleButton(text, callbacks, startOn); row.addView(button.view); autoOffButtons.push(button); };
-            
-            addToggle(row1, "Unhit(M1)", call_unhit_m1, false); addToggle(row1, "Unhit(M2)", call_unhit_m2, false); addToggle(row1, "Anti Afk", call_antiAfk, false); addToggle(row1, "Auto Off", call_autoOFF, false);
-            addToggle(row2, "Wall Hack", call_wallhack, false);
-            const showAdminsButton = createToggleButton("Radar ADM", call_showAdmins, true); row2.addView(showAdminsButton.view);
-
-            const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity); explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); explosionControlLayout.setGravity(Gravity.CENTER.value);
-            const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode); autoOffButtons.push(explosionButton);
-            const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`)));
-            const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); }; const increaseAction = () => { explosionRadius = Math.min(100, explosionRadius + 1); updateRadiusText(); };
-            explosionControlLayout.addView(createHoldButton("<", decreaseAction)); explosionControlLayout.addView(explosionButton.view); explosionControlLayout.addView(createHoldButton(">", increaseAction));
-            row2.addView(explosionControlLayout);
-
-            const scanButton = createToggleButton("SMART SCAN", call_smartScan, false); row3.addView(scanButton.view);
-
-            const clearButton = classLoader.TextView.$new(mainActivity);
-            clearButton.setText(classLoader.String.$new("[ Limpar ]")); clearButton.setTextColor(classLoader.Color.WHITE.value); clearButton.setBackgroundColor(COLOR_OFF); clearButton.setPadding(PADDING, PADDING, PADDING, PADDING); clearButton.setLayoutParams(btnLP);
-            clearButton.setOnClickListener(Java.registerClass({
-                name: "com.example.ClearClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { smartListLogs = []; interceptedData = {}; currentTargetIndex = 0; showToast("Lista limpa!"); } }
-            }).$new());
-            row3.addView(clearButton);
-
-            const saveButton = classLoader.TextView.$new(mainActivity);
-            saveButton.setText(classLoader.String.$new("[ Save TXT ]")); saveButton.setTextColor(classLoader.Color.WHITE.value); saveButton.setBackgroundColor(COLOR_SAVE); saveButton.setPadding(PADDING, PADDING, PADDING, PADDING); saveButton.setLayoutParams(btnLP);
-            saveButton.setOnClickListener(Java.registerClass({
-                name: "com.example.SaveClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        Java.perform(() => {
-                            try {
-                                const ActivityThread = Java.use("android.app.ActivityThread");
-                                const context = ActivityThread.currentApplication().getApplicationContext();
-                                const pkgName = context.getPackageName();
-                                const FileOutputStream = Java.use("java.io.FileOutputStream");
-                                const JString = Java.use("java.lang.String");
-
-                                const externalPath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath();
-                                const filePath = externalPath + "/Android/data/" + pkgName + "/saved_functions.txt";
-                                
-                                let fos = FileOutputStream.$new(filePath, true); 
-
-                                if (smartListLogs.length > 0) {
-                                    const targetName = smartListLogs[currentTargetIndex];
-                                    if (targetName) {
-                                        let linha = saveCounter + ". " + targetName + "\n";
-                                        fos.write(JString.$new(linha).getBytes());
-                                        
-                                        saveCounter++; 
-                                        showToast("Salvo alvo " + currentTargetIndex + " no TXT!");
-                                    }
-                                } else {
-                                    showToast("Nenhum alvo para salvar.");
-                                }
-                                
-                                fos.close();
-                            } catch(e) { 
-                                showToast("Erro no Save: " + e.message); 
-                            }
-                        });
-                    }
-                }
-            }).$new());
-            row3.addView(saveButton);
-
-            const scanLogView = classLoader.TextView.$new(mainActivity); scanLogView.setTextColor(classLoader.Color.YELLOW.value); scanLogView.setPadding(PADDING, PADDING, PADDING, PADDING); scanLogView.setText(classLoader.String.$new("...")); row4.addView(scanLogView);
-
-            mainActivity.addContentView(trRootLayout, trRootParams); 
-            mainActivity.addContentView(topLayout, topParams); 
-            mainActivity.addContentView(bottomLayout, bottomParams);
-
-            setInterval(() => {
-                try {
-                    const props = getPlayerProperties(activeplayer);
-                    Java.scheduleOnMainThread(function() {
-                        const infoText = ` Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
-                        topInfoTextView.setText(classLoader.String.$new(infoText));
-                        
-                        if (scanMode === 1) scanLogView.setText(classLoader.String.$new("...Calibrando (Fique Parado)..."));
-                        else if (scanMode === 2 || smartListLogs.length > 0) {
-                            let displayTexts = smartListLogs.map((name, idx) => { return (idx === currentTargetIndex ? "🎯 " : "   ") + name.substring(0, 25) + "..."; });
-                            if (displayTexts.length === 0) displayTexts.push("Nenhuma ação capturada.");
-                            scanLogView.setText(classLoader.String.$new(displayTexts.join("\n")));
-                        } else scanLogView.setText(classLoader.String.$new("Scan Desligado"));
-                    });
-                } catch(e) {}
-            }, 500);
+            mainActivity.addContentView(trRoot, classLoader.LinearLayout_LayoutParams.$new(-1,-1));
+            mainActivity.addContentView(topLayout, classLoader.LinearLayout_LayoutParams.$new(-1,-1));
+            mainActivity.addContentView(bottomLayout, classLoader.LinearLayout_LayoutParams.$new(-1,-1));
         });
     });
+
+    function getgetClassLoader(){ return { Gravity: Java.use("android.view.Gravity"), TextView: Java.use("android.widget.TextView"), LinearLayout: Java.use("android.widget.LinearLayout"), LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"), Color: Java.use("android.graphics.Color"), ActivityThread: Java.use("android.app.ActivityThread"), View: Java.use("android.view.View"), String: Java.use("java.lang.String") }; }
+    function getMainActivity(cl){ return Java.cast(cl.ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord")).activity.value; }
+    function pixelDensityToPixels(c, dp){ return parseInt(dp * c.getResources().getDisplayMetrics().density.value); }
 }, 8000);
