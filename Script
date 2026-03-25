@@ -1,5 +1,5 @@
 // ========================================================================
-// SCRIPT DEFINITIVO: SMART SCANNER - CAÇADA AO INVENTÁRIO (BOMBS)
+// SCRIPT DEFINITIVO: SMART SCANNER + INTERCEPTADOR DE STRINGS (REDE)
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -85,13 +85,26 @@ setTimeout(() => {
     const alphaFadedStr = createTString('alpha=0.3');
     const zoomNormalStr = createTString('zoom=1');
 
+    // LEITOR SEGURO DE STRINGS
+    function safeReadString(ptr) {
+        try {
+            if (ptr.isNull()) return null;
+            const val = ptr.toInt32();
+            if (val < 0x10000) return null; // Ignora ponteiros baixos (prováveis números int)
+            const str = ptr.readUtf8String(30); // Tenta ler 30 caracteres
+            // Se tiver pelo menos 3 letras e for texto legível:
+            if (str && str.length > 2 && /^[a-zA-Z0-9_.-]+$/.test(str)) {
+                return str;
+            }
+        } catch (e) {}
+        return null;
+    }
 
-    // --- PREPARAÇÃO DO SMART SCANNER (ÂNCORA DISPATCHER) ---
+    // --- PREPARAÇÃO DO SMART SCANNER ---
     Java.perform(() => {
         try {
             const exports = Module.enumerateExports("libqplay.so");
-            
-            // Usando o Despachante de Inputs como âncora
+            // Voltamos para a âncora do Despachante de Ações, pois ele aciona os pacotes!
             const referenceName = "_ZN10W6NzgawMJy10TqFCwaot82Ei"; 
             
             exports.sort((a, b) => a.address.compare(b.address));
@@ -112,14 +125,22 @@ setTimeout(() => {
                                     if (scanMode === 2) {
                                         if (blacklistedFunctions.has(exp.name)) return;
 
-                                        // Salvamos os ponteiros para tentar o replay
-                                        interceptedData[exp.name] = {
+                                        // Tenta achar texto nos argumentos!
+                                        let foundString = safeReadString(args[1]) || safeReadString(args[2]);
+                                        
+                                        // Salva com uma marcação de string se achar
+                                        let displayName = exp.name;
+                                        if (foundString) {
+                                            displayName = "📝[" + foundString + "] " + exp.name;
+                                        }
+
+                                        interceptedData[displayName] = {
                                             address: exp.address,
                                             args: [args[0], args[1], args[2], args[3]]
                                         };
 
-                                        if (!smartListLogs.includes(exp.name)) {
-                                            smartListLogs.push(exp.name);
+                                        if (!smartListLogs.includes(displayName)) {
+                                            smartListLogs.push(displayName);
                                             if (smartListLogs.length > 8) smartListLogs.shift(); 
                                         }
                                     }
@@ -368,7 +389,7 @@ setTimeout(() => {
                                 const targetName = smartListLogs[currentTargetIndex];
                                 const data = interceptedData[targetName];
                                 if (data) {
-                                    showToast("Executando: " + targetName.substring(0, 10));
+                                    showToast("Executando Genérico...");
                                     const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
                                     Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
                                 }
@@ -488,7 +509,7 @@ setTimeout(() => {
                     if (scanMode === 1) {
                         scanLogView.setText(classLoader.String.$new("...Calibrando (Fique Parado)..."));
                     } else if (scanMode === 2 || smartListLogs.length > 0) {
-                        let displayTexts = smartListLogs.map((name, idx) => { return (idx === currentTargetIndex ? "🎯 " : "   ") + name.substring(0, 25) + "..."; });
+                        let displayTexts = smartListLogs.map((name, idx) => { return (idx === currentTargetIndex ? "🎯 " : "   ") + name.substring(0, 30) + "..."; });
                         if (displayTexts.length === 0) displayTexts.push("Nenhuma ação capturada.");
                         scanLogView.setText(classLoader.String.$new(displayTexts.join("\n")));
                     } else {
