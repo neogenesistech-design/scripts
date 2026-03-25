@@ -367,7 +367,9 @@ setTimeout(() => {
                 return button; 
             }
 
+            // ========================================================================
             // PAINEL FIXO TOP-RIGHT
+            // ========================================================================
             const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
             topRightContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             topRightContainer.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
@@ -418,7 +420,6 @@ setTimeout(() => {
             }).$new());
             topRightContainer.addView(clearButton);
 
-            // NOVO BOTÃO SAVE COM LÓGICA SIMPLIFICADA E DIRETA (APENAS NOMES)
             const saveButton = classLoader.TextView.$new(mainActivity);
             saveButton.setText(classLoader.String.$new("[ Save TXT ]")); saveButton.setTextColor(classLoader.Color.WHITE.value); saveButton.setBackgroundColor(COLOR_SAVE); saveButton.setPadding(PADDING, PADDING, PADDING, PADDING); saveButton.setLayoutParams(btnLP);
             saveButton.setOnClickListener(Java.registerClass({
@@ -431,27 +432,32 @@ setTimeout(() => {
                                 const context = ActivityThread.currentApplication().getApplicationContext();
                                 const pkgName = context.getPackageName();
                                 const File = Java.use("java.io.File");
-                                const FileOutputStream = Java.use("java.io.FileOutputStream");
-                                const OutputStreamWriter = Java.use("java.io.OutputStreamWriter");
+                                const FileWriter = Java.use("java.io.FileWriter");
+                                const BufferedWriter = Java.use("java.io.BufferedWriter");
+                                const JString = Java.use("java.lang.String");
 
                                 const externalPath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath();
                                 const filePath = externalPath + "/Android/data/" + pkgName + "/saved_functions.txt";
                                 
                                 let file = File.$new(filePath);
-                                let fos = FileOutputStream.$new(file, true); 
-                                let osw = OutputStreamWriter.$new(fos);
+                                let fw = FileWriter.$new(file, true); 
+                                let bw = BufferedWriter.$new(fw);
 
                                 if (smartListLogs.length > 0) {
                                     for (let i = 0; i < smartListLogs.length; i++) {
-                                        osw.write(smartListLogs[i] + "\n");
+                                        // Força a conversão para Java String para evitar erro de Write
+                                        bw.write(JString.$new(smartListLogs[i] + "\n"));
                                     }
-                                    showToast("TXT limpo salvo na pasta Android/data!");
+                                    showToast("TXT salvo com sucesso!");
                                 } else {
-                                    showToast("Nenhuma função na lista para salvar.");
+                                    showToast("Nenhuma função para salvar.");
                                 }
                                 
-                                osw.close(); fos.close();
-                            } catch(e) { showToast("Erro no Save!"); }
+                                bw.close(); fw.close();
+                            } catch(e) { 
+                                showToast("Erro no Save: " + e.message); 
+                                console.log("Save Error: " + e);
+                            }
                         });
                     }
                 }
@@ -459,7 +465,9 @@ setTimeout(() => {
             topRightContainer.addView(saveButton);
             trRootLayout.addView(topRightContainer);
 
+            // ========================================================================
             // PAINEL INFERIOR
+            // ========================================================================
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
             const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
             const row2 = classLoader.LinearLayout.$new(mainActivity); row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row2.setGravity(Gravity.CENTER.value);
