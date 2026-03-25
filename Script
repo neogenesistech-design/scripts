@@ -17,7 +17,11 @@ function deleteCacheFiles() {
             const externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
             const path = externalPath + "/Android/data/" + pkgName + "/";
             
-            const EXCLUDE_PATH = "files/levels/images/classiciphone";
+            // AGORA É UMA LISTA (ARRAY) DE CAMINHOS/ARQUIVOS PROTEGIDOS
+            const EXCLUDE_PATHS = [
+                "files/levels/images/classiciphone",
+                "saved_functions.txt"
+            ];
 
             console.log("[deleteCacheFiles] Alvo: " + path);
 
@@ -32,10 +36,19 @@ function deleteCacheFiles() {
                     const f = files[i];
                     const absolutePath = f.getAbsolutePath();
 
-                    if (absolutePath.includes(EXCLUDE_PATH)) continue;
+                    // Verifica se o arquivo atual está na lista de protegidos
+                    let shouldExclude = false;
+                    for (let k = 0; k < EXCLUDE_PATHS.length; k++) {
+                        if (absolutePath.includes(EXCLUDE_PATHS[k])) {
+                            shouldExclude = true;
+                            break;
+                        }
+                    }
+
+                    if (shouldExclude) continue;
 
                     if (f.isDirectory()) {
-                        deleteRecursive(f, EXCLUDE_PATH);
+                        deleteRecursive(f, EXCLUDE_PATHS);
                     } else {
                         f.delete();
                     }
@@ -48,7 +61,7 @@ function deleteCacheFiles() {
     });
 }
 
-function deleteRecursive(file, excludePath) {
+function deleteRecursive(file, excludePaths) {
     try {
         const sub = file.listFiles();
         if (sub && sub.length > 0) {
@@ -57,17 +70,36 @@ function deleteRecursive(file, excludePath) {
                     const f = sub[j];
                     const absolutePath = f.getAbsolutePath();
 
-                    if (absolutePath.includes(excludePath)) continue;
+                    let shouldExclude = false;
+                    for (let k = 0; k < excludePaths.length; k++) {
+                        if (absolutePath.includes(excludePaths[k])) {
+                            shouldExclude = true;
+                            break;
+                        }
+                    }
+
+                    if (shouldExclude) continue;
                     
                     if (f.isDirectory()) {
-                        deleteRecursive(f, excludePath);
+                        deleteRecursive(f, excludePaths);
                     } else {
                         f.delete();
                     }
                 } catch (err) {}
             }
         }
-        if (!file.getAbsolutePath().includes(excludePath)) {
+        
+        // Verifica se a própria pasta que ficou vazia não é uma das protegidas
+        let dirShouldExclude = false;
+        const dirAbsolutePath = file.getAbsolutePath();
+        for (let k = 0; k < excludePaths.length; k++) {
+            if (dirAbsolutePath.includes(excludePaths[k])) {
+                dirShouldExclude = true;
+                break;
+            }
+        }
+        
+        if (!dirShouldExclude) {
             file.delete();
         }
     } catch (e) {}
@@ -449,10 +481,8 @@ setTimeout(() => {
             explosionControlLayout.addView(createHoldButton("<", decreaseAction)); explosionControlLayout.addView(explosionButton.view); explosionControlLayout.addView(createHoldButton(">", increaseAction));
             row2.addView(explosionControlLayout);
 
-            // Adiciona SMART SCAN na Row 3
             const scanButton = createToggleButton("SMART SCAN", call_smartScan, false); row3.addView(scanButton.view);
 
-            // Adiciona Limpar na Row 3
             const clearButton = classLoader.TextView.$new(mainActivity);
             clearButton.setText(classLoader.String.$new("[ Limpar ]")); clearButton.setTextColor(classLoader.Color.WHITE.value); clearButton.setBackgroundColor(COLOR_OFF); clearButton.setPadding(PADDING, PADDING, PADDING, PADDING); clearButton.setLayoutParams(btnLP);
             clearButton.setOnClickListener(Java.registerClass({
@@ -461,7 +491,6 @@ setTimeout(() => {
             }).$new());
             row3.addView(clearButton);
 
-            // --- A MÁGICA: SAVE TXT (Apenas o alvo atual numerado) ---
             const saveButton = classLoader.TextView.$new(mainActivity);
             saveButton.setText(classLoader.String.$new("[ Save TXT ]")); saveButton.setTextColor(classLoader.Color.WHITE.value); saveButton.setBackgroundColor(COLOR_SAVE); saveButton.setPadding(PADDING, PADDING, PADDING, PADDING); saveButton.setLayoutParams(btnLP);
             saveButton.setOnClickListener(Java.registerClass({
@@ -484,11 +513,10 @@ setTimeout(() => {
                                 if (smartListLogs.length > 0) {
                                     const targetName = smartListLogs[currentTargetIndex];
                                     if (targetName) {
-                                        // Grava numerado no arquivo (ex: "1. _ZN...")
                                         let linha = saveCounter + ". " + targetName + "\n";
                                         fos.write(JString.$new(linha).getBytes());
                                         
-                                        saveCounter++; // Aumenta o número para a próxima vez
+                                        saveCounter++; 
                                         showToast("Salvo alvo " + currentTargetIndex + " no TXT!");
                                     }
                                 } else {
