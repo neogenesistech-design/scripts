@@ -99,11 +99,11 @@ setTimeout(() => {
     let autoOffButtons = []; 
 
     // --- VARIÁVEIS DO SMART SCANNER & REPLAY ATTACK ---
-    let scanMode = 0; // 0: Desligado, 1: Calibrando, 2: Escutando
+    let scanMode = 0; 
     let blacklistedFunctions = new Set(); 
     let smartListLogs = []; 
     let currentTargetIndex = 0;
-    let interceptedData = {}; // Guarda a função e seus argumentos para o Replay Attack
+    let interceptedData = {}; 
 
     // --- FUNÇÕES NATIVAS ---
     let hurtPlayer_orig = null;
@@ -142,10 +142,14 @@ setTimeout(() => {
                                     if (scanMode === 2) {
                                         if (blacklistedFunctions.has(exp.name)) return;
 
-                                        // RESTAURADO: Captura os argumentos originais puros para o Replay Attack funcionar!
                                         interceptedData[exp.name] = {
                                             address: exp.address,
-                                            args: [args[0], args[1], args[2], args[3]]
+                                            args: [
+                                                args[0] ? args[0].toString() : "0x0", 
+                                                args[1] ? args[1].toString() : "0x0", 
+                                                args[2] ? args[2].toString() : "0x0", 
+                                                args[3] ? args[3].toString() : "0x0"
+                                            ]
                                         };
 
                                         if (!smartListLogs.includes(exp.name)) {
@@ -363,9 +367,11 @@ setTimeout(() => {
                 return button; 
             }
 
-            // PAINEL FIXO TOP-RIGHT
+            // ========================================================================
+            // PAINEL FIXO TOP-RIGHT (Apenas ALVO e EXECUTAR lado a lado)
+            // ========================================================================
             const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
-            topRightContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+            topRightContainer.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); // Alinhado Horizontalmente
             topRightContainer.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
             
             const trRootLayout = classLoader.LinearLayout.$new(mainActivity);
@@ -384,7 +390,6 @@ setTimeout(() => {
             }).$new());
             topRightContainer.addView(targetButton);
 
-            // BOTÃO EXECUTAR (Restaurado com execução perfeita dos argumentos!)
             const executeButton = classLoader.TextView.$new(mainActivity);
             executeButton.setText(classLoader.String.$new("[ EXECUTAR ]")); executeButton.setTextColor(classLoader.Color.WHITE.value); executeButton.setBackgroundColor(COLOR_ACTION); executeButton.setPadding(PADDING, PADDING, PADDING, PADDING); executeButton.setLayoutParams(btnLP);
             executeButton.setOnClickListener(Java.registerClass({
@@ -396,9 +401,9 @@ setTimeout(() => {
                                 const targetName = smartListLogs[currentTargetIndex];
                                 const data = interceptedData[targetName];
                                 if (data) {
-                                    showToast("Executando: " + targetName.substring(0, 10));
+                                    showToast("Executando genérico: " + targetName.substring(0, 10));
                                     const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-                                    Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
+                                    Java.perform(() => { injectedFunc(ptr(0), ptr(0), ptr(0), ptr(0)); });
                                 }
                             } catch(e) { showToast("Crash evitado!"); }
                         }
@@ -407,60 +412,11 @@ setTimeout(() => {
             }).$new());
             topRightContainer.addView(executeButton);
 
-            const clearButton = classLoader.TextView.$new(mainActivity);
-            clearButton.setText(classLoader.String.$new("[ Limpar ]")); clearButton.setTextColor(classLoader.Color.WHITE.value); clearButton.setBackgroundColor(COLOR_OFF); clearButton.setPadding(PADDING, PADDING, PADDING, PADDING); clearButton.setLayoutParams(btnLP);
-            clearButton.setOnClickListener(Java.registerClass({
-                name: "com.example.ClearClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { smartListLogs = []; interceptedData = {}; currentTargetIndex = 0; showToast("Lista limpa!"); } }
-            }).$new());
-            topRightContainer.addView(clearButton);
-
-            // SAVE TXT (Modificado para salvar SOMENTE a String do Nome e não os args crus)
-            const saveButton = classLoader.TextView.$new(mainActivity);
-            saveButton.setText(classLoader.String.$new("[ Save TXT ]")); saveButton.setTextColor(classLoader.Color.WHITE.value); saveButton.setBackgroundColor(COLOR_SAVE); saveButton.setPadding(PADDING, PADDING, PADDING, PADDING); saveButton.setLayoutParams(btnLP);
-            saveButton.setOnClickListener(Java.registerClass({
-                name: "com.example.SaveClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        Java.perform(() => {
-                            try {
-                                const ActivityThread = Java.use("android.app.ActivityThread");
-                                const context = ActivityThread.currentApplication().getApplicationContext();
-                                const pkgName = context.getPackageName();
-                                const File = Java.use("java.io.File");
-                                const FileWriter = Java.use("java.io.FileWriter");
-                                const BufferedWriter = Java.use("java.io.BufferedWriter");
-                                const JString = Java.use("java.lang.String");
-
-                                const externalPath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath();
-                                const filePath = externalPath + "/Android/data/" + pkgName + "/saved_functions.txt";
-                                
-                                let file = File.$new(filePath);
-                                let fw = FileWriter.$new(file, true); 
-                                let bw = BufferedWriter.$new(fw);
-
-                                if (smartListLogs.length > 0) {
-                                    for (let i = 0; i < smartListLogs.length; i++) {
-                                        // Salva APENAS o nome
-                                        bw.write(JString.$new(smartListLogs[i] + "\n"));
-                                    }
-                                    showToast("Nomes salvos no TXT!");
-                                } else {
-                                    showToast("Nenhuma função na lista.");
-                                }
-                                
-                                bw.close(); fw.close();
-                            } catch(e) { 
-                                showToast("Erro no Save: " + e.message); 
-                            }
-                        });
-                    }
-                }
-            }).$new());
-            topRightContainer.addView(saveButton);
             trRootLayout.addView(topRightContainer);
 
-            // PAINEL INFERIOR
+            // ========================================================================
+            // PAINEL INFERIOR (Gaveta)
+            // ========================================================================
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
             const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
             const row2 = classLoader.LinearLayout.$new(mainActivity); row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row2.setGravity(Gravity.CENTER.value);
@@ -496,7 +452,62 @@ setTimeout(() => {
             explosionControlLayout.addView(createHoldButton("<", decreaseAction)); explosionControlLayout.addView(explosionButton.view); explosionControlLayout.addView(createHoldButton(">", increaseAction));
             row2.addView(explosionControlLayout);
 
+            // Adiciona SMART SCAN na Row 3
             const scanButton = createToggleButton("SMART SCAN", call_smartScan, false); row3.addView(scanButton.view);
+
+            // Adiciona Limpar na Row 3
+            const clearButton = classLoader.TextView.$new(mainActivity);
+            clearButton.setText(classLoader.String.$new("[ Limpar ]")); clearButton.setTextColor(classLoader.Color.WHITE.value); clearButton.setBackgroundColor(COLOR_OFF); clearButton.setPadding(PADDING, PADDING, PADDING, PADDING); clearButton.setLayoutParams(btnLP);
+            clearButton.setOnClickListener(Java.registerClass({
+                name: "com.example.ClearClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { onClick(v) { smartListLogs = []; interceptedData = {}; currentTargetIndex = 0; showToast("Lista limpa!"); } }
+            }).$new());
+            row3.addView(clearButton);
+
+            // Adiciona Save TXT na Row 3
+            const saveButton = classLoader.TextView.$new(mainActivity);
+            saveButton.setText(classLoader.String.$new("[ Save TXT ]")); saveButton.setTextColor(classLoader.Color.WHITE.value); saveButton.setBackgroundColor(COLOR_SAVE); saveButton.setPadding(PADDING, PADDING, PADDING, PADDING); saveButton.setLayoutParams(btnLP);
+            saveButton.setOnClickListener(Java.registerClass({
+                name: "com.example.SaveClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        Java.perform(() => {
+                            try {
+                                const ActivityThread = Java.use("android.app.ActivityThread");
+                                const context = ActivityThread.currentApplication().getApplicationContext();
+                                const pkgName = context.getPackageName();
+                                const File = Java.use("java.io.File");
+                                const FileWriter = Java.use("java.io.FileWriter");
+                                const BufferedWriter = Java.use("java.io.BufferedWriter");
+                                const JString = Java.use("java.lang.String");
+
+                                const externalPath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath();
+                                const filePath = externalPath + "/Android/data/" + pkgName + "/saved_functions.txt";
+                                
+                                let file = File.$new(filePath);
+                                let fw = FileWriter.$new(file, true); 
+                                let bw = BufferedWriter.$new(fw);
+
+                                if (smartListLogs.length > 0) {
+                                    for (let i = 0; i < smartListLogs.length; i++) {
+                                        bw.write(JString.$new(smartListLogs[i] + "\n"));
+                                    }
+                                    showToast("Nomes salvos no TXT!");
+                                } else {
+                                    showToast("Nenhuma função na lista.");
+                                }
+                                
+                                bw.close(); fw.close();
+                            } catch(e) { 
+                                showToast("Erro no Save: " + e.message); 
+                            }
+                        });
+                    }
+                }
+            }).$new());
+            row3.addView(saveButton);
+
+            // Log View na Row 4
             const scanLogView = classLoader.TextView.$new(mainActivity); scanLogView.setTextColor(classLoader.Color.YELLOW.value); scanLogView.setPadding(PADDING, PADDING, PADDING, PADDING); scanLogView.setText(classLoader.String.$new("...")); row4.addView(scanLogView);
 
             mainActivity.addContentView(trRootLayout, trRootParams); 
