@@ -103,7 +103,7 @@ setTimeout(() => {
     let blacklistedFunctions = new Set(); 
     let smartListLogs = []; 
     let currentTargetIndex = 0;
-    let interceptedData = {}; 
+    let interceptedData = {}; // Guarda a função e seus argumentos para o Replay Attack
 
     // --- FUNÇÕES NATIVAS ---
     let hurtPlayer_orig = null;
@@ -142,14 +142,10 @@ setTimeout(() => {
                                     if (scanMode === 2) {
                                         if (blacklistedFunctions.has(exp.name)) return;
 
+                                        // RESTAURADO: Captura os argumentos originais puros para o Replay Attack funcionar!
                                         interceptedData[exp.name] = {
                                             address: exp.address,
-                                            args: [
-                                                args[0] ? args[0].toString() : "0x0", 
-                                                args[1] ? args[1].toString() : "0x0", 
-                                                args[2] ? args[2].toString() : "0x0", 
-                                                args[3] ? args[3].toString() : "0x0"
-                                            ]
+                                            args: [args[0], args[1], args[2], args[3]]
                                         };
 
                                         if (!smartListLogs.includes(exp.name)) {
@@ -367,9 +363,7 @@ setTimeout(() => {
                 return button; 
             }
 
-            // ========================================================================
             // PAINEL FIXO TOP-RIGHT
-            // ========================================================================
             const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
             topRightContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             topRightContainer.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
@@ -390,6 +384,7 @@ setTimeout(() => {
             }).$new());
             topRightContainer.addView(targetButton);
 
+            // BOTÃO EXECUTAR (Restaurado com execução perfeita dos argumentos!)
             const executeButton = classLoader.TextView.$new(mainActivity);
             executeButton.setText(classLoader.String.$new("[ EXECUTAR ]")); executeButton.setTextColor(classLoader.Color.WHITE.value); executeButton.setBackgroundColor(COLOR_ACTION); executeButton.setPadding(PADDING, PADDING, PADDING, PADDING); executeButton.setLayoutParams(btnLP);
             executeButton.setOnClickListener(Java.registerClass({
@@ -403,7 +398,7 @@ setTimeout(() => {
                                 if (data) {
                                     showToast("Executando: " + targetName.substring(0, 10));
                                     const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-                                    Java.perform(() => { injectedFunc(ptr(data.args[0]), ptr(data.args[1]), ptr(data.args[2]), ptr(data.args[3])); });
+                                    Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
                                 }
                             } catch(e) { showToast("Crash evitado!"); }
                         }
@@ -420,6 +415,7 @@ setTimeout(() => {
             }).$new());
             topRightContainer.addView(clearButton);
 
+            // SAVE TXT (Modificado para salvar SOMENTE a String do Nome e não os args crus)
             const saveButton = classLoader.TextView.$new(mainActivity);
             saveButton.setText(classLoader.String.$new("[ Save TXT ]")); saveButton.setTextColor(classLoader.Color.WHITE.value); saveButton.setBackgroundColor(COLOR_SAVE); saveButton.setPadding(PADDING, PADDING, PADDING, PADDING); saveButton.setLayoutParams(btnLP);
             saveButton.setOnClickListener(Java.registerClass({
@@ -445,18 +441,17 @@ setTimeout(() => {
 
                                 if (smartListLogs.length > 0) {
                                     for (let i = 0; i < smartListLogs.length; i++) {
-                                        // Força a conversão para Java String para evitar erro de Write
+                                        // Salva APENAS o nome
                                         bw.write(JString.$new(smartListLogs[i] + "\n"));
                                     }
-                                    showToast("TXT salvo com sucesso!");
+                                    showToast("Nomes salvos no TXT!");
                                 } else {
-                                    showToast("Nenhuma função para salvar.");
+                                    showToast("Nenhuma função na lista.");
                                 }
                                 
                                 bw.close(); fw.close();
                             } catch(e) { 
                                 showToast("Erro no Save: " + e.message); 
-                                console.log("Save Error: " + e);
                             }
                         });
                     }
@@ -465,9 +460,7 @@ setTimeout(() => {
             topRightContainer.addView(saveButton);
             trRootLayout.addView(topRightContainer);
 
-            // ========================================================================
             // PAINEL INFERIOR
-            // ========================================================================
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
             const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
             const row2 = classLoader.LinearLayout.$new(mainActivity); row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row2.setGravity(Gravity.CENTER.value);
