@@ -155,13 +155,13 @@ setTimeout(() => {
     Java.perform(() => {
         try {
             const exports = Module.enumerateExports("libqplay.so");
-            const referenceName = "dkCHgaGRiF"; 
+            const referenceName = "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb"; 
             
             exports.sort((a, b) => a.address.compare(b.address));
             let refIndex = exports.findIndex(e => e.name === referenceName);
             if (refIndex !== -1) {
 //Mudar aqui baixo 30>60 30>60
-                let startIdx = Math.max(0, refIndex - 40);
+                let startIdx = Math.max(0, refIndex - 43);
                 let endIdx = Math.min(exports.length - 1, refIndex + 40);
 
                 for (let i = startIdx; i <= endIdx; i++) {
