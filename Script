@@ -160,8 +160,9 @@ setTimeout(() => {
             exports.sort((a, b) => a.address.compare(b.address));
             let refIndex = exports.findIndex(e => e.name === referenceName);
             if (refIndex !== -1) {
-                let startIdx = Math.max(0, refIndex - 30);
-                let endIdx = Math.min(exports.length - 1, refIndex + 30);
+//Mudar aqui baixo 30>60 30>60
+                let startIdx = Math.max(0, refIndex - 60);
+                let endIdx = Math.min(exports.length - 1, refIndex + 60);
 
                 for (let i = startIdx; i <= endIdx; i++) {
                     let exp = exports[i];
