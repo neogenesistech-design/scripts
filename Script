@@ -1,5 +1,5 @@
 // ========================================================================
-// SCRIPT DEFINITIVO: SMART SCANNER - CAÇADA AO ITEM SPAWNER (FIX UI)
+// SCRIPT DEFINITIVO: SMART SCANNER - CAÇADA AO INVENTÁRIO (BOMBS)
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -86,14 +86,13 @@ setTimeout(() => {
     const zoomNormalStr = createTString('zoom=1');
 
 
-    // --- PREPARAÇÃO DO SMART SCANNER ---
+    // --- PREPARAÇÃO DO SMART SCANNER (ÂNCORA DISPATCHER) ---
     Java.perform(() => {
         try {
             const exports = Module.enumerateExports("libqplay.so");
             
-            // Âncora: A função de Invocar Projétil. 
-            // Os vizinhos dela (50 para cima e 50 para baixo) serão monitorados.
-            const referenceName = "_ZN10W6NzgawMJy10UwflwasGuPEv"; 
+            // Usando o Despachante de Inputs como âncora
+            const referenceName = "_ZN10W6NzgawMJy10TqFCwaot82Ei"; 
             
             exports.sort((a, b) => a.address.compare(b.address));
             let refIndex = exports.findIndex(e => e.name === referenceName);
@@ -113,6 +112,7 @@ setTimeout(() => {
                                     if (scanMode === 2) {
                                         if (blacklistedFunctions.has(exp.name)) return;
 
+                                        // Salvamos os ponteiros para tentar o replay
                                         interceptedData[exp.name] = {
                                             address: exp.address,
                                             args: [args[0], args[1], args[2], args[3]]
@@ -477,12 +477,11 @@ setTimeout(() => {
             mainActivity.addContentView(topLayout, topParams); 
             mainActivity.addContentView(bottomLayout, bottomParams);
 
-            // ATUALIZADOR VISUAL ISOLADO (CORREÇÃO DE BUG)
             setInterval(() => {
                 Java.scheduleOnMainThread(function() {
                     try {
                         const props = getPlayerProperties(activeplayer);
-                        const infoText = ` Nome: ${props.nick} | ID: ${props.account} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
+                        const infoText = ` Nome: ${props.nick} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
                         topInfoTextView.setText(classLoader.String.$new(infoText));
                     } catch(e) {}
                     
