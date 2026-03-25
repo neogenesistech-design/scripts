@@ -104,6 +104,7 @@ setTimeout(() => {
     let smartListLogs = []; 
     let currentTargetIndex = 0;
     let interceptedData = {}; // Guarda a função e seus args para o Replay Attack
+    let saveCounter = 1; // Contador para numerar as funções salvas no TXT
 
     // --- FUNÇÕES NATIVAS ---
     let hurtPlayer_orig = null;
@@ -460,7 +461,7 @@ setTimeout(() => {
             }).$new());
             row3.addView(clearButton);
 
-            // --- A MÁGICA: SAVE TXT (100% à prova de falhas com FileOutputStream em Bytes) ---
+            // --- A MÁGICA: SAVE TXT (Apenas o alvo atual numerado) ---
             const saveButton = classLoader.TextView.$new(mainActivity);
             saveButton.setText(classLoader.String.$new("[ Save TXT ]")); saveButton.setTextColor(classLoader.Color.WHITE.value); saveButton.setBackgroundColor(COLOR_SAVE); saveButton.setPadding(PADDING, PADDING, PADDING, PADDING); saveButton.setLayoutParams(btnLP);
             saveButton.setOnClickListener(Java.registerClass({
@@ -478,18 +479,20 @@ setTimeout(() => {
                                 const externalPath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath();
                                 const filePath = externalPath + "/Android/data/" + pkgName + "/saved_functions.txt";
                                 
-                                // Abre o arquivo escrevendo direto em bytes
                                 let fos = FileOutputStream.$new(filePath, true); 
 
                                 if (smartListLogs.length > 0) {
-                                    for (let i = 0; i < smartListLogs.length; i++) {
-                                        let nomePuro = smartListLogs[i] + "\n";
-                                        // A chave de sucesso: converter para getBytes()
-                                        fos.write(JString.$new(nomePuro).getBytes());
+                                    const targetName = smartListLogs[currentTargetIndex];
+                                    if (targetName) {
+                                        // Grava numerado no arquivo (ex: "1. _ZN...")
+                                        let linha = saveCounter + ". " + targetName + "\n";
+                                        fos.write(JString.$new(linha).getBytes());
+                                        
+                                        saveCounter++; // Aumenta o número para a próxima vez
+                                        showToast("Salvo alvo " + currentTargetIndex + " no TXT!");
                                     }
-                                    showToast("Nomes salvos no TXT!");
                                 } else {
-                                    showToast("Nenhuma função na lista.");
+                                    showToast("Nenhum alvo para salvar.");
                                 }
                                 
                                 fos.close();
