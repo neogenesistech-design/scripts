@@ -1,5 +1,5 @@
 // ========================================================================
-// SCRIPT DEFINITIVO: SMART SCANNER + SIMULADOR DE AÇÕES (GLOVE HACK)
+// SCRIPT DEFINITIVO: SMART SCANNER + FORÇADOR DE ESTADO DE MEMÓRIA
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -57,26 +57,14 @@ deleteCacheFiles();
 // DELAY PRINCIPAL DO SCRIPT PARA CARREGAMENTO
 // ========================================================================
 setTimeout(() => {
-    // --- VARIÁVEIS DE ESTADO E FUNÇÕES ESSENCIAIS ---
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
 
-    let unhit = false;
-    let unhit_mode = 1; 
-    let showAdmins = true; 
-    let autoOFF = false;
-    let afkInterval = null;
-    let autoOffHasTriggered = false;
-    let wallhack = false;
-    
-    let canExplode = false;
-    let explosionsInterval = null;
-    let explosionRadius = 90;
-
-    let lastAdminToastTime = 0;
-    let lastAdminSeenTime = 0; 
+    let unhit = false, unhit_mode = 1, showAdmins = true, autoOFF = false, afkInterval = null;
+    let autoOffHasTriggered = false, wallhack = false, canExplode = false, explosionsInterval = null;
+    let explosionRadius = 90, lastAdminToastTime = 0, lastAdminSeenTime = 0; 
     let autoOffButtons = []; 
 
-    // --- VARIÁVEIS DO SCANNER E CONTROLADOR ---
+    // --- VARIÁVEIS DO SCANNER E FORÇADOR ---
     let scanMode = 0; 
     let blacklistedFunctions = new Set(); 
     let smartListLogs = []; 
@@ -84,20 +72,16 @@ setTimeout(() => {
     let interceptedData = {}; 
     let saveCounter = 1; 
     
-    let currentActionParam = 5; // O parâmetro (param_1) que vimos no seu código
+    let handItemId = 1; // ID do item que vamos injetar na mão
 
     // --- FUNÇÕES NATIVAS ---
     let hurtPlayer_orig = null;
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
     
-    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
+    const activeplayerPtr = Module.findExportByName("libqplay.so", "dkCHgaGRiF");
     const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
     const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
     const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
-
-    // NOVA FUNÇÃO DESCOBERTA POR VOCÊ (Input Dispatcher)
-    const actionDispatcherPtr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10TqFCwaot82Ei");
-    const dispatchAction = actionDispatcherPtr ? new NativeFunction(actionDispatcherPtr, "void", ["pointer", "int"]) : null;
 
     const alphaNormalStr = createTString('alpha=1');
     const alphaFadedStr = createTString('alpha=0.3');
@@ -177,6 +161,7 @@ setTimeout(() => {
 
     function makeExplosion(level, radius) { 
         if (!level) return; 
+        const activeplayer = activeplayerPtr.readPointer();
         const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); 
         const offset = Math.floor(radius / 2); 
         for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } 
@@ -189,6 +174,7 @@ setTimeout(() => {
             Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 
                 'onEnter': function(args) { 
                     const playerPtr = args[0];
+                    const activeplayer = activeplayerPtr.readPointer();
                     const props = getPlayerProperties(playerPtr);
                     
                     if (playerPtr.toInt32() === activeplayer.toInt32()) return;
@@ -365,7 +351,7 @@ setTimeout(() => {
             const btnLP = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
             btnLP.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
 
-            // --- LINHA 1 (SCANNER) ---
+            // --- LINHA 1: SCANNER ---
             const rowScanner = classLoader.LinearLayout.$new(mainActivity);
             rowScanner.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             rowScanner.setGravity(Gravity.RIGHT.value);
@@ -402,59 +388,67 @@ setTimeout(() => {
             
             topRightContainer.addView(rowScanner);
 
-            // --- LINHA 2 (O CÉREBRO: ACTION DISPATCHER) ---
-            const rowDispatcher = classLoader.LinearLayout.$new(mainActivity);
-            rowDispatcher.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            rowDispatcher.setGravity(Gravity.RIGHT.value);
+            // --- LINHA 2: MEMORY STATE FORCER ---
+            const rowForcer = classLoader.LinearLayout.$new(mainActivity);
+            rowForcer.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            rowForcer.setGravity(Gravity.RIGHT.value);
 
-            const decParamBtn = classLoader.TextView.$new(mainActivity);
-            decParamBtn.setText(classLoader.String.$new("[ < ]")); decParamBtn.setTextColor(classLoader.Color.WHITE.value); decParamBtn.setBackgroundColor(COLOR_OFF); decParamBtn.setPadding(PADDING, PADDING, PADDING, PADDING); decParamBtn.setLayoutParams(btnLP);
+            const decHandBtn = classLoader.TextView.$new(mainActivity);
+            decHandBtn.setText(classLoader.String.$new("[ < ]")); decHandBtn.setTextColor(classLoader.Color.WHITE.value); decHandBtn.setBackgroundColor(COLOR_OFF); decHandBtn.setPadding(PADDING, PADDING, PADDING, PADDING); decHandBtn.setLayoutParams(btnLP);
             
-            const displayParamBtn = classLoader.TextView.$new(mainActivity);
-            displayParamBtn.setText(classLoader.String.$new("[ Param: " + currentActionParam + " ]")); displayParamBtn.setTextColor(classLoader.Color.WHITE.value); displayParamBtn.setBackgroundColor(COLOR_OFF); displayParamBtn.setPadding(PADDING, PADDING, PADDING, PADDING); displayParamBtn.setLayoutParams(btnLP);
+            const displayHandBtn = classLoader.TextView.$new(mainActivity);
+            displayHandBtn.setText(classLoader.String.$new("[ ID Mão: " + handItemId + " ]")); displayHandBtn.setTextColor(classLoader.Color.WHITE.value); displayHandBtn.setBackgroundColor(COLOR_OFF); displayHandBtn.setPadding(PADDING, PADDING, PADDING, PADDING); displayHandBtn.setLayoutParams(btnLP);
             
-            const incParamBtn = classLoader.TextView.$new(mainActivity);
-            incParamBtn.setText(classLoader.String.$new("[ > ]")); incParamBtn.setTextColor(classLoader.Color.WHITE.value); incParamBtn.setBackgroundColor(COLOR_OFF); incParamBtn.setPadding(PADDING, PADDING, PADDING, PADDING); incParamBtn.setLayoutParams(btnLP);
+            const incHandBtn = classLoader.TextView.$new(mainActivity);
+            incHandBtn.setText(classLoader.String.$new("[ > ]")); incHandBtn.setTextColor(classLoader.Color.WHITE.value); incHandBtn.setBackgroundColor(COLOR_OFF); incHandBtn.setPadding(PADDING, PADDING, PADDING, PADDING); incHandBtn.setLayoutParams(btnLP);
 
-            const updateParamDisplay = () => { Java.scheduleOnMainThread(() => { displayParamBtn.setText(classLoader.String.$new("[ Param: " + currentActionParam + " ]")); }); };
+            const updateHandDisplay = () => { Java.scheduleOnMainThread(() => { displayHandBtn.setText(classLoader.String.$new("[ ID Mão: " + handItemId + " ]")); }); };
 
-            decParamBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.DecParamClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { currentActionParam = Math.max(1, currentActionParam - 1); updateParamDisplay(); } }
+            decHandBtn.setOnClickListener(Java.registerClass({
+                name: "com.example.DecHandClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { onClick(v) { handItemId = Math.max(0, handItemId - 1); updateHandDisplay(); } }
             }).$new());
             
-            incParamBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.IncParamClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { currentActionParam = Math.min(20, currentActionParam + 1); updateParamDisplay(); } }
+            incHandBtn.setOnClickListener(Java.registerClass({
+                name: "com.example.IncHandClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { onClick(v) { handItemId = Math.min(20, handItemId + 1); updateHandDisplay(); } }
             }).$new());
 
-            const fireActionBtn = classLoader.TextView.$new(mainActivity);
-            fireActionBtn.setText(classLoader.String.$new("[ Forçar Ação ]")); fireActionBtn.setTextColor(classLoader.Color.WHITE.value); fireActionBtn.setBackgroundColor(COLOR_FIRE); fireActionBtn.setPadding(PADDING, PADDING, PADDING, PADDING); fireActionBtn.setLayoutParams(btnLP);
-            fireActionBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.FireActionClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+            const forceHandBtn = classLoader.TextView.$new(mainActivity);
+            forceHandBtn.setText(classLoader.String.$new("[ Forçar Mão ]")); forceHandBtn.setTextColor(classLoader.Color.WHITE.value); forceHandBtn.setBackgroundColor(COLOR_FIRE); forceHandBtn.setPadding(PADDING, PADDING, PADDING, PADDING); forceHandBtn.setLayoutParams(btnLP);
+            forceHandBtn.setOnClickListener(Java.registerClass({
+                name: "com.example.ForceHandClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: { 
                     onClick(v) { 
-                        if (dispatchAction && !activeplayer.isNull()) {
-                            showToast("Forçando ação: " + currentActionParam);
-                            // Chama o "Cérebro" do C++ passando o botão virtual
-                            dispatchAction(activeplayer, currentActionParam);
-                        } else {
-                            showToast("Função Dispatcher não encontrada.");
+                        const activeplayer = activeplayerPtr.readPointer();
+                        if (!activeplayer.isNull()) {
+                            try {
+                                // Injetando direto no offset revelado pelo seu código C++
+                                // Ghidra: this[0x6a0]
+                                // Se for um array de inteiros (ponteiros), é 0x6a0 * 4 = 0x1A80.
+                                // Se for offset direto em bytes, é 0x6a0.
+                                // Vamos testar gravar nos dois para garantir!
+                                activeplayer.add(0x6a0).writeU32(handItemId); 
+                                activeplayer.add(0x1a80).writeU32(handItemId);
+                                showToast("Injetado ID " + handItemId + " na mão!");
+                            } catch(e) {
+                                showToast("Erro de injeção na memória.");
+                            }
                         }
                     } 
                 }
             }).$new());
 
-            rowDispatcher.addView(decParamBtn);
-            rowDispatcher.addView(displayParamBtn);
-            rowDispatcher.addView(incParamBtn);
-            rowDispatcher.addView(fireActionBtn);
+            rowForcer.addView(decHandBtn);
+            rowForcer.addView(displayHandBtn);
+            rowForcer.addView(incHandBtn);
+            rowForcer.addView(forceHandBtn);
 
-            topRightContainer.addView(rowDispatcher);
+            topRightContainer.addView(rowForcer);
             trRootLayout.addView(topRightContainer);
 
             // ========================================================================
-            // PAINEL INFERIOR E GAVETA DE MENU (MANTIDOS INTACTOS)
+            // PAINEL INFERIOR E GAVETA DE MENU
             // ========================================================================
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
             const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
