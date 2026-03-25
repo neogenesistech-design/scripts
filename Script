@@ -99,11 +99,11 @@ setTimeout(() => {
     let autoOffButtons = []; 
 
     // --- VARIÁVEIS DO SMART SCANNER & REPLAY ATTACK ---
-    let scanMode = 0; 
+    let scanMode = 0; // 0: Desligado, 1: Calibrando, 2: Escutando
     let blacklistedFunctions = new Set(); 
     let smartListLogs = []; 
     let currentTargetIndex = 0;
-    let interceptedData = {}; 
+    let interceptedData = {}; // Guarda a função e seus args para o Replay Attack
 
     // --- FUNÇÕES NATIVAS ---
     let hurtPlayer_orig = null;
@@ -142,14 +142,10 @@ setTimeout(() => {
                                     if (scanMode === 2) {
                                         if (blacklistedFunctions.has(exp.name)) return;
 
+                                        // Salva o endereço e os argumentos originais para não crashar ao EXECUTAR
                                         interceptedData[exp.name] = {
                                             address: exp.address,
-                                            args: [
-                                                args[0] ? args[0].toString() : "0x0", 
-                                                args[1] ? args[1].toString() : "0x0", 
-                                                args[2] ? args[2].toString() : "0x0", 
-                                                args[3] ? args[3].toString() : "0x0"
-                                            ]
+                                            args: [args[0], args[1], args[2], args[3]]
                                         };
 
                                         if (!smartListLogs.includes(exp.name)) {
@@ -368,10 +364,10 @@ setTimeout(() => {
             }
 
             // ========================================================================
-            // PAINEL FIXO TOP-RIGHT (Apenas ALVO e EXECUTAR lado a lado)
+            // PAINEL FIXO TOP-RIGHT
             // ========================================================================
             const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
-            topRightContainer.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); // Alinhado Horizontalmente
+            topRightContainer.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             topRightContainer.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
             
             const trRootLayout = classLoader.LinearLayout.$new(mainActivity);
@@ -401,9 +397,9 @@ setTimeout(() => {
                                 const targetName = smartListLogs[currentTargetIndex];
                                 const data = interceptedData[targetName];
                                 if (data) {
-                                    showToast("Executando genérico: " + targetName.substring(0, 10));
+                                    showToast("Executando: " + targetName.substring(0, 10));
                                     const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-                                    Java.perform(() => { injectedFunc(ptr(0), ptr(0), ptr(0), ptr(0)); });
+                                    Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
                                 }
                             } catch(e) { showToast("Crash evitado!"); }
                         }
@@ -415,7 +411,7 @@ setTimeout(() => {
             trRootLayout.addView(topRightContainer);
 
             // ========================================================================
-            // PAINEL INFERIOR (Gaveta)
+            // PAINEL INFERIOR (GAVETA)
             // ========================================================================
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
             const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
@@ -464,7 +460,7 @@ setTimeout(() => {
             }).$new());
             row3.addView(clearButton);
 
-            // Adiciona Save TXT na Row 3
+            // --- A MÁGICA: SAVE TXT (100% à prova de falhas com FileOutputStream em Bytes) ---
             const saveButton = classLoader.TextView.$new(mainActivity);
             saveButton.setText(classLoader.String.$new("[ Save TXT ]")); saveButton.setTextColor(classLoader.Color.WHITE.value); saveButton.setBackgroundColor(COLOR_SAVE); saveButton.setPadding(PADDING, PADDING, PADDING, PADDING); saveButton.setLayoutParams(btnLP);
             saveButton.setOnClickListener(Java.registerClass({
@@ -476,28 +472,27 @@ setTimeout(() => {
                                 const ActivityThread = Java.use("android.app.ActivityThread");
                                 const context = ActivityThread.currentApplication().getApplicationContext();
                                 const pkgName = context.getPackageName();
-                                const File = Java.use("java.io.File");
-                                const FileWriter = Java.use("java.io.FileWriter");
-                                const BufferedWriter = Java.use("java.io.BufferedWriter");
+                                const FileOutputStream = Java.use("java.io.FileOutputStream");
                                 const JString = Java.use("java.lang.String");
 
                                 const externalPath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath();
                                 const filePath = externalPath + "/Android/data/" + pkgName + "/saved_functions.txt";
                                 
-                                let file = File.$new(filePath);
-                                let fw = FileWriter.$new(file, true); 
-                                let bw = BufferedWriter.$new(fw);
+                                // Abre o arquivo escrevendo direto em bytes
+                                let fos = FileOutputStream.$new(filePath, true); 
 
                                 if (smartListLogs.length > 0) {
                                     for (let i = 0; i < smartListLogs.length; i++) {
-                                        bw.write(JString.$new(smartListLogs[i] + "\n"));
+                                        let nomePuro = smartListLogs[i] + "\n";
+                                        // A chave de sucesso: converter para getBytes()
+                                        fos.write(JString.$new(nomePuro).getBytes());
                                     }
                                     showToast("Nomes salvos no TXT!");
                                 } else {
                                     showToast("Nenhuma função na lista.");
                                 }
                                 
-                                bw.close(); fw.close();
+                                fos.close();
                             } catch(e) { 
                                 showToast("Erro no Save: " + e.message); 
                             }
@@ -507,7 +502,6 @@ setTimeout(() => {
             }).$new());
             row3.addView(saveButton);
 
-            // Log View na Row 4
             const scanLogView = classLoader.TextView.$new(mainActivity); scanLogView.setTextColor(classLoader.Color.YELLOW.value); scanLogView.setPadding(PADDING, PADDING, PADDING, PADDING); scanLogView.setText(classLoader.String.$new("...")); row4.addView(scanLogView);
 
             mainActivity.addContentView(trRootLayout, trRootParams); 
