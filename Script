@@ -1,26 +1,32 @@
-/* SCRIPT DE TESTE - HELLO WORLD TOAST
-   Este código deve ser colocado no link RAW do seu repositório.
-*/
+/* SCRIPT DE TESTE COM DELAY - HELLO WORLD TOAST */
 
-Java.perform(function() {
-    console.log("[*] Script remoto carregado com sucesso!");
+setTimeout(function() {
+    Java.perform(function() {
+        console.log("[*] Iniciando execução após delay...");
 
-    // Usamos o scheduleOnMainThread porque Toasts precisam rodar na thread de interface
-    Java.scheduleOnMainThread(function() {
-        var Toast = Java.use("android.widget.Toast");
-        var String = Java.use("java.lang.String");
-        var ActivityThread = Java.use("android.app.ActivityThread");
-        
-        // Obtém o contexto da aplicação de forma dinâmica
-        var context = ActivityThread.currentApplication().getApplicationContext();
-        
-        // Mensagem de sucesso
-        var message = String.$new("Hello World! Frida Injetado com Sucesso!");
-        
-        // Exibe o Toast (0 = Short, 1 = Long)
-        var toast = Toast.makeText(context, message, 1);
-        toast.show();
-        
-        console.log("[*] Toast exibido no jogo!");
+        Java.scheduleOnMainThread(function() {
+            try {
+                var Toast = Java.use("android.widget.Toast");
+                var String = Java.use("java.lang.String");
+                var ActivityThread = Java.use("android.app.ActivityThread");
+                
+                // Tenta pegar o contexto. Se falhar, tentamos outra forma.
+                var app = ActivityThread.currentApplication();
+                if (app == null) {
+                    console.log("[-] Erro: Application ainda é nula.");
+                    return;
+                }
+                
+                var context = app.getApplicationContext();
+                var message = String.$new("Frida Ativo! Delay Funcionou.");
+                
+                var toast = Toast.makeText(context, message, 1);
+                toast.show();
+                
+                console.log("[*] Toast disparado com sucesso!");
+            } catch (err) {
+                console.log("[-] Erro no script: " + err);
+            }
+        });
     });
-});
+}, 5000); // 5 segundos de espera
