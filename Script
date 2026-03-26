@@ -1,5 +1,5 @@
 // ========================================================================
-// SCRIPT DEFINITIVO: SMART SCANNER V2 (LISTA ROLÁVEL) + PODERES
+// SCRIPT DEFINITIVO: SMART SCANNER + PODERES OFICIAIS + ANTI-LAG
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -40,12 +40,17 @@ setTimeout(() => {
     let explosionRadius = 90, lastAdminToastTime = 0, lastAdminSeenTime = 0; 
     let autoOffButtons = []; 
 
+    // --- VARIÁVEIS DE FILA ANTI-LAG (NOVIDADE) ---
+    let pendingAdminDisable = false;
+    let pendingAdminToastMsg = null;
+
     // --- VARIÁVEIS DO SCANNER V2 ---
     let scanMode = 0; 
     let blacklistedFunctions = new Set(); 
-    let smartListLogs = []; // Array de nomes capturados
-    let interceptedData = {}; // Dados para o Replay
-    let selectedTargetName = null; // A função clicada na lista
+    let smartListLogs = []; 
+    let interceptedData = {}; 
+    let selectedTargetName = null; 
+    let currentTargetIndex = 0;
     let saveCounter = 1; 
 
     // --- PONTEIROS ESSENCIAIS ---
@@ -69,20 +74,18 @@ setTimeout(() => {
     const alphaFadedStr = createTString('alpha=0.3');
     const zoomNormalStr = createTString('zoom=1');
 
-    // Função global para a UI atualizar a lista
     let refreshScannerUI = null; 
 
     // --- PREPARAÇÃO DO SMART SCANNER (-33 a +33) ---
     Java.perform(() => {
         try {
             const exports = Module.enumerateExports("libqplay.so");
-            // Âncora original: hurtPlayer
+            // Âncora: hurtPlayer
             const referenceName = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"; 
             
             exports.sort((a, b) => a.address.compare(b.address));
             let refIndex = exports.findIndex(e => e.name === referenceName);
             if (refIndex !== -1) {
-                // Margem exata pedida: 33
                 let startIdx = Math.max(0, refIndex - 33);
                 let endIdx = Math.min(exports.length - 1, refIndex + 33);
 
@@ -105,9 +108,7 @@ setTimeout(() => {
 
                                         if (!smartListLogs.includes(exp.name)) {
                                             smartListLogs.push(exp.name);
-                                            if (smartListLogs.length > 50) smartListLogs.shift(); // Limite de 50 para não estourar a tela
-                                            
-                                            // Atualiza a lista visual
+                                            if (smartListLogs.length > 50) smartListLogs.shift();
                                             if (refreshScannerUI) refreshScannerUI();
                                         }
                                     }
@@ -155,7 +156,7 @@ setTimeout(() => {
         for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } 
     }
 
-    // --- HOOK SHOW ADMINS ---
+    // --- HOOK SHOW ADMINS (SISTEMA ANTI-LAG) ---
     setTimeout(() => {
         Java.perform(() => {
             const accRgx = /^(pc\:|graal\d+|guest.*)/;
@@ -163,9 +164,9 @@ setTimeout(() => {
                 'onEnter': function(args) { 
                     const playerPtr = args[0];
                     const activeplayer = activeplayerPtr.readPointer();
-                    const props = getPlayerProperties(playerPtr);
-                    
                     if (playerPtr.toInt32() === activeplayer.toInt32()) return;
+                    
+                    const props = getPlayerProperties(playerPtr);
                     const account = props.account ? props.account.toLowerCase() : '';
 
                     if (account !== '') { 
@@ -176,15 +177,17 @@ setTimeout(() => {
                             lastAdminSeenTime = now; 
                             if (autoOFF && !autoOffHasTriggered) { 
                                 autoOffHasTriggered = true; 
-                                Java.perform(() => {
-                                    showToast('Admin Detectado. Desativando cheats.'); 
-                                    Java.scheduleOnMainThread(() => { for (const button of autoOffButtons) { button.reset(); } }); 
-                                });
+                                // Não chama Java.perform aqui! Apenas levanta a bandeira.
+                                pendingAdminDisable = true;
                             }
                             if (showAdmins) {
                                 if (props.alpha < 1.0) setVarValue(playerPtr, alphaNormalStr);
                                 if (props.zoom < 1.0) setVarValue(playerPtr, zoomNormalStr);
-                                if (now - lastAdminToastTime > 5000) { lastAdminToastTime = now; showToast(`ADM REVELADO: ${props.nick}`, 0); }
+                                if (now - lastAdminToastTime > 5000) { 
+                                    lastAdminToastTime = now; 
+                                    // Levanta a bandeira para o Toast
+                                    pendingAdminToastMsg = `ADM REVELADO: ${props.nick}`; 
+                                }
                             }
                         } else {
                             if (showAdmins) {
@@ -264,7 +267,7 @@ setTimeout(() => {
     const call_wallhack = { on() { wallhack = true; showToast("Wallhack Ativo."); }, off() { wallhack = false; showToast("Wallhack Desativado."); } };
     const call_explode = { on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 200); }, off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } };
 
-    // --- INICIALIZAÇÃO DA UI (COM NOVO SCROLLVIEW DO SCANNER) ---
+    // --- INICIALIZAÇÃO DA UI ---
     Java.perform(function () {
         Java.scheduleOnMainThread(function () {
             const classLoader = getClassLoader();
@@ -275,10 +278,11 @@ setTimeout(() => {
             const COLOR_OFF = classLoader.Color.parseColor("#80000000");
             const COLOR_ON = classLoader.Color.parseColor("#80008000");
             const COLOR_ACTION = classLoader.Color.parseColor("#CC880000");
+            const COLOR_EXEC = classLoader.Color.parseColor("#CC9400D3"); // Roxo para o botão fixo
             const COLOR_HEAL = classLoader.Color.parseColor("#CC008800"); 
             const COLOR_FIRE = classLoader.Color.parseColor("#CCFF8C00"); 
-            const COLOR_BG_PANEL = classLoader.Color.parseColor("#E6000022"); // Fundo do painel do scanner
-            const COLOR_SELECTED = classLoader.Color.parseColor("#8000FF00"); // Verde para item selecionado
+            const COLOR_BG_PANEL = classLoader.Color.parseColor("#E6000022"); 
+            const COLOR_SELECTED = classLoader.Color.parseColor("#8000FF00"); 
             
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
@@ -322,7 +326,7 @@ setTimeout(() => {
             btnLP.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
 
             // ========================================================================
-            // 1. PAINEL TOP-RIGHT (OS PODERES)
+            // 1. PAINEL TOP-RIGHT (FIXO NA TELA) - EXECUTAR ALVO E PODERES
             // ========================================================================
             const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
             topRightContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value); 
@@ -333,6 +337,52 @@ setTimeout(() => {
             trRootLayout.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
             trRootLayout.setPadding(0, PADDING * 4, 0, 0); 
 
+            // LINHA 1: SCANNER CONTROLS
+            const rowTargetControl = classLoader.LinearLayout.$new(mainActivity);
+            rowTargetControl.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            rowTargetControl.setGravity(Gravity.RIGHT.value);
+
+            const targetButton = classLoader.TextView.$new(mainActivity);
+            targetButton.setText(classLoader.String.$new("[ > Alvo ]")); targetButton.setTextColor(classLoader.Color.WHITE.value); targetButton.setBackgroundColor(COLOR_OFF); targetButton.setPadding(PADDING, PADDING, PADDING, PADDING); targetButton.setLayoutParams(btnLP);
+            targetButton.setOnClickListener(Java.registerClass({
+                name: "com.example.TargetClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { 
+                    onClick(v) { 
+                        if (smartListLogs.length > 0) { 
+                            currentTargetIndex = (currentTargetIndex + 1) % smartListLogs.length; 
+                            selectedTargetName = smartListLogs[currentTargetIndex];
+                            if(refreshScannerUI) refreshScannerUI();
+                            showToast("Alvo alterado!"); 
+                        } else {
+                            showToast("Lista vazia."); 
+                        } 
+                    } 
+                }
+            }).$new());
+            rowTargetControl.addView(targetButton);
+
+            const execTargetBtn = classLoader.TextView.$new(mainActivity);
+            execTargetBtn.setText(classLoader.String.$new("[ EXECUTAR ]")); execTargetBtn.setTextColor(classLoader.Color.WHITE.value); execTargetBtn.setBackgroundColor(COLOR_EXEC); execTargetBtn.setPadding(PADDING, PADDING, PADDING, PADDING); execTargetBtn.setLayoutParams(btnLP);
+            execTargetBtn.setOnClickListener(Java.registerClass({
+                name: "com.example.ExecTargetClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        if (selectedTargetName && interceptedData[selectedTargetName]) {
+                            try {
+                                const data = interceptedData[selectedTargetName];
+                                const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
+                                Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
+                            } catch(e) { showToast("Crash evitado!"); }
+                        } else {
+                            showToast("Nenhum alvo selecionado.");
+                        }
+                    }
+                }
+            }).$new());
+            rowTargetControl.addView(execTargetBtn);
+            topRightContainer.addView(rowTargetControl);
+
+            // LINHA 2: PODER DE CURA
             const rowHeal = classLoader.LinearLayout.$new(mainActivity);
             rowHeal.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             rowHeal.setGravity(Gravity.RIGHT.value);
@@ -351,6 +401,7 @@ setTimeout(() => {
             rowHeal.addView(healButton);
             topRightContainer.addView(rowHeal);
 
+            // LINHA 3: PODERES FÍSICOS
             const rowPhysics = classLoader.LinearLayout.$new(mainActivity);
             rowPhysics.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
             rowPhysics.setGravity(Gravity.RIGHT.value);
@@ -372,6 +423,7 @@ setTimeout(() => {
             rowPhysics.addView(throwButton);
             rowPhysics.addView(projButton);
             topRightContainer.addView(rowPhysics);
+
             trRootLayout.addView(topRightContainer);
 
             // ========================================================================
@@ -381,12 +433,11 @@ setTimeout(() => {
             scannerPanel.setOrientation(classLoader.LinearLayout.VERTICAL.value);
             scannerPanel.setBackgroundColor(COLOR_BG_PANEL);
             scannerPanel.setPadding(PADDING, PADDING, PADDING, PADDING);
-            scannerPanel.setVisibility(View.GONE.value); // Começa escondido
+            scannerPanel.setVisibility(View.GONE.value);
             const scannerLP = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 280), -2);
             scannerLP.setMargins(0, PADDING * 4, 0, 0);
             scannerPanel.setLayoutParams(scannerLP);
 
-            // Botões de Controle do Scanner
             const scanControlsRow = classLoader.LinearLayout.$new(mainActivity);
             scanControlsRow.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
 
@@ -394,26 +445,6 @@ setTimeout(() => {
                 on() { scanMode = 1; smartListLogs = []; selectedTargetName = null; refreshScannerUI(); setTimeout(() => { if (scanMode === 1) { scanMode = 2; showToast("Scanner Escutando..."); } }, 3000); }, 
                 off() { scanMode = 0; } 
             });
-            
-            const btnExec = classLoader.TextView.$new(mainActivity);
-            btnExec.setText(classLoader.String.$new("EXEC")); btnExec.setTextColor(classLoader.Color.WHITE.value); btnExec.setBackgroundColor(COLOR_ACTION); btnExec.setPadding(PADDING, PADDING, PADDING, PADDING); btnExec.setLayoutParams(btnLP);
-            btnExec.setOnClickListener(Java.registerClass({
-                name: "com.example.ExecScanClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        if (selectedTargetName && interceptedData[selectedTargetName]) {
-                            try {
-                                showToast("Executando...");
-                                const data = interceptedData[selectedTargetName];
-                                const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-                                Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
-                            } catch(e) { showToast("Crash evitado!"); }
-                        } else {
-                            showToast("Selecione uma função na lista!");
-                        }
-                    }
-                }
-            }).$new());
 
             const btnLimpar = classLoader.TextView.$new(mainActivity);
             btnLimpar.setText(classLoader.String.$new("LIMPAR")); btnLimpar.setTextColor(classLoader.Color.WHITE.value); btnLimpar.setBackgroundColor(COLOR_OFF); btnLimpar.setPadding(PADDING, PADDING, PADDING, PADDING); btnLimpar.setLayoutParams(btnLP);
@@ -423,7 +454,7 @@ setTimeout(() => {
             }).$new());
 
             const btnSave = classLoader.TextView.$new(mainActivity);
-            btnSave.setText(classLoader.String.$new("SAVE")); btnSave.setTextColor(classLoader.Color.WHITE.value); btnSave.setBackgroundColor(COLOR_OFF); btnSave.setPadding(PADDING, PADDING, PADDING, PADDING); btnSave.setLayoutParams(btnLP);
+            btnSave.setText(classLoader.String.$new("SAVE TXT")); btnSave.setTextColor(classLoader.Color.WHITE.value); btnSave.setBackgroundColor(COLOR_SAVE); btnSave.setPadding(PADDING, PADDING, PADDING, PADDING); btnSave.setLayoutParams(btnLP);
             btnSave.setOnClickListener(Java.registerClass({
                 name: "com.example.SaveScanClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: {
@@ -437,7 +468,7 @@ setTimeout(() => {
                                 let fos = FileOutputStream.$new(filePath, true); 
                                 fos.write(Java.use("java.lang.String").$new(saveCounter + ". " + selectedTargetName + "\n").getBytes());
                                 saveCounter++; 
-                                showToast("Salvo TXT!");
+                                showToast("Salvo no TXT!");
                                 fos.close();
                             } catch(e) { showToast("Erro no Save."); }
                         });
@@ -446,14 +477,12 @@ setTimeout(() => {
             }).$new());
 
             scanControlsRow.addView(scanToggle.view);
-            scanControlsRow.addView(btnExec);
             scanControlsRow.addView(btnLimpar);
             scanControlsRow.addView(btnSave);
             scannerPanel.addView(scanControlsRow);
 
-            // A Lista Rolável
             const scrollView = classLoader.ScrollView.$new(mainActivity);
-            const scrollLP = classLoader.LinearLayout_LayoutParams.$new(-1, pixelDensityToPixels(mainActivity, 250)); // Altura fixa máxima
+            const scrollLP = classLoader.LinearLayout_LayoutParams.$new(-1, pixelDensityToPixels(mainActivity, 250));
             scrollView.setLayoutParams(scrollLP);
             
             const listContainer = classLoader.LinearLayout.$new(mainActivity);
@@ -461,7 +490,6 @@ setTimeout(() => {
             scrollView.addView(listContainer);
             scannerPanel.addView(scrollView);
 
-            // Função para recriar a lista visualmente
             refreshScannerUI = function() {
                 Java.scheduleOnMainThread(() => {
                     listContainer.removeAllViews();
@@ -486,11 +514,9 @@ setTimeout(() => {
                         const funcName = smartListLogs[i];
                         const itemTv = classLoader.TextView.$new(mainActivity);
                         
-                        // Encurta o nome visualmente se for muito grande
                         let displayName = funcName.length > 35 ? funcName.substring(0, 35) + "..." : funcName;
                         itemTv.setText(classLoader.String.$new(displayName));
                         
-                        // Cor de seleção
                         if (funcName === selectedTargetName) {
                             itemTv.setBackgroundColor(COLOR_SELECTED);
                             itemTv.setTextColor(classLoader.Color.BLACK.value);
@@ -501,10 +527,13 @@ setTimeout(() => {
                         
                         itemTv.setPadding(PADDING, PADDING, PADDING, PADDING);
                         
-                        // Clique no item
                         itemTv.setOnClickListener(Java.registerClass({
                             name: "com.example.ItemClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                            methods: { onClick(v) { selectedTargetName = funcName; refreshScannerUI(); } }
+                            methods: { onClick(v) { 
+                                selectedTargetName = funcName; 
+                                currentTargetIndex = i; // Sincroniza com o botão [> Alvo]
+                                refreshScannerUI(); 
+                            } }
                         }).$new());
 
                         listContainer.addView(itemTv);
@@ -531,13 +560,13 @@ setTimeout(() => {
             const call_hideCheats = { on() { mainBarLayout.setVisibility(View.VISIBLE.value); }, off() { mainBarLayout.setVisibility(View.GONE.value); } };
             const hideCheatsButton = createToggleButton("[ Menu ]", call_hideCheats, false); 
             
-            const toggleScannerPanel = { on() { scannerPanel.setVisibility(View.VISIBLE.value); }, off() { scannerPanel.setVisibility(View.GONE.value); } };
+            const toggleScannerPanel = { on() { scannerPanel.setVisibility(View.VISIBLE.value); refreshScannerUI(); }, off() { scannerPanel.setVisibility(View.GONE.value); } };
             const scannerMenuBtn = createToggleButton("[ Painel Scanner ]", toggleScannerPanel, false);
 
             topBarLayout.addView(hideCheatsButton.view); topBarLayout.addView(scannerMenuBtn.view); topBarLayout.addView(topInfoTextView);
             
             topLayout.addView(topBarLayout);
-            topLayout.addView(scannerPanel); // Adiciona o painel do scanner logo abaixo do Menu no lado esquerdo
+            topLayout.addView(scannerPanel);
 
             const addToggle = (row, text, callbacks, startOn = false) => { const button = createToggleButton(text, callbacks, startOn); row.addView(button.view); autoOffButtons.push(button); };
             
@@ -556,8 +585,23 @@ setTimeout(() => {
             mainActivity.addContentView(topLayout, topParams); 
             mainActivity.addContentView(bottomLayout, bottomParams);
 
+            // Loop de Processamento Assíncrono (Atualiza a UI sem travar o C++)
             setInterval(() => {
                 Java.scheduleOnMainThread(function() {
+                    // 1. Processa Ações de Admin Pendentes (Fim do lag do Admin)
+                    if (pendingAdminDisable) {
+                        pendingAdminDisable = false;
+                        var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+                        Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new('Admin Detectado. Desativando cheats.'), 0).show();
+                        for (const button of autoOffButtons) { button.reset(); }
+                    }
+                    if (pendingAdminToastMsg) {
+                        var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+                        Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new(pendingAdminToastMsg), 0).show();
+                        pendingAdminToastMsg = null;
+                    }
+
+                    // 2. Atualiza Posição do Info Text
                     try {
                         const activeplayer = activeplayerPtr.readPointer();
                         if (!activeplayer.isNull()) {
@@ -568,9 +612,6 @@ setTimeout(() => {
                     } catch(e) {}
                 });
             }, 500);
-            
-            // Inicializa a lista visual vazia
-            refreshScannerUI();
         });
     });
 }, 8000);
