@@ -1,5 +1,5 @@
 // ========================================================================
-// SCRIPT DEFINITIVO: SMART SCANNER + INTERCEPTADOR DE STRINGS (REDE)
+// SCRIPT HACK MENU: PODERES OFICIAIS (HEAL, THROW, PROJECTILE)
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -26,35 +26,11 @@ function deleteCacheFiles() {
         } catch (e) {}
     });
 }
-
-function deleteRecursive(file, excludePaths) {
-    try {
-        const sub = file.listFiles();
-        if (sub && sub.length > 0) {
-            for (let j = 0; j < sub.length; j++) {
-                try {
-                    const f = sub[j];
-                    let shouldExclude = false;
-                    for (let k = 0; k < excludePaths.length; k++) {
-                        if (f.getAbsolutePath().includes(excludePaths[k])) { shouldExclude = true; break; }
-                    }
-                    if (shouldExclude) continue;
-                    if (f.isDirectory()) deleteRecursive(f, excludePaths); else f.delete();
-                } catch (err) {}
-            }
-        }
-        let dirShouldExclude = false;
-        for (let k = 0; k < excludePaths.length; k++) {
-            if (file.getAbsolutePath().includes(excludePaths[k])) { dirShouldExclude = true; break; }
-        }
-        if (!dirShouldExclude) file.delete();
-    } catch (e) {}
-}
-
+function deleteRecursive(f, e) { try { const sub = f.listFiles(); if (sub) for (let j = 0; j < sub.length; j++) { let ex = false; for (let k = 0; k < e.length; k++) if (sub[j].getAbsolutePath().includes(e[k])) ex = true; if (ex) continue; if (sub[j].isDirectory()) deleteRecursive(sub[j], e); else sub[j].delete(); } f.delete(); } catch (err) {} }
 deleteCacheFiles();
 
 // ========================================================================
-// DELAY PRINCIPAL DO SCRIPT PARA CARREGAMENTO
+// DELAY PRINCIPAL DO SCRIPT
 // ========================================================================
 setTimeout(() => {
     var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
@@ -64,100 +40,36 @@ setTimeout(() => {
     let explosionRadius = 90, lastAdminToastTime = 0, lastAdminSeenTime = 0; 
     let autoOffButtons = []; 
 
-    // --- VARIÁVEIS DO SCANNER ---
-    let scanMode = 0; 
-    let blacklistedFunctions = new Set(); 
-    let smartListLogs = []; 
-    let currentTargetIndex = 0;
-    let interceptedData = {}; 
-    let saveCounter = 1; 
-
-    // --- FUNÇÕES NATIVAS ---
-    let hurtPlayer_orig = null;
+    // --- PONTEIROS ESSENCIAIS ---
+    const activeplayerPtr = Module.findExportByName("libqplay.so", "dkCHgaGRiF");
     const setVarValue = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10G0gxgajWBw10gVHMMaRyAEERK10C8THgaTQxF"), "void", ["pointer", "pointer"]);
-    
-    const activeplayer = Module.findExportByName("libqplay.so", "dkCHgaGRiF").readPointer();
     const getlocaly = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10qCgWga1ADREv"), "double", ["pointer"]);
     const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
     const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
+
+    // --- FUNÇÕES MAPEADAS POR VOCÊ (OS PODERES) ---
+    
+    // 1. Curar Vida (Life+) -> Requer: (Player*, double)
+    const healFuncPtr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10zwkXwa7SwkEd");
+    const forceHeal = healFuncPtr ? new NativeFunction(healFuncPtr, "void", ["pointer", "double"]) : null;
+
+    // 2. Arremessar Objeto p/ Frente -> Requer: (Player*)
+    const throwFuncPtr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10IFrkwaQTOOEv");
+    const forceThrow = throwFuncPtr ? new NativeFunction(throwFuncPtr, "void", ["pointer"]) : null;
+
+    // 3. Invocar Projétil -> Requer: (Player*)
+    const spawnProjPtr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10UwflwasGuPEv");
+    const forceProjectile = spawnProjPtr ? new NativeFunction(spawnProjPtr, "void", ["pointer"]) : null;
 
     const alphaNormalStr = createTString('alpha=1');
     const alphaFadedStr = createTString('alpha=0.3');
     const zoomNormalStr = createTString('zoom=1');
 
-    // LEITOR SEGURO DE STRINGS
-    function safeReadString(ptr) {
-        try {
-            if (ptr.isNull()) return null;
-            const val = ptr.toInt32();
-            if (val < 0x10000) return null; // Ignora ponteiros baixos (prováveis números int)
-            const str = ptr.readUtf8String(30); // Tenta ler 30 caracteres
-            // Se tiver pelo menos 3 letras e for texto legível:
-            if (str && str.length > 2 && /^[a-zA-Z0-9_.-]+$/.test(str)) {
-                return str;
-            }
-        } catch (e) {}
-        return null;
-    }
-
-    // --- PREPARAÇÃO DO SMART SCANNER ---
-    Java.perform(() => {
-        try {
-            const exports = Module.enumerateExports("libqplay.so");
-            // Voltamos para a âncora do Despachante de Ações, pois ele aciona os pacotes!
-            const referenceName = "_ZN10W6NzgawMJy10TqFCwaot82Ei"; 
-            
-            exports.sort((a, b) => a.address.compare(b.address));
-            let refIndex = exports.findIndex(e => e.name === referenceName);
-            if (refIndex !== -1) {
-                let startIdx = Math.max(0, refIndex - 50);
-                let endIdx = Math.min(exports.length - 1, refIndex + 50);
-
-                for (let i = startIdx; i <= endIdx; i++) {
-                    let exp = exports[i];
-                    if (exp.type === 'function' && exp.name !== referenceName) {
-                        try {
-                            Interceptor.attach(exp.address, {
-                                onEnter: function(args) {
-                                    if (scanMode === 0) return;
-                                    if (scanMode === 1) { blacklistedFunctions.add(exp.name); return; }
-
-                                    if (scanMode === 2) {
-                                        if (blacklistedFunctions.has(exp.name)) return;
-
-                                        // Tenta achar texto nos argumentos!
-                                        let foundString = safeReadString(args[1]) || safeReadString(args[2]);
-                                        
-                                        // Salva com uma marcação de string se achar
-                                        let displayName = exp.name;
-                                        if (foundString) {
-                                            displayName = "📝[" + foundString + "] " + exp.name;
-                                        }
-
-                                        interceptedData[displayName] = {
-                                            address: exp.address,
-                                            args: [args[0], args[1], args[2], args[3]]
-                                        };
-
-                                        if (!smartListLogs.includes(displayName)) {
-                                            smartListLogs.push(displayName);
-                                            if (smartListLogs.length > 8) smartListLogs.shift(); 
-                                        }
-                                    }
-                                }
-                            });
-                        } catch(e) {}
-                    }
-                }
-            }
-        } catch(e) {}
-    });
-
-    // --- HOOK UNHIT ---
+    // --- HOOKS BÁSICOS ---
     Java.perform(() => {
         const hurtPlayer_ptr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy");
         if (hurtPlayer_ptr) {
-            hurtPlayer_orig = new NativeFunction(hurtPlayer_ptr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
+            let hurtPlayer_orig = new NativeFunction(hurtPlayer_ptr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
             const unhit_master_callback = new NativeCallback((a, b, c, d, e, f) => {
                 if (!unhit) return hurtPlayer_orig(a, b, c, d, e, f);
                 if (unhit_mode === 1) return 0; 
@@ -167,13 +79,11 @@ setTimeout(() => {
         }
     });
 
-    // --- HOOK WALLHACK ---
     Java.perform(() => {
         const wallhack_ptr = Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb");
         if (wallhack_ptr) Interceptor.attach(wallhack_ptr, { 'onLeave': function(ret) { if (wallhack) ret.replace(0); } });
     });
 
-    // --- HOOK EXPLOSÃO ---
     Java.perform(() => {
         const explode_trigger_ptr = Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd");
         if(explode_trigger_ptr) {
@@ -183,6 +93,8 @@ setTimeout(() => {
 
     function makeExplosion(level, radius) { 
         if (!level) return; 
+        const activeplayer = activeplayerPtr.readPointer();
+        if(activeplayer.isNull()) return;
         const playerX = getlocalx(activeplayer); const playerY = getlocaly(activeplayer); 
         const offset = Math.floor(radius / 2); 
         for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } 
@@ -195,6 +107,7 @@ setTimeout(() => {
             Interceptor.attach(Module.findExportByName("libqplay.so", "_ZN10MpGzgariDy10Q3v7IaUAWzERK10C8THgaTQxF"), { 
                 'onEnter': function(args) { 
                     const playerPtr = args[0];
+                    const activeplayer = activeplayerPtr.readPointer();
                     const props = getPlayerProperties(playerPtr);
                     
                     if (playerPtr.toInt32() === activeplayer.toInt32()) return;
@@ -288,21 +201,12 @@ setTimeout(() => {
         })); 
     }
     
-    // Callbacks Base
     const call_unhit_m1 = { on() { unhit = true; unhit_mode = 1; showToast("Unhit (M1) Ativo."); }, off() { unhit = false; } };
     const call_unhit_m2 = { on() { unhit = true; unhit_mode = 2; showToast("Unhit (M2) Ativo."); }, off() { unhit = false; } };
     const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; showToast("Auto-Off Ativo."); }, off() { autoOFF = false; } };
     const call_showAdmins = { on() { showAdmins = true; showToast("Radar Visual Ativo."); }, off() { showAdmins = false; showToast("Radar Visual Desativado."); } };
     const call_wallhack = { on() { wallhack = true; showToast("Wallhack Ativo."); }, off() { wallhack = false; showToast("Wallhack Desativado."); } };
     const call_explode = { on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 200); }, off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } };
-    
-    const call_smartScan = { 
-        on() { 
-            scanMode = 1; smartListLogs = []; currentTargetIndex = 0; blacklistedFunctions.clear(); showToast("Calibrando Scanner... FIQUE PARADO!"); 
-            setTimeout(() => { if (scanMode === 1) { scanMode = 2; showToast("Scanner Pronto! Faça a ação."); } }, 3000);
-        }, 
-        off() { scanMode = 0; showToast("Scanner Pausado."); } 
-    };
 
     // --- INICIALIZAÇÃO DA UI ---
     Java.perform(function () {
@@ -315,7 +219,8 @@ setTimeout(() => {
             const COLOR_OFF = classLoader.Color.parseColor("#80000000");
             const COLOR_ON = classLoader.Color.parseColor("#80008000");
             const COLOR_ACTION = classLoader.Color.parseColor("#CC880000");
-            const COLOR_SAVE = classLoader.Color.parseColor("#CC000088"); 
+            const COLOR_HEAL = classLoader.Color.parseColor("#CC008800"); 
+            const COLOR_FIRE = classLoader.Color.parseColor("#CCFF8C00"); 
             
             const PADDING = pixelDensityToPixels(mainActivity, 8);
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
@@ -356,10 +261,10 @@ setTimeout(() => {
             }
 
             // ========================================================================
-            // PAINEL FIXO TOP-RIGHT
+            // PAINEL FIXO TOP-RIGHT (OS PODERES)
             // ========================================================================
             const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
-            topRightContainer.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); 
+            topRightContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value); 
             topRightContainer.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
             
             const trRootLayout = classLoader.LinearLayout.$new(mainActivity);
@@ -370,35 +275,73 @@ setTimeout(() => {
             const btnLP = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
             btnLP.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
 
-            const targetButton = classLoader.TextView.$new(mainActivity);
-            targetButton.setText(classLoader.String.$new("[ > Alvo ]")); targetButton.setTextColor(classLoader.Color.WHITE.value); targetButton.setBackgroundColor(COLOR_OFF); targetButton.setPadding(PADDING, PADDING, PADDING, PADDING); targetButton.setLayoutParams(btnLP);
-            targetButton.setOnClickListener(Java.registerClass({
-                name: "com.example.TargetClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { if (smartListLogs.length > 0) { currentTargetIndex = (currentTargetIndex + 1) % smartListLogs.length; showToast("Alvo alterado!"); } else showToast("Lista vazia."); } }
-            }).$new());
-            topRightContainer.addView(targetButton);
+            // LINHA 1: PODER DE CURA
+            const rowHeal = classLoader.LinearLayout.$new(mainActivity);
+            rowHeal.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            rowHeal.setGravity(Gravity.RIGHT.value);
 
-            const executeButton = classLoader.TextView.$new(mainActivity);
-            executeButton.setText(classLoader.String.$new("[ EXECUTAR ]")); executeButton.setTextColor(classLoader.Color.WHITE.value); executeButton.setBackgroundColor(COLOR_ACTION); executeButton.setPadding(PADDING, PADDING, PADDING, PADDING); executeButton.setLayoutParams(btnLP);
-            executeButton.setOnClickListener(Java.registerClass({
-                name: "com.example.ExecuteClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+            const healButton = classLoader.TextView.$new(mainActivity);
+            healButton.setText(classLoader.String.$new("[ Vida Máxima ]")); healButton.setTextColor(classLoader.Color.WHITE.value); healButton.setBackgroundColor(COLOR_HEAL); healButton.setPadding(PADDING, PADDING, PADDING, PADDING); healButton.setLayoutParams(btnLP);
+            healButton.setOnClickListener(Java.registerClass({
+                name: "com.example.HealClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: {
                     onClick(v) {
-                        if (smartListLogs.length > 0) {
-                            try {
-                                const targetName = smartListLogs[currentTargetIndex];
-                                const data = interceptedData[targetName];
-                                if (data) {
-                                    showToast("Executando Genérico...");
-                                    const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-                                    Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
-                                }
-                            } catch(e) { showToast("Crash evitado!"); }
+                        const activeplayer = activeplayerPtr.readPointer();
+                        if (forceHeal && !activeplayer.isNull()) {
+                            forceHeal(activeplayer, 3.0);
+                            showToast("Curado para 3.0!");
+                        } else {
+                            showToast("Erro: Função Heal não carregada.");
                         }
                     }
                 }
             }).$new());
-            topRightContainer.addView(executeButton);
+            rowHeal.addView(healButton);
+            topRightContainer.addView(rowHeal);
+
+            // LINHA 2: PODERES FÍSICOS
+            const rowPhysics = classLoader.LinearLayout.$new(mainActivity);
+            rowPhysics.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            rowPhysics.setGravity(Gravity.RIGHT.value);
+
+            const throwButton = classLoader.TextView.$new(mainActivity);
+            throwButton.setText(classLoader.String.$new("[ Atirar Longe ]")); throwButton.setTextColor(classLoader.Color.WHITE.value); throwButton.setBackgroundColor(COLOR_ACTION); throwButton.setPadding(PADDING, PADDING, PADDING, PADDING); throwButton.setLayoutParams(btnLP);
+            throwButton.setOnClickListener(Java.registerClass({
+                name: "com.example.ThrowClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        const activeplayer = activeplayerPtr.readPointer();
+                        if (forceThrow && !activeplayer.isNull()) {
+                            forceThrow(activeplayer);
+                        } else {
+                            showToast("Nenhuma função Arremessar.");
+                        }
+                    }
+                }
+            }).$new());
+
+            const projButton = classLoader.TextView.$new(mainActivity);
+            projButton.setText(classLoader.String.$new("[ Spam Projétil ]")); projButton.setTextColor(classLoader.Color.WHITE.value); projButton.setBackgroundColor(COLOR_FIRE); projButton.setPadding(PADDING, PADDING, PADDING, PADDING); projButton.setLayoutParams(btnLP);
+            projButton.setOnClickListener(Java.registerClass({
+                name: "com.example.ProjClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: {
+                    onClick(v) {
+                        const activeplayer = activeplayerPtr.readPointer();
+                        if (forceProjectile && !activeplayer.isNull()) {
+                            // Dispara 3 vezes rapidamente
+                            forceProjectile(activeplayer);
+                            forceProjectile(activeplayer);
+                            forceProjectile(activeplayer);
+                        } else {
+                            showToast("Nenhuma função Projétil.");
+                        }
+                    }
+                }
+            }).$new());
+
+            rowPhysics.addView(throwButton);
+            rowPhysics.addView(projButton);
+            topRightContainer.addView(rowPhysics);
 
             trRootLayout.addView(topRightContainer);
 
@@ -408,10 +351,8 @@ setTimeout(() => {
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
             const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
             const row2 = classLoader.LinearLayout.$new(mainActivity); row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row2.setGravity(Gravity.CENTER.value);
-            const row3 = classLoader.LinearLayout.$new(mainActivity); row3.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row3.setGravity(Gravity.CENTER.value);
-            const row4 = classLoader.LinearLayout.$new(mainActivity); row4.setOrientation(classLoader.LinearLayout.VERTICAL.value); row4.setGravity(Gravity.CENTER.value); row4.setBackgroundColor(classLoader.Color.parseColor("#90000044")); 
 
-            mainBarLayout.addView(row1); mainBarLayout.addView(row2); mainBarLayout.addView(row3); mainBarLayout.addView(row4);
+            mainBarLayout.addView(row1); mainBarLayout.addView(row2);
 
             const bottomLayout = classLoader.LinearLayout.$new(mainActivity); const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1); bottomLayout.setLayoutParams(bottomParams); bottomLayout.setGravity(Gravity.BOTTOM.value | Gravity.CENTER_HORIZONTAL.value); bottomLayout.addView(mainBarLayout);
 
@@ -440,60 +381,6 @@ setTimeout(() => {
             explosionControlLayout.addView(createHoldButton("<", decreaseAction)); explosionControlLayout.addView(explosionButton.view); explosionControlLayout.addView(createHoldButton(">", increaseAction));
             row2.addView(explosionControlLayout);
 
-            const scanButton = createToggleButton("SMART SCAN", call_smartScan, false); row3.addView(scanButton.view);
-
-            const clearButton = classLoader.TextView.$new(mainActivity);
-            clearButton.setText(classLoader.String.$new("[ Limpar ]")); clearButton.setTextColor(classLoader.Color.WHITE.value); clearButton.setBackgroundColor(COLOR_OFF); clearButton.setPadding(PADDING, PADDING, PADDING, PADDING); clearButton.setLayoutParams(btnLP);
-            clearButton.setOnClickListener(Java.registerClass({
-                name: "com.example.ClearClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { smartListLogs = []; interceptedData = {}; currentTargetIndex = 0; showToast("Lista limpa!"); } }
-            }).$new());
-            row3.addView(clearButton);
-
-            const saveButton = classLoader.TextView.$new(mainActivity);
-            saveButton.setText(classLoader.String.$new("[ Save TXT ]")); saveButton.setTextColor(classLoader.Color.WHITE.value); saveButton.setBackgroundColor(COLOR_SAVE); saveButton.setPadding(PADDING, PADDING, PADDING, PADDING); saveButton.setLayoutParams(btnLP);
-            saveButton.setOnClickListener(Java.registerClass({
-                name: "com.example.SaveClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        Java.perform(() => {
-                            try {
-                                const ActivityThread = Java.use("android.app.ActivityThread");
-                                const context = ActivityThread.currentApplication().getApplicationContext();
-                                const pkgName = context.getPackageName();
-                                const FileOutputStream = Java.use("java.io.FileOutputStream");
-                                const JString = Java.use("java.lang.String");
-
-                                const externalPath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath();
-                                const filePath = externalPath + "/Android/data/" + pkgName + "/saved_functions.txt";
-                                
-                                let fos = FileOutputStream.$new(filePath, true); 
-
-                                if (smartListLogs.length > 0) {
-                                    const targetName = smartListLogs[currentTargetIndex];
-                                    if (targetName) {
-                                        let linha = saveCounter + ". " + targetName + "\n";
-                                        fos.write(JString.$new(linha).getBytes());
-                                        
-                                        saveCounter++; 
-                                        showToast("Salvo alvo " + currentTargetIndex + " no TXT!");
-                                    }
-                                } else {
-                                    showToast("Nenhum alvo para salvar.");
-                                }
-                                
-                                fos.close();
-                            } catch(e) { 
-                                showToast("Erro no Save: " + e.message); 
-                            }
-                        });
-                    }
-                }
-            }).$new());
-            row3.addView(saveButton);
-
-            const scanLogView = classLoader.TextView.$new(mainActivity); scanLogView.setTextColor(classLoader.Color.YELLOW.value); scanLogView.setPadding(PADDING, PADDING, PADDING, PADDING); scanLogView.setText(classLoader.String.$new("...")); row4.addView(scanLogView);
-
             mainActivity.addContentView(trRootLayout, trRootParams); 
             mainActivity.addContentView(topLayout, topParams); 
             mainActivity.addContentView(bottomLayout, bottomParams);
@@ -501,20 +388,13 @@ setTimeout(() => {
             setInterval(() => {
                 Java.scheduleOnMainThread(function() {
                     try {
-                        const props = getPlayerProperties(activeplayer);
-                        const infoText = ` Nome: ${props.nick} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
-                        topInfoTextView.setText(classLoader.String.$new(infoText));
+                        const activeplayer = activeplayerPtr.readPointer();
+                        if (!activeplayer.isNull()) {
+                            const props = getPlayerProperties(activeplayer);
+                            const infoText = ` Nome: ${props.nick} | Pos: (${props.x.toFixed(2)}, ${props.y.toFixed(2)})`;
+                            topInfoTextView.setText(classLoader.String.$new(infoText));
+                        }
                     } catch(e) {}
-                    
-                    if (scanMode === 1) {
-                        scanLogView.setText(classLoader.String.$new("...Calibrando (Fique Parado)..."));
-                    } else if (scanMode === 2 || smartListLogs.length > 0) {
-                        let displayTexts = smartListLogs.map((name, idx) => { return (idx === currentTargetIndex ? "🎯 " : "   ") + name.substring(0, 30) + "..."; });
-                        if (displayTexts.length === 0) displayTexts.push("Nenhuma ação capturada.");
-                        scanLogView.setText(classLoader.String.$new(displayTexts.join("\n")));
-                    } else {
-                        scanLogView.setText(classLoader.String.$new("Scan Desligado"));
-                    }
                 });
             }, 500);
         });
