@@ -1,32 +1,30 @@
-/* SCRIPT DE TESTE COM DELAY - HELLO WORLD TOAST */
-
-setTimeout(function() {
-    Java.perform(function() {
-        console.log("[*] Iniciando execução após delay...");
-
-        Java.scheduleOnMainThread(function() {
+// ========================================================================
+// DELAY PRINCIPAL DE 8 SEGUNDOS PARA CARREGAMENTO E TOAST
+// ========================================================================
+setTimeout(() => {
+    Java.perform(function () {
+        // --- EMITE O TOAST JUNTO COM O MENU ---
+        Java.scheduleOnMainThread(function () {
             try {
-                var Toast = Java.use("android.widget.Toast");
-                var String = Java.use("java.lang.String");
-                var ActivityThread = Java.use("android.app.ActivityThread");
-                
-                // Tenta pegar o contexto. Se falhar, tentamos outra forma.
-                var app = ActivityThread.currentApplication();
-                if (app == null) {
-                    console.log("[-] Erro: Application ainda é nula.");
-                    return;
-                }
-                
-                var context = app.getApplicationContext();
-                var message = String.$new("Frida Ativo! Delay Funcionou.");
-                
-                var toast = Toast.makeText(context, message, 1);
-                toast.show();
-                
-                console.log("[*] Toast disparado com sucesso!");
-            } catch (err) {
-                console.log("[-] Erro no script: " + err);
-            }
+                var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+                var JString = Java.use("java.lang.String");
+                Java.use("android.widget.Toast").makeText(context, JString.$new("🚀 MENU CARREGADO!"), 1).show();
+            } catch (e) { console.log("Erro no Toast: " + e); }
+        });
+
+        // --- RESTO DA SUA LÓGICA ORIGINAL ---
+        var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
+
+        let unhit = false;
+        let unhit_mode = 1; 
+        let showAdmins = true; 
+        // ... (todo o seu código de variáveis e hooks continua aqui) ...
+
+        // --- INICIALIZAÇÃO DA UI (Sua lógica de Java.scheduleOnMainThread da UI) ---
+        Java.scheduleOnMainThread(function () {
+            const classLoader = getClassLoader();
+            const mainActivity = getMainActivity(classLoader);
+            // ... (restante da criação dos botões e painéis) ...
         });
     });
-}, 5000); // 5 segundos de espera
+}, 8000); // O TOAST VAI ESPERAR ESSES 8 SEGUNDOS
