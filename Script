@@ -1,5 +1,5 @@
 // ========================================================================
-// SCRIPT DEFINITIVO: SMART SCANNER + PODERES OFICIAIS + ANTI-LAG
+// SCRIPT DEFINITIVO: SMART SCANNER V2 (ANTI-LAG) + EXECUÇÃO EXTERNA
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -33,18 +33,18 @@ deleteCacheFiles();
 // DELAY PRINCIPAL DO SCRIPT
 // ========================================================================
 setTimeout(() => {
-    var malloc = getFunc("libc.so", "malloc", "pointer", ["int"]);
+    var malloc = new NativeFunction(Module.findExportByName("libc.so", "malloc"), "pointer", ["int"]);
 
     let unhit = false, unhit_mode = 1, showAdmins = true, autoOFF = false, afkInterval = null;
     let autoOffHasTriggered = false, wallhack = false, canExplode = false, explosionsInterval = null;
     let explosionRadius = 90, lastAdminToastTime = 0, lastAdminSeenTime = 0; 
     let autoOffButtons = []; 
 
-    // --- VARIÁVEIS DE FILA ANTI-LAG (NOVIDADE) ---
+    // Variáveis Anti-Lag do Admin
     let pendingAdminDisable = false;
     let pendingAdminToastMsg = null;
 
-    // --- VARIÁVEIS DO SCANNER V2 ---
+    // Variáveis do Scanner
     let scanMode = 0; 
     let blacklistedFunctions = new Set(); 
     let smartListLogs = []; 
@@ -52,6 +52,7 @@ setTimeout(() => {
     let selectedTargetName = null; 
     let currentTargetIndex = 0;
     let saveCounter = 1; 
+    let uiNeedsUpdate = false; 
 
     // --- PONTEIROS ESSENCIAIS ---
     const activeplayerPtr = Module.findExportByName("libqplay.so", "dkCHgaGRiF");
@@ -60,7 +61,7 @@ setTimeout(() => {
     const getlocalx = new NativeFunction(Module.findExportByName("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv"), "double", ["pointer"]);
     const putExplosion = new NativeFunction(Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii"), "void", ["pointer", "double", "double", "double", "int", "int"]);
 
-    // --- OS PODERES OFICIAIS ---
+    // --- PODERES OFICIAIS ---
     const healFuncPtr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10zwkXwa7SwkEd");
     const forceHeal = healFuncPtr ? new NativeFunction(healFuncPtr, "void", ["pointer", "double"]) : null;
 
@@ -80,15 +81,12 @@ setTimeout(() => {
     Java.perform(() => {
         try {
             const exports = Module.enumerateExports("libqplay.so");
-            // Âncora: hurtPlayer
             const referenceName = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"; 
-            
             exports.sort((a, b) => a.address.compare(b.address));
             let refIndex = exports.findIndex(e => e.name === referenceName);
             if (refIndex !== -1) {
                 let startIdx = Math.max(0, refIndex - 33);
                 let endIdx = Math.min(exports.length - 1, refIndex + 33);
-
                 for (let i = startIdx; i <= endIdx; i++) {
                     let exp = exports[i];
                     if (exp.type === 'function' && exp.name !== referenceName) {
@@ -97,19 +95,13 @@ setTimeout(() => {
                                 onEnter: function(args) {
                                     if (scanMode === 0) return;
                                     if (scanMode === 1) { blacklistedFunctions.add(exp.name); return; }
-
                                     if (scanMode === 2) {
                                         if (blacklistedFunctions.has(exp.name)) return;
-
-                                        interceptedData[exp.name] = {
-                                            address: exp.address,
-                                            args: [args[0], args[1], args[2], args[3]]
-                                        };
-
+                                        interceptedData[exp.name] = { address: exp.address, args: [args[0], args[1], args[2], args[3]] };
                                         if (!smartListLogs.includes(exp.name)) {
                                             smartListLogs.push(exp.name);
                                             if (smartListLogs.length > 50) smartListLogs.shift();
-                                            if (refreshScannerUI) refreshScannerUI();
+                                            uiNeedsUpdate = true; // Sinaliza anti-lag
                                         }
                                     }
                                 }
@@ -121,30 +113,21 @@ setTimeout(() => {
         } catch(e) {}
     });
 
-    // --- HOOKS BÁSICOS ---
+    // --- HOOKS: UNHIT, WALLHACK, EXPLOSION ---
     Java.perform(() => {
         const hurtPlayer_ptr = Module.findExportByName("libqplay.so", "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy");
         if (hurtPlayer_ptr) {
             let hurtPlayer_orig = new NativeFunction(hurtPlayer_ptr, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-            const unhit_master_callback = new NativeCallback((a, b, c, d, e, f) => {
+            Interceptor.replace(hurtPlayer_ptr, new NativeCallback((a, b, c, d, e, f) => {
                 if (!unhit) return hurtPlayer_orig(a, b, c, d, e, f);
                 if (unhit_mode === 1) return 0; 
-                else if (unhit_mode === 2) return hurtPlayer_orig(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
-            }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]);
-            Interceptor.replace(hurtPlayer_ptr, unhit_master_callback);
+                return hurtPlayer_orig(a, 0.0, 0.0, 0.0, ptr(0), ptr(0));
+            }, "void", ["pointer", "double", "double", "double", "pointer", "pointer"]));
         }
-    });
-
-    Java.perform(() => {
         const wallhack_ptr = Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10CGk7IaA0MzEddb");
         if (wallhack_ptr) Interceptor.attach(wallhack_ptr, { 'onLeave': function(ret) { if (wallhack) ret.replace(0); } });
-    });
-
-    Java.perform(() => {
         const explode_trigger_ptr = Module.findExportByName("libqplay.so", "_ZN10zF9VgaBKxR10iUxUgaX7aQEdd");
-        if(explode_trigger_ptr) {
-            Interceptor.attach(explode_trigger_ptr, { onEnter: function(args) { if (!canExplode) return; canExplode = false; makeExplosion(args[0], explosionRadius); } });
-        }
+        if(explode_trigger_ptr) Interceptor.attach(explode_trigger_ptr, { onEnter: function(args) { if (!canExplode) return; canExplode = false; makeExplosion(args[0], explosionRadius); } });
     });
 
     function makeExplosion(level, radius) { 
@@ -156,7 +139,7 @@ setTimeout(() => {
         for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } 
     }
 
-    // --- HOOK SHOW ADMINS (SISTEMA ANTI-LAG) ---
+    // --- HOOK SHOW ADMINS (ANTI-LAG) ---
     setTimeout(() => {
         Java.perform(() => {
             const accRgx = /^(pc\:|graal\d+|guest.*)/;
@@ -165,29 +148,18 @@ setTimeout(() => {
                     const playerPtr = args[0];
                     const activeplayer = activeplayerPtr.readPointer();
                     if (playerPtr.toInt32() === activeplayer.toInt32()) return;
-                    
                     const props = getPlayerProperties(playerPtr);
                     const account = props.account ? props.account.toLowerCase() : '';
-
                     if (account !== '') { 
                         const isAdmin = !accRgx.test(account);
                         const now = Date.now();
-                        
                         if (isAdmin) { 
                             lastAdminSeenTime = now; 
-                            if (autoOFF && !autoOffHasTriggered) { 
-                                autoOffHasTriggered = true; 
-                                // Não chama Java.perform aqui! Apenas levanta a bandeira.
-                                pendingAdminDisable = true;
-                            }
+                            if (autoOFF && !autoOffHasTriggered) { autoOffHasTriggered = true; pendingAdminDisable = true; }
                             if (showAdmins) {
                                 if (props.alpha < 1.0) setVarValue(playerPtr, alphaNormalStr);
                                 if (props.zoom < 1.0) setVarValue(playerPtr, zoomNormalStr);
-                                if (now - lastAdminToastTime > 5000) { 
-                                    lastAdminToastTime = now; 
-                                    // Levanta a bandeira para o Toast
-                                    pendingAdminToastMsg = `ADM REVELADO: ${props.nick}`; 
-                                }
+                                if (now - lastAdminToastTime > 5000) { lastAdminToastTime = now; pendingAdminToastMsg = `ADM REVELADO: ${props.nick}`; }
                             }
                         } else {
                             if (showAdmins) {
@@ -201,65 +173,17 @@ setTimeout(() => {
         });
     }, 7000);
 
-    // --- FUNÇÕES DE BAIXO NÍVEL E UTILITÁRIOS ---
-    function getFunc(lib, func, type, params) { return new NativeFunction(Module.findExportByName(lib, func), type, params); }
-    function createTString(str) { 
-        var str_pointer = malloc(4); var str_struct = malloc(str.length + 8); 
-        str_pointer.writePointer(str_struct); str_struct.writeInt(str.length); 
-        ptr(parseInt(str_struct) + 4).writeInt(1); ptr(parseInt(str_struct) + 8).writeUtf8String(str); 
-        return str_pointer; 
-    }
-    function readTString(str) { 
-        if (!str.isNull() && parseInt(str) != 0) { 
-            var pstr = str.readPointer(); 
-            if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } 
-        } 
-        return ""; 
-    }
-    
-    function getPlayerProperties(p) { 
-        return { 
-            "alpha": Memory.readFloat(p.add(356)), "zoom": Memory.readFloat(p.add(0x138)), 
-            "nick": readTString(p.add(464)), "account": readTString(p.add(696)), 
-            "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)) 
-        }; 
-    }
-
-    function getClassLoader() {
-        return {
-            Gravity: Java.use("android.view.Gravity"), TextView: Java.use("android.widget.TextView"),
-            LinearLayout: Java.use("android.widget.LinearLayout"), LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-            Color: Java.use("android.graphics.Color"), ActivityThread: Java.use("android.app.ActivityThread"),
-            View_OnTouchListener: Java.use("android.view.View$OnTouchListener"), MotionEvent: Java.use("android.view.MotionEvent"),
-            String: Java.use("java.lang.String"), View: Java.use("android.view.View"),
-            DisplayMetrics: Java.use("android.util.DisplayMetrics"), Point: Java.use("android.graphics.Point"),
-            ScrollView: Java.use("android.widget.ScrollView")
-        };
-    }
-    function getMainActivity(classLoader) { 
-        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-        const activityClientRecord = Java.cast(activityThread.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
-        return activityClientRecord.activity.value;
-    }
+    // --- FUNÇÕES DE BAIXO NÍVEL ---
+    function createTString(str) { var str_pointer = malloc(4); var str_struct = malloc(str.length + 8); str_pointer.writePointer(str_struct); str_struct.writeInt(str.length); ptr(parseInt(str_struct) + 4).writeInt(1); ptr(parseInt(str_struct) + 8).writeUtf8String(str); return str_pointer; }
+    function readTString(str) { if (!str.isNull() && parseInt(str) != 0) { var pstr = str.readPointer(); if (!pstr.isNull()) { var strlen = pstr.readInt(); if (strlen > 0) return ptr(parseInt(pstr) + 8).readCString(strlen); } } return ""; }
+    function getPlayerProperties(p) { return { "alpha": Memory.readFloat(p.add(356)), "zoom": Memory.readFloat(p.add(0x138)), "nick": readTString(p.add(464)), "account": readTString(p.add(696)), "x": Memory.readDouble(p.add(0x238)), "y": Memory.readDouble(p.add(0x240)) }; }
+    function getClassLoader() { return { Gravity: Java.use("android.view.Gravity"), TextView: Java.use("android.widget.TextView"), LinearLayout: Java.use("android.widget.LinearLayout"), LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"), Color: Java.use("android.graphics.Color"), ActivityThread: Java.use("android.app.ActivityThread"), View_OnTouchListener: Java.use("android.view.View$OnTouchListener"), MotionEvent: Java.use("android.view.MotionEvent"), String: Java.use("java.lang.String"), View: Java.use("android.view.View"), DisplayMetrics: Java.use("android.util.DisplayMetrics"), ScrollView: Java.use("android.widget.ScrollView") }; }
+    function getMainActivity(classLoader) { const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value; return Java.cast(activityThread.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord")).activity.value; }
     function pixelDensityToPixels(context, dp) { return parseInt(dp * context.getResources().getDisplayMetrics().density.value); }
-    function showToast(text, time = 0) { 
-        Java.perform(() => {
-            Java.scheduleOnMainThread(function() {
-                var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
-                Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new(text), time).show();
-            });
-        });
-    }
+    function showToast(text, time = 0) { Java.perform(() => { Java.scheduleOnMainThread(function() { var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext(); Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new(text), time).show(); }); }); }
+    function click() { Java.perform(() => Java.scheduleOnMainThread(() => { const mainActivity = getMainActivity(getClassLoader()); let time = Java.use("android.os.SystemClock").uptimeMillis(); mainActivity.dispatchTouchEvent(Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0)); })); }
 
     const call_antiAfk = { on() { if (!afkInterval) afkInterval = setInterval(click, 240 * 1000); }, off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } } };
-    function click() { 
-        Java.perform(() => Java.scheduleOnMainThread(() => { 
-            const mainActivity = getMainActivity(getClassLoader());
-            let time = Java.use("android.os.SystemClock").uptimeMillis(); 
-            mainActivity.dispatchTouchEvent(Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0)); 
-        })); 
-    }
-    
     const call_unhit_m1 = { on() { unhit = true; unhit_mode = 1; showToast("Unhit (M1) Ativo."); }, off() { unhit = false; } };
     const call_unhit_m2 = { on() { unhit = true; unhit_mode = 2; showToast("Unhit (M2) Ativo."); }, off() { unhit = false; } };
     const call_autoOFF = { on() { autoOFF = true; autoOffHasTriggered = false; showToast("Auto-Off Ativo."); }, off() { autoOFF = false; } };
@@ -278,7 +202,7 @@ setTimeout(() => {
             const COLOR_OFF = classLoader.Color.parseColor("#80000000");
             const COLOR_ON = classLoader.Color.parseColor("#80008000");
             const COLOR_ACTION = classLoader.Color.parseColor("#CC880000");
-            const COLOR_EXEC = classLoader.Color.parseColor("#CC9400D3"); // Roxo para o botão fixo
+            const COLOR_EXEC = classLoader.Color.parseColor("#CC9400D3"); // Roxo
             const COLOR_HEAL = classLoader.Color.parseColor("#CC008800"); 
             const COLOR_FIRE = classLoader.Color.parseColor("#CCFF8C00"); 
             const COLOR_BG_PANEL = classLoader.Color.parseColor("#E6000022"); 
@@ -288,37 +212,19 @@ setTimeout(() => {
             const MARGIN = pixelDensityToPixels(mainActivity, 2);
 
             function createToggleButton(text, callbacks, startOn = false) {
-                const button = classLoader.TextView.$new(mainActivity);
-                let isOn = startOn;
+                const button = classLoader.TextView.$new(mainActivity); let isOn = startOn;
                 const reset = () => { if (isOn) { isOn = false; button.setBackgroundColor(COLOR_OFF); if (callbacks.off) callbacks.off(); } };
-                button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value);
-                button.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING);
-                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); button.setLayoutParams(layoutParams);
-                button.setOnClickListener(Java.registerClass({
-                    name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
-                    implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: { onClick(v) { isOn = !isOn; v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF); if (isOn) { if (callbacks.on) callbacks.on(); } else { if (callbacks.off) callbacks.off(); } } }
-                }).$new());
-                if (startOn) { if (callbacks.on) callbacks.on(); }
-                return { view: button, reset: reset };
+                button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value); button.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING);
+                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); button.setLayoutParams(layoutParams);
+                button.setOnClickListener(Java.registerClass({ name: "C"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")], methods: { onClick(v) { isOn = !isOn; v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF); if (isOn) { if (callbacks.on) callbacks.on(); } else { if (callbacks.off) callbacks.off(); } } } }).$new());
+                if (startOn) { if (callbacks.on) callbacks.on(); } return { view: button, reset: reset };
             }
 
             function createHoldButton(text, action) { 
                 const button = classLoader.TextView.$new(mainActivity); let holdInterval = null; 
                 button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value); button.setBackgroundColor(COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING); 
                 const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); button.setLayoutParams(layoutParams); 
-                button.setOnTouchListener(Java.registerClass({ 
-                    name: "com.example.TouchListener" + Math.random().toString(36).substring(2), implements: [classLoader.View_OnTouchListener], 
-                    methods: { 
-                        onTouch(v, event) { 
-                            switch (event.getAction()) { 
-                                case classLoader.MotionEvent.ACTION_DOWN.value: action(); holdInterval = setInterval(action, 100); return true; 
-                                case classLoader.MotionEvent.ACTION_UP.value: if (holdInterval) clearInterval(holdInterval); holdInterval = null; return true; 
-                            } return false; 
-                        } 
-                    } 
-                }).$new()); 
+                button.setOnTouchListener(Java.registerClass({ name: "T"+Math.random().toString(36).substring(2), implements: [classLoader.View_OnTouchListener], methods: { onTouch(v, event) { switch (event.getAction()) { case classLoader.MotionEvent.ACTION_DOWN.value: action(); holdInterval = setInterval(action, 100); return true; case classLoader.MotionEvent.ACTION_UP.value: if (holdInterval) clearInterval(holdInterval); holdInterval = null; return true; } return false; } } }).$new()); 
                 return button; 
             }
 
@@ -345,26 +251,24 @@ setTimeout(() => {
             const targetButton = classLoader.TextView.$new(mainActivity);
             targetButton.setText(classLoader.String.$new("[ > Alvo ]")); targetButton.setTextColor(classLoader.Color.WHITE.value); targetButton.setBackgroundColor(COLOR_OFF); targetButton.setPadding(PADDING, PADDING, PADDING, PADDING); targetButton.setLayoutParams(btnLP);
             targetButton.setOnClickListener(Java.registerClass({
-                name: "com.example.TargetClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                name: "TC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: { 
                     onClick(v) { 
                         if (smartListLogs.length > 0) { 
                             currentTargetIndex = (currentTargetIndex + 1) % smartListLogs.length; 
                             selectedTargetName = smartListLogs[currentTargetIndex];
-                            if(refreshScannerUI) refreshScannerUI();
+                            uiNeedsUpdate = true;
                             showToast("Alvo alterado!"); 
-                        } else {
-                            showToast("Lista vazia."); 
-                        } 
+                        } else { showToast("Lista vazia."); } 
                     } 
                 }
             }).$new());
             rowTargetControl.addView(targetButton);
 
             const execTargetBtn = classLoader.TextView.$new(mainActivity);
-            execTargetBtn.setText(classLoader.String.$new("[ EXECUTAR ]")); execTargetBtn.setTextColor(classLoader.Color.WHITE.value); execTargetBtn.setBackgroundColor(COLOR_EXEC); execTargetBtn.setPadding(PADDING, PADDING, PADDING, PADDING); execTargetBtn.setLayoutParams(btnLP);
+            execTargetBtn.setText(classLoader.String.$new("[ 🎯 EXECUTAR ]")); execTargetBtn.setTextColor(classLoader.Color.WHITE.value); execTargetBtn.setBackgroundColor(COLOR_EXEC); execTargetBtn.setPadding(PADDING, PADDING, PADDING, PADDING); execTargetBtn.setLayoutParams(btnLP);
             execTargetBtn.setOnClickListener(Java.registerClass({
-                name: "com.example.ExecTargetClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                name: "ET"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: {
                     onClick(v) {
                         if (selectedTargetName && interceptedData[selectedTargetName]) {
@@ -372,10 +276,9 @@ setTimeout(() => {
                                 const data = interceptedData[selectedTargetName];
                                 const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
                                 Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
+                                showToast("Ação Executada!");
                             } catch(e) { showToast("Crash evitado!"); }
-                        } else {
-                            showToast("Nenhum alvo selecionado.");
-                        }
+                        } else { showToast("Abra o scanner e selecione um alvo."); }
                     }
                 }
             }).$new());
@@ -390,13 +293,8 @@ setTimeout(() => {
             const healButton = classLoader.TextView.$new(mainActivity);
             healButton.setText(classLoader.String.$new("[ Vida Máxima ]")); healButton.setTextColor(classLoader.Color.WHITE.value); healButton.setBackgroundColor(COLOR_HEAL); healButton.setPadding(PADDING, PADDING, PADDING, PADDING); healButton.setLayoutParams(btnLP);
             healButton.setOnClickListener(Java.registerClass({
-                name: "com.example.HealClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        const activeplayer = activeplayerPtr.readPointer();
-                        if (forceHeal && !activeplayer.isNull()) { forceHeal(activeplayer, 3.0); showToast("Curado!"); }
-                    }
-                }
+                name: "HC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { onClick(v) { const activeplayer = activeplayerPtr.readPointer(); if (forceHeal && !activeplayer.isNull()) { forceHeal(activeplayer, 3.0); showToast("Curado!"); } } }
             }).$new());
             rowHeal.addView(healButton);
             topRightContainer.addView(rowHeal);
@@ -407,23 +305,22 @@ setTimeout(() => {
             rowPhysics.setGravity(Gravity.RIGHT.value);
 
             const throwButton = classLoader.TextView.$new(mainActivity);
-            throwButton.setText(classLoader.String.$new("[ Atirar Longe ]")); throwButton.setTextColor(classLoader.Color.WHITE.value); throwButton.setBackgroundColor(COLOR_ACTION); throwButton.setPadding(PADDING, PADDING, PADDING, PADDING); throwButton.setLayoutParams(btnLP);
+            throwButton.setText(classLoader.String.$new("[ Atirar ]")); throwButton.setTextColor(classLoader.Color.WHITE.value); throwButton.setBackgroundColor(COLOR_ACTION); throwButton.setPadding(PADDING, PADDING, PADDING, PADDING); throwButton.setLayoutParams(btnLP);
             throwButton.setOnClickListener(Java.registerClass({
-                name: "com.example.ThrowClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                name: "ThrC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: { onClick(v) { const activeplayer = activeplayerPtr.readPointer(); if (forceThrow && !activeplayer.isNull()) forceThrow(activeplayer); } }
             }).$new());
 
             const projButton = classLoader.TextView.$new(mainActivity);
-            projButton.setText(classLoader.String.$new("[ Spam Projétil ]")); projButton.setTextColor(classLoader.Color.WHITE.value); projButton.setBackgroundColor(COLOR_FIRE); projButton.setPadding(PADDING, PADDING, PADDING, PADDING); projButton.setLayoutParams(btnLP);
+            projButton.setText(classLoader.String.$new("[ Spam ]")); projButton.setTextColor(classLoader.Color.WHITE.value); projButton.setBackgroundColor(COLOR_FIRE); projButton.setPadding(PADDING, PADDING, PADDING, PADDING); projButton.setLayoutParams(btnLP);
             projButton.setOnClickListener(Java.registerClass({
-                name: "com.example.ProjClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                name: "PC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: { onClick(v) { const activeplayer = activeplayerPtr.readPointer(); if (forceProjectile && !activeplayer.isNull()) { forceProjectile(activeplayer); forceProjectile(activeplayer); forceProjectile(activeplayer); } } }
             }).$new());
 
             rowPhysics.addView(throwButton);
             rowPhysics.addView(projButton);
             topRightContainer.addView(rowPhysics);
-
             trRootLayout.addView(topRightContainer);
 
             // ========================================================================
@@ -442,21 +339,21 @@ setTimeout(() => {
             scanControlsRow.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
 
             const scanToggle = createToggleButton("SCAN", { 
-                on() { scanMode = 1; smartListLogs = []; selectedTargetName = null; refreshScannerUI(); setTimeout(() => { if (scanMode === 1) { scanMode = 2; showToast("Scanner Escutando..."); } }, 3000); }, 
+                on() { scanMode = 1; smartListLogs = []; selectedTargetName = null; uiNeedsUpdate = true; setTimeout(() => { if (scanMode === 1) { scanMode = 2; showToast("Scanner Escutando..."); } }, 3000); }, 
                 off() { scanMode = 0; } 
             });
 
             const btnLimpar = classLoader.TextView.$new(mainActivity);
             btnLimpar.setText(classLoader.String.$new("LIMPAR")); btnLimpar.setTextColor(classLoader.Color.WHITE.value); btnLimpar.setBackgroundColor(COLOR_OFF); btnLimpar.setPadding(PADDING, PADDING, PADDING, PADDING); btnLimpar.setLayoutParams(btnLP);
             btnLimpar.setOnClickListener(Java.registerClass({
-                name: "com.example.ClearScanClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                methods: { onClick(v) { smartListLogs = []; interceptedData = {}; selectedTargetName = null; refreshScannerUI(); showToast("Limpo!"); } }
+                name: "CL"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                methods: { onClick(v) { smartListLogs = []; interceptedData = {}; selectedTargetName = null; uiNeedsUpdate = true; showToast("Limpo!"); } }
             }).$new());
 
             const btnSave = classLoader.TextView.$new(mainActivity);
             btnSave.setText(classLoader.String.$new("SAVE TXT")); btnSave.setTextColor(classLoader.Color.WHITE.value); btnSave.setBackgroundColor(COLOR_SAVE); btnSave.setPadding(PADDING, PADDING, PADDING, PADDING); btnSave.setLayoutParams(btnLP);
             btnSave.setOnClickListener(Java.registerClass({
-                name: "com.example.SaveScanClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                name: "SV"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
                 methods: {
                     onClick(v) {
                         if (!selectedTargetName) { showToast("Selecione na lista primeiro."); return; }
@@ -491,54 +388,42 @@ setTimeout(() => {
             scannerPanel.addView(scrollView);
 
             refreshScannerUI = function() {
-                Java.scheduleOnMainThread(() => {
-                    listContainer.removeAllViews();
+                listContainer.removeAllViews();
+                
+                if (scanMode === 1) {
+                    const loadingTv = classLoader.TextView.$new(mainActivity);
+                    loadingTv.setText(classLoader.String.$new("...Calibrando (Fique Parado)..."));
+                    loadingTv.setTextColor(classLoader.Color.YELLOW.value);
+                    listContainer.addView(loadingTv);
+                    return;
+                }
+                if (smartListLogs.length === 0) {
+                    const emptyTv = classLoader.TextView.$new(mainActivity);
+                    emptyTv.setText(classLoader.String.$new("Nenhuma ação capturada."));
+                    emptyTv.setTextColor(classLoader.Color.GRAY.value);
+                    listContainer.addView(emptyTv);
+                    return;
+                }
+                for (let i = 0; i < smartListLogs.length; i++) {
+                    const funcName = smartListLogs[i];
+                    const itemTv = classLoader.TextView.$new(mainActivity);
+                    let displayName = funcName.length > 35 ? funcName.substring(0, 35) + "..." : funcName;
+                    itemTv.setText(classLoader.String.$new(displayName));
                     
-                    if (scanMode === 1) {
-                        const loadingTv = classLoader.TextView.$new(mainActivity);
-                        loadingTv.setText(classLoader.String.$new("...Calibrando (Fique Parado)..."));
-                        loadingTv.setTextColor(classLoader.Color.YELLOW.value);
-                        listContainer.addView(loadingTv);
-                        return;
+                    if (funcName === selectedTargetName) {
+                        itemTv.setBackgroundColor(COLOR_SELECTED);
+                        itemTv.setTextColor(classLoader.Color.BLACK.value);
+                    } else {
+                        itemTv.setBackgroundColor(classLoader.Color.TRANSPARENT.value);
+                        itemTv.setTextColor(classLoader.Color.YELLOW.value);
                     }
-
-                    if (smartListLogs.length === 0) {
-                        const emptyTv = classLoader.TextView.$new(mainActivity);
-                        emptyTv.setText(classLoader.String.$new("Nenhuma ação capturada."));
-                        emptyTv.setTextColor(classLoader.Color.GRAY.value);
-                        listContainer.addView(emptyTv);
-                        return;
-                    }
-
-                    for (let i = 0; i < smartListLogs.length; i++) {
-                        const funcName = smartListLogs[i];
-                        const itemTv = classLoader.TextView.$new(mainActivity);
-                        
-                        let displayName = funcName.length > 35 ? funcName.substring(0, 35) + "..." : funcName;
-                        itemTv.setText(classLoader.String.$new(displayName));
-                        
-                        if (funcName === selectedTargetName) {
-                            itemTv.setBackgroundColor(COLOR_SELECTED);
-                            itemTv.setTextColor(classLoader.Color.BLACK.value);
-                        } else {
-                            itemTv.setBackgroundColor(classLoader.Color.TRANSPARENT.value);
-                            itemTv.setTextColor(classLoader.Color.YELLOW.value);
-                        }
-                        
-                        itemTv.setPadding(PADDING, PADDING, PADDING, PADDING);
-                        
-                        itemTv.setOnClickListener(Java.registerClass({
-                            name: "com.example.ItemClick" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                            methods: { onClick(v) { 
-                                selectedTargetName = funcName; 
-                                currentTargetIndex = i; // Sincroniza com o botão [> Alvo]
-                                refreshScannerUI(); 
-                            } }
-                        }).$new());
-
-                        listContainer.addView(itemTv);
-                    }
-                });
+                    itemTv.setPadding(PADDING, PADDING, PADDING, PADDING);
+                    itemTv.setOnClickListener(Java.registerClass({
+                        name: "IC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                        methods: { onClick(v) { selectedTargetName = funcName; currentTargetIndex = i; uiNeedsUpdate = true; } }
+                    }).$new());
+                    listContainer.addView(itemTv);
+                }
             };
 
             // ========================================================================
@@ -547,26 +432,22 @@ setTimeout(() => {
             const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
             const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
             const row2 = classLoader.LinearLayout.$new(mainActivity); row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row2.setGravity(Gravity.CENTER.value);
-
             mainBarLayout.addView(row1); mainBarLayout.addView(row2);
 
             const bottomLayout = classLoader.LinearLayout.$new(mainActivity); const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1); bottomLayout.setLayoutParams(bottomParams); bottomLayout.setGravity(Gravity.BOTTOM.value | Gravity.CENTER_HORIZONTAL.value); bottomLayout.addView(mainBarLayout);
 
             const topInfoTextView = classLoader.TextView.$new(mainActivity); topInfoTextView.setTextColor(classLoader.Color.WHITE.value); topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
             const topBarLayout = classLoader.LinearLayout.$new(mainActivity); topBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); topBarLayout.setGravity(Gravity.CENTER_VERTICAL.value);
-            
             const topLayout = classLoader.LinearLayout.$new(mainActivity); const topParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1); topLayout.setLayoutParams(topParams); topLayout.setGravity(Gravity.TOP.value | Gravity.LEFT.value); 
             
             const call_hideCheats = { on() { mainBarLayout.setVisibility(View.VISIBLE.value); }, off() { mainBarLayout.setVisibility(View.GONE.value); } };
             const hideCheatsButton = createToggleButton("[ Menu ]", call_hideCheats, false); 
             
-            const toggleScannerPanel = { on() { scannerPanel.setVisibility(View.VISIBLE.value); refreshScannerUI(); }, off() { scannerPanel.setVisibility(View.GONE.value); } };
+            const toggleScannerPanel = { on() { scannerPanel.setVisibility(View.VISIBLE.value); uiNeedsUpdate = true; }, off() { scannerPanel.setVisibility(View.GONE.value); } };
             const scannerMenuBtn = createToggleButton("[ Painel Scanner ]", toggleScannerPanel, false);
 
             topBarLayout.addView(hideCheatsButton.view); topBarLayout.addView(scannerMenuBtn.view); topBarLayout.addView(topInfoTextView);
-            
-            topLayout.addView(topBarLayout);
-            topLayout.addView(scannerPanel);
+            topLayout.addView(topBarLayout); topLayout.addView(scannerPanel);
 
             const addToggle = (row, text, callbacks, startOn = false) => { const button = createToggleButton(text, callbacks, startOn); row.addView(button.view); autoOffButtons.push(button); };
             
@@ -585,23 +466,20 @@ setTimeout(() => {
             mainActivity.addContentView(topLayout, topParams); 
             mainActivity.addContentView(bottomLayout, bottomParams);
 
-            // Loop de Processamento Assíncrono (Atualiza a UI sem travar o C++)
+            // LOOP PRINCIPAL (UI e Anti-Lag)
             setInterval(() => {
                 Java.scheduleOnMainThread(function() {
-                    // 1. Processa Ações de Admin Pendentes (Fim do lag do Admin)
                     if (pendingAdminDisable) {
                         pendingAdminDisable = false;
-                        var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
-                        Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new('Admin Detectado. Desativando cheats.'), 0).show();
+                        var ctx = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+                        Java.use("android.widget.Toast").makeText(ctx, Java.use("java.lang.String").$new('Admin Detectado. Desativando cheats.'), 0).show();
                         for (const button of autoOffButtons) { button.reset(); }
                     }
                     if (pendingAdminToastMsg) {
-                        var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
-                        Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new(pendingAdminToastMsg), 0).show();
+                        var ctx = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+                        Java.use("android.widget.Toast").makeText(ctx, Java.use("java.lang.String").$new(pendingAdminToastMsg), 0).show();
                         pendingAdminToastMsg = null;
                     }
-
-                    // 2. Atualiza Posição do Info Text
                     try {
                         const activeplayer = activeplayerPtr.readPointer();
                         if (!activeplayer.isNull()) {
@@ -610,8 +488,15 @@ setTimeout(() => {
                             topInfoTextView.setText(classLoader.String.$new(infoText));
                         }
                     } catch(e) {}
+
+                    if (uiNeedsUpdate) {
+                        refreshScannerUI();
+                        uiNeedsUpdate = false;
+                    }
                 });
             }, 500);
+            
+            uiNeedsUpdate = true;
         });
     });
 }, 8000);
