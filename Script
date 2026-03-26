@@ -1,5 +1,5 @@
 // ========================================================================
-// SCRIPT DEFINITIVO: SMART SCANNER V2 (ANTI-CRASH E ANTI-LAG)
+// SCRIPT DEFINITIVO: SMART SCANNER V3 (UI OTIMIZADA + CRASH LOGGER)
 // ========================================================================
 
 function deleteCacheFiles() {
@@ -10,7 +10,8 @@ function deleteCacheFiles() {
             const pkgName = context.getPackageName();
             const File = Java.use("java.io.File");
             const path = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath() + "/Android/data/" + pkgName + "/";
-            const EXCLUDE_PATHS = ["files/levels/images/classiciphone", "saved_functions.txt"];
+            // Preserva os arquivos de log de crash
+            const EXCLUDE_PATHS = ["files/levels/images/classiciphone", "saved_functions.txt", "alvo_atual.txt", "blacklist_crashes.txt"];
             const targetDir = File.$new(path);
             if (!targetDir.exists() || !targetDir.isDirectory()) return;
             const files = targetDir.listFiles();
@@ -30,7 +31,7 @@ function deleteRecursive(f, e) { try { const sub = f.listFiles(); if (sub) for (
 deleteCacheFiles();
 
 setTimeout(() => {
-    // --- FUNÇÕES DE SEGURANÇA (O ESCUDO ANTI-CRASH) ---
+    // --- FUNÇÕES DE SEGURANÇA ---
     function getSafeNativeFunc(lib, funcName, retType, args) {
         const ptr = Module.findExportByName(lib, funcName);
         if (ptr) return new NativeFunction(ptr, retType, args);
@@ -39,6 +40,7 @@ setTimeout(() => {
     
     var malloc = getSafeNativeFunc("libc.so", "malloc", "pointer", ["int"]);
 
+    // --- VARIÁVEIS GLOBAIS ---
     let unhit = false, unhit_mode = 1, showAdmins = true, autoOFF = false, afkInterval = null;
     let autoOffHasTriggered = false, wallhack = false, canExplode = false, explosionsInterval = null;
     let explosionRadius = 90, lastAdminToastTime = 0, lastAdminSeenTime = 0; 
@@ -52,9 +54,24 @@ setTimeout(() => {
     let smartListLogs = []; 
     let interceptedData = {}; 
     let selectedTargetName = null; 
-    let currentTargetIndex = 0;
     let saveCounter = 1; 
     let uiNeedsUpdate = false; 
+
+    // --- VARIÁVEIS SPAM PROJÉTIL ---
+    let isSpamming = false;
+    let spamSpeeds = [250, 500, 1000, 2000]; // em ms
+    let spamSpeedIdx = 1; // Padrão: 500ms
+    let spamIntervalId = null;
+
+    // --- VARIÁVEIS ÂNCORA ---
+    let currentScanHooks = []; // Guarda os hooks do scanner para podermos trocar de âncora
+    const anchorOptions = [
+        { name: "HurtPlayer (Dano)", ref: "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy" },
+        { name: "Invocar Projétil", ref: "_ZN10W6NzgawMJy10UwflwasGuPEv" },
+        { name: "Arremessar Item", ref: "_ZN10W6NzgawMJy10IFrkwaQTOOEv" },
+        { name: "Heal (Vida)", ref: "_ZN10W6NzgawMJy10zwkXwa7SwkEd" }
+    ];
+    let currentAnchorRef = anchorOptions[0].ref;
 
     // --- PONTEIROS ESSENCIAIS ---
     const activeplayerPtr = Module.findExportByName("libqplay.so", "dkCHgaGRiF");
@@ -65,52 +82,127 @@ setTimeout(() => {
     const getlocalx = getSafeNativeFunc("libqplay.so", "_ZNK10W6NzgawMJy10Qi2VgaCyrREv", "double", ["pointer"]);
     const putExplosion = getSafeNativeFunc("libqplay.so", "_ZN10zF9VgaBKxR10tMaombuGXrEdddii", "void", ["pointer", "double", "double", "double", "int", "int"]);
 
-    // --- PODERES OFICIAIS ---
     const forceHeal = getSafeNativeFunc("libqplay.so", "_ZN10W6NzgawMJy10zwkXwa7SwkEd", "void", ["pointer", "double"]);
     const forceThrow = getSafeNativeFunc("libqplay.so", "_ZN10W6NzgawMJy10IFrkwaQTOOEv", "void", ["pointer"]);
     const forceProjectile = getSafeNativeFunc("libqplay.so", "_ZN10W6NzgawMJy10UwflwasGuPEv", "void", ["pointer"]);
 
-    const alphaNormalStr = createTString('alpha=1');
-    const alphaFadedStr = createTString('alpha=0.3');
-    const zoomNormalStr = createTString('zoom=1');
+    const zoomAdminStr = createTString('zoom=1.8'); // Admin Gigante
 
     let refreshScannerUI = null; 
+    let refreshSpamUI = null;
 
-    // --- PREPARAÇÃO DO SMART SCANNER (-33 a +33) ---
-    Java.perform(() => {
+    // --- SISTEMA DE LOG DE CRASH PERSISTENTE ---
+    function checkPreviousCrash(mainActivity) {
         try {
-            const exports = Module.enumerateExports("libqplay.so");
-            const referenceName = "_ZN10W6NzgawMJy10iPzUgaQKcQEdddRK10C8THgaTQxFP10MpGzgariDy"; // hurtPlayer
-            exports.sort((a, b) => a.address.compare(b.address));
-            let refIndex = exports.findIndex(e => e.name === referenceName);
-            if (refIndex !== -1) {
-                let startIdx = Math.max(0, refIndex - 33);
-                let endIdx = Math.min(exports.length - 1, refIndex + 33);
-                for (let i = startIdx; i <= endIdx; i++) {
-                    let exp = exports[i];
-                    if (exp && exp.type === 'function' && exp.name !== referenceName) {
-                        try {
-                            Interceptor.attach(exp.address, {
-                                onEnter: function(args) {
-                                    if (scanMode === 0) return;
-                                    if (scanMode === 1) { blacklistedFunctions.add(exp.name); return; }
-                                    if (scanMode === 2) {
-                                        if (blacklistedFunctions.has(exp.name)) return;
-                                        interceptedData[exp.name] = { address: exp.address, args: [args[0], args[1], args[2], args[3]] };
-                                        if (!smartListLogs.includes(exp.name)) {
-                                            smartListLogs.push(exp.name);
-                                            if (smartListLogs.length > 50) smartListLogs.shift();
-                                            uiNeedsUpdate = true; // Aviso silencioso pra interface atualizar
-                                        }
-                                    }
-                                }
-                            });
-                        } catch(e) {}
-                    }
+            const context = mainActivity.getApplicationContext();
+            const basePath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath() + "/Android/data/" + context.getPackageName() + "/";
+            const File = Java.use("java.io.File");
+            const FileReader = Java.use("java.io.FileReader");
+            const BufferedReader = Java.use("java.io.BufferedReader");
+            const FileWriter = Java.use("java.io.FileWriter");
+            const BufferedWriter = Java.use("java.io.BufferedWriter");
+            const JString = Java.use("java.lang.String");
+
+            const fileTarget = File.$new(basePath + "alvo_atual.txt");
+            const fileBlacklist = File.$new(basePath + "blacklist_crashes.txt");
+
+            if (fileBlacklist.exists()) {
+                const br = BufferedReader.$new(FileReader.$new(fileBlacklist));
+                let line;
+                while ((line = br.readLine()) !== null) { blacklistedFunctions.add(line.toString()); }
+                br.close();
+            }
+
+            if (fileTarget.exists()) {
+                const br = BufferedReader.$new(FileReader.$new(fileTarget));
+                const funcAssassina = br.readLine();
+                br.close();
+                
+                if (funcAssassina !== null) {
+                    const funcName = funcAssassina.toString();
+                    blacklistedFunctions.add(funcName);
+                    const bw = BufferedWriter.$new(FileWriter.$new(fileBlacklist, true));
+                    bw.write(JString.$new(funcName + "\n")); bw.close();
+                    Java.scheduleOnMainThread(() => { Java.use("android.widget.Toast").makeText(context, JString.$new("CRASH PREVISTO: Função " + funcName.substring(0, 15) + " banida!"), 1).show(); });
                 }
+                fileTarget.delete();
             }
         } catch(e) {}
-    });
+    }
+
+    function registrarExecucao(funcName, mainActivity) {
+        try {
+            const basePath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath() + "/Android/data/" + mainActivity.getApplicationContext().getPackageName() + "/";
+            const FileWriter = Java.use("java.io.FileWriter");
+            const fw = FileWriter.$new(Java.use("java.io.File").$new(basePath + "alvo_atual.txt"), false);
+            fw.write(Java.use("java.lang.String").$new(funcName)); fw.close();
+        } catch(e) {}
+    }
+
+    function limparExecucao(mainActivity) {
+        try {
+            const basePath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath() + "/Android/data/" + mainActivity.getApplicationContext().getPackageName() + "/";
+            const fileTarget = Java.use("java.io.File").$new(basePath + "alvo_atual.txt");
+            if (fileTarget.exists()) fileTarget.delete();
+        } catch(e) {}
+    }
+
+    // --- TROCA DE ÂNCORA DINÂMICA ---
+    function updateScannerAnchor() {
+        // Remove hooks antigos
+        currentScanHooks.forEach(hook => hook.detach());
+        currentScanHooks = [];
+        smartListLogs = [];
+        interceptedData = {};
+        selectedTargetName = null;
+        uiNeedsUpdate = true;
+
+        Java.perform(() => {
+            try {
+                const exports = Module.enumerateExports("libqplay.so");
+                exports.sort((a, b) => a.address.compare(b.address));
+                let refIndex = exports.findIndex(e => e.name === currentAnchorRef);
+                if (refIndex !== -1) {
+                    let startIdx = Math.max(0, refIndex - 33);
+                    let endIdx = Math.min(exports.length - 1, refIndex + 33);
+                    for (let i = startIdx; i <= endIdx; i++) {
+                        let exp = exports[i];
+                        if (exp && exp.type === 'function' && exp.name !== currentAnchorRef) {
+                            try {
+                                let listener = Interceptor.attach(exp.address, {
+                                    onEnter: function(args) {
+                                        if (scanMode === 0) return;
+                                        if (scanMode === 2) {
+                                            if (blacklistedFunctions.has(exp.name)) return;
+                                            interceptedData[exp.name] = { address: exp.address, args: [args[0], args[1], args[2], args[3]] };
+                                            if (!smartListLogs.includes(exp.name)) {
+                                                smartListLogs.push(exp.name);
+                                                if (smartListLogs.length > 50) smartListLogs.shift();
+                                                uiNeedsUpdate = true;
+                                            }
+                                        }
+                                    }
+                                });
+                                currentScanHooks.push(listener);
+                            } catch(e) {}
+                        }
+                    }
+                }
+            } catch(e) {}
+        });
+    }
+
+    // --- LÓGICA DE SPAM ---
+    function updateSpamState() {
+        if (spamIntervalId) clearInterval(spamIntervalId);
+        if (isSpamming) {
+            spamIntervalId = setInterval(() => {
+                const ap = getActivePlayer();
+                if (!ap.isNull() && forceProjectile) forceProjectile(ap);
+            }, spamSpeeds[spamSpeedIdx]);
+        }
+        if (refreshSpamUI) refreshSpamUI();
+    }
 
     // --- HOOKS: UNHIT, WALLHACK, EXPLOSION ---
     Java.perform(() => {
@@ -146,7 +238,7 @@ setTimeout(() => {
         for (let i = 0; i < radius; i++) { for (let j = 0; j < radius; j++) { putExplosion(level, playerX + offset - i, playerY + offset - j, 1, 0, 1); } } 
     }
 
-    // --- HOOK SHOW ADMINS (ANTI-LAG APRIMORADO) ---
+    // --- HOOK SHOW ADMINS (TAMANHO GIGANTE) ---
     setTimeout(() => {
         Java.perform(() => {
             try {
@@ -168,17 +260,13 @@ setTimeout(() => {
                                     if (autoOFF && !autoOffHasTriggered) { autoOffHasTriggered = true; pendingAdminDisable = true; }
                                     if (showAdmins) {
                                         if (setVarValue) {
-                                            if (props.alpha < 1.0) setVarValue(playerPtr, alphaNormalStr);
-                                            if (props.zoom < 1.0) setVarValue(playerPtr, zoomNormalStr);
+                                            // Admin vira gigante na tela
+                                            setVarValue(playerPtr, zoomAdminStr); 
                                         }
                                         if (now - lastAdminToastTime > 5000) { lastAdminToastTime = now; pendingAdminToastMsg = `ADM REVELADO: ${props.nick}`; }
                                     }
-                                } else {
-                                    if (showAdmins && setVarValue) {
-                                        if (now - lastAdminSeenTime < 6000) { if (props.alpha > 0.9) setVarValue(playerPtr, alphaFadedStr); } 
-                                        else { if (props.alpha > 0.25 && props.alpha < 0.35) setVarValue(playerPtr, alphaNormalStr); }
-                                    }
-                                }
+                                } 
+                                // Removida a alteração de transparência dos players comuns! Ficam 100% normais.
                             }
                         } 
                     });
@@ -194,6 +282,7 @@ setTimeout(() => {
     function getClassLoader() { return { Gravity: Java.use("android.view.Gravity"), TextView: Java.use("android.widget.TextView"), LinearLayout: Java.use("android.widget.LinearLayout"), LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"), Color: Java.use("android.graphics.Color"), ActivityThread: Java.use("android.app.ActivityThread"), View_OnTouchListener: Java.use("android.view.View$OnTouchListener"), MotionEvent: Java.use("android.view.MotionEvent"), String: Java.use("java.lang.String"), View: Java.use("android.view.View"), DisplayMetrics: Java.use("android.util.DisplayMetrics"), ScrollView: Java.use("android.widget.ScrollView") }; }
     function getMainActivity(classLoader) { const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value; return Java.cast(activityThread.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord")).activity.value; }
     function pixelDensityToPixels(context, dp) { return parseInt(dp * context.getResources().getDisplayMetrics().density.value); }
+    function showToast(context, text, time = 0) { Java.perform(() => { Java.scheduleOnMainThread(function() { Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new(text), time).show(); }); }); }
 
     const call_antiAfk = { on() { if (!afkInterval) afkInterval = setInterval(()=>{ try { Java.perform(() => Java.scheduleOnMainThread(() => { const mainActivity = getMainActivity(getClassLoader()); let time = Java.use("android.os.SystemClock").uptimeMillis(); mainActivity.dispatchTouchEvent(Java.use("android.view.MotionEvent").obtain(time, time + 50, 0, 1, 1, 0)); })); }catch(e){} }, 240 * 1000); }, off() { if (afkInterval) { clearInterval(afkInterval); afkInterval = null; } } };
     const call_unhit_m1 = { on() { unhit = true; unhit_mode = 1; }, off() { unhit = false; } };
@@ -203,170 +292,218 @@ setTimeout(() => {
     const call_wallhack = { on() { wallhack = true; }, off() { wallhack = false; } };
     const call_explode = { on() { if (!explosionsInterval) explosionsInterval = setInterval(() => { canExplode = true; }, 200); }, off() { if (explosionsInterval) { clearInterval(explosionsInterval); explosionsInterval = null; canExplode = false; } } };
 
-    // --- INICIALIZAÇÃO DA UI (BLINDADA) ---
+    // --- INICIALIZAÇÃO DA UI ---
     Java.perform(function () {
         Java.scheduleOnMainThread(function () {
             try {
                 const classLoader = getClassLoader();
                 const mainActivity = getMainActivity(classLoader);
+                const context = mainActivity.getApplicationContext();
                 const Gravity = classLoader.Gravity;
                 const View = classLoader.View;
 
-                const COLOR_OFF = classLoader.Color.parseColor("#80000000");
-                const COLOR_ON = classLoader.Color.parseColor("#80008000");
-                const COLOR_ACTION = classLoader.Color.parseColor("#CC880000");
+                checkPreviousCrash(mainActivity);
+
+                const COLOR_OFF = classLoader.Color.parseColor("#90000000"); 
+                const COLOR_ON = classLoader.Color.parseColor("#CC008000");
                 const COLOR_EXEC = classLoader.Color.parseColor("#CC9400D3"); 
                 const COLOR_HEAL = classLoader.Color.parseColor("#CC008800"); 
-                const COLOR_FIRE = classLoader.Color.parseColor("#CCFF8C00"); 
-                const COLOR_BG_PANEL = classLoader.Color.parseColor("#E6000022"); 
+                const COLOR_BG_PANEL = classLoader.Color.parseColor("#E6111111"); 
                 const COLOR_SELECTED = classLoader.Color.parseColor("#8000FF00"); 
                 
-                const PADDING = pixelDensityToPixels(mainActivity, 8);
-                const MARGIN = pixelDensityToPixels(mainActivity, 2);
-
-                function createToggleButton(text, callbacks, startOn = false) {
-                    const button = classLoader.TextView.$new(mainActivity); let isOn = startOn;
-                    const reset = () => { if (isOn) { isOn = false; button.setBackgroundColor(COLOR_OFF); if (callbacks.off) callbacks.off(); } };
-                    button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value); button.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING);
-                    const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); button.setLayoutParams(layoutParams);
-                    button.setOnClickListener(Java.registerClass({ name: "C"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")], methods: { onClick(v) { isOn = !isOn; v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF); if (isOn) { if (callbacks.on) callbacks.on(); } else { if (callbacks.off) callbacks.off(); } } } }).$new());
-                    if (startOn) { if (callbacks.on) callbacks.on(); } return { view: button, reset: reset };
-                }
-
-                function createHoldButton(text, action) { 
-                    const button = classLoader.TextView.$new(mainActivity); let holdInterval = null; 
-                    button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value); button.setBackgroundColor(COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING); 
-                    const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); button.setLayoutParams(layoutParams); 
-                    button.setOnTouchListener(Java.registerClass({ name: "T"+Math.random().toString(36).substring(2), implements: [classLoader.View_OnTouchListener], methods: { onTouch(v, event) { switch (event.getAction()) { case classLoader.MotionEvent.ACTION_DOWN.value: action(); holdInterval = setInterval(action, 100); return true; case classLoader.MotionEvent.ACTION_UP.value: if (holdInterval) clearInterval(holdInterval); holdInterval = null; return true; } return false; } } }).$new()); 
-                    return button; 
-                }
-
+                const PADDING = pixelDensityToPixels(context, 8);
+                const MARGIN = pixelDensityToPixels(context, 2);
                 const btnLP = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
                 btnLP.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
 
-                // ========================================================================
-                // 1. PAINEL TOP-RIGHT (FIXO NA TELA) - EXECUTAR ALVO E PODERES
-                // ========================================================================
-                const topRightContainer = classLoader.LinearLayout.$new(mainActivity);
-                topRightContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value); 
-                topRightContainer.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
-                
-                const trRootLayout = classLoader.LinearLayout.$new(mainActivity);
-                const trRootParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
-                trRootLayout.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
-                trRootLayout.setPadding(0, PADDING * 4, 0, 0); 
+                // --- LAYOUTS BASE ---
+                const rootLayout = classLoader.LinearLayout.$new(mainActivity);
+                rootLayout.setLayoutParams(classLoader.LinearLayout_LayoutParams.$new(-1, -1));
+                rootLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
 
-                // LINHA 1: SCANNER CONTROLS
-                const rowTargetControl = classLoader.LinearLayout.$new(mainActivity);
-                rowTargetControl.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-                rowTargetControl.setGravity(Gravity.RIGHT.value);
+                // COLUNA ESQUERDA (GAVETAS)
+                const leftCol = classLoader.LinearLayout.$new(mainActivity);
+                leftCol.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+                leftCol.setLayoutParams(classLoader.LinearLayout_LayoutParams.$new(-2, -1));
+                leftCol.setGravity(Gravity.LEFT.value | Gravity.TOP.value);
+                leftCol.setPadding(0, PADDING * 4, 0, 0);
 
-                const targetButton = classLoader.TextView.$new(mainActivity);
-                targetButton.setText(classLoader.String.$new("[ > Alvo ]")); targetButton.setTextColor(classLoader.Color.WHITE.value); targetButton.setBackgroundColor(COLOR_OFF); targetButton.setPadding(PADDING, PADDING, PADDING, PADDING); targetButton.setLayoutParams(btnLP);
-                targetButton.setOnClickListener(Java.registerClass({
-                    name: "TC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: { 
-                        onClick(v) { 
-                            if (smartListLogs.length > 0) { 
-                                currentTargetIndex = (currentTargetIndex + 1) % smartListLogs.length; 
-                                selectedTargetName = smartListLogs[currentTargetIndex];
-                                uiNeedsUpdate = true;
-                            } 
-                        } 
-                    }
-                }).$new());
-                rowTargetControl.addView(targetButton);
+                // COLUNA DIREITA (AÇÕES FIXAS COM MARGEM 20)
+                const rightCol = classLoader.LinearLayout.$new(mainActivity);
+                rightCol.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+                const rightLP = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
+                rightLP.setMargins(0, PADDING * 4, pixelDensityToPixels(context, 20), 0); // Margem de 20 pedida
+                rightCol.setLayoutParams(rightLP);
+                rightCol.setGravity(Gravity.RIGHT.value | Gravity.TOP.value);
 
-                const execTargetBtn = classLoader.TextView.$new(mainActivity);
-                execTargetBtn.setText(classLoader.String.$new("[ 🎯 EXECUTAR ]")); execTargetBtn.setTextColor(classLoader.Color.WHITE.value); execTargetBtn.setBackgroundColor(COLOR_EXEC); execTargetBtn.setPadding(PADDING, PADDING, PADDING, PADDING); execTargetBtn.setLayoutParams(btnLP);
-                execTargetBtn.setOnClickListener(Java.registerClass({
-                    name: "ET"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                rootLayout.addView(leftCol);
+                rootLayout.addView(rightCol);
+
+                // ==========================================
+                // DIREITA: BOTÕES DE AÇÃO FIXOS
+                // ==========================================
+                const btnExecutar = classLoader.TextView.$new(mainActivity);
+                btnExecutar.setText(classLoader.String.$new("[ 🎯 EXECUTAR ]")); btnExecutar.setTextColor(classLoader.Color.WHITE.value); btnExecutar.setBackgroundColor(COLOR_EXEC); btnExecutar.setPadding(PADDING, PADDING, PADDING, PADDING); btnExecutar.setLayoutParams(btnLP);
+                btnExecutar.setOnClickListener(Java.registerClass({
+                    name: "ExecAction", implements: [Java.use("android.view.View$OnClickListener")],
                     methods: {
                         onClick(v) {
                             if (selectedTargetName && interceptedData[selectedTargetName]) {
+                                if (blacklistedFunctions.has(selectedTargetName)) {
+                                    showToast(context, "BLOQUEADO: Esta função já causou crash antes!"); return;
+                                }
                                 try {
+                                    registrarExecucao(selectedTargetName, mainActivity);
                                     const data = interceptedData[selectedTargetName];
                                     const injectedFunc = new NativeFunction(data.address, 'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-                                    Java.perform(() => { injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]); });
-                                } catch(e) {}
-                            } 
+                                    injectedFunc(data.args[0], data.args[1], data.args[2], data.args[3]);
+                                    limparExecucao(mainActivity);
+                                    showToast(context, "Ação Concluída!");
+                                } catch(e) { limparExecucao(mainActivity); }
+                            } else { showToast(context, "Selecione um alvo no Scanner."); }
                         }
                     }
                 }).$new());
-                rowTargetControl.addView(execTargetBtn);
-                topRightContainer.addView(rowTargetControl);
-
-                // LINHA 2: PODER DE CURA E ARREMESSO
-                const rowPowers = classLoader.LinearLayout.$new(mainActivity);
-                rowPowers.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-                rowPowers.setGravity(Gravity.RIGHT.value);
-
-                const healButton = classLoader.TextView.$new(mainActivity);
-                healButton.setText(classLoader.String.$new("[ Heal ]")); healButton.setTextColor(classLoader.Color.WHITE.value); healButton.setBackgroundColor(COLOR_HEAL); healButton.setPadding(PADDING, PADDING, PADDING, PADDING); healButton.setLayoutParams(btnLP);
-                healButton.setOnClickListener(Java.registerClass({
-                    name: "HC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: { onClick(v) { const activeplayer = getActivePlayer(); if (forceHeal && !activeplayer.isNull()) forceHeal(activeplayer, 3.0); } }
-                }).$new());
-
-                const throwButton = classLoader.TextView.$new(mainActivity);
-                throwButton.setText(classLoader.String.$new("[ Atirar ]")); throwButton.setTextColor(classLoader.Color.WHITE.value); throwButton.setBackgroundColor(COLOR_ACTION); throwButton.setPadding(PADDING, PADDING, PADDING, PADDING); throwButton.setLayoutParams(btnLP);
-                throwButton.setOnClickListener(Java.registerClass({
-                    name: "ThrC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: { onClick(v) { const activeplayer = getActivePlayer(); if (forceThrow && !activeplayer.isNull()) forceThrow(activeplayer); } }
-                }).$new());
-
-                const projButton = classLoader.TextView.$new(mainActivity);
-                projButton.setText(classLoader.String.$new("[ Spam ]")); projButton.setTextColor(classLoader.Color.WHITE.value); projButton.setBackgroundColor(COLOR_FIRE); projButton.setPadding(PADDING, PADDING, PADDING, PADDING); projButton.setLayoutParams(btnLP);
-                projButton.setOnClickListener(Java.registerClass({
-                    name: "PC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: { onClick(v) { const activeplayer = getActivePlayer(); if (forceProjectile && !activeplayer.isNull()) { forceProjectile(activeplayer); forceProjectile(activeplayer); forceProjectile(activeplayer); } } }
-                }).$new());
-
-                rowPowers.addView(healButton);
-                rowPowers.addView(throwButton);
-                rowPowers.addView(projButton);
-                topRightContainer.addView(rowPowers);
-                trRootLayout.addView(topRightContainer);
-
-                // ========================================================================
-                // 2. PAINEL DO SMART SCANNER V2 (LISTA ROLÁVEL NA ESQUERDA)
-                // ========================================================================
-                const scannerPanel = classLoader.LinearLayout.$new(mainActivity);
-                scannerPanel.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-                scannerPanel.setBackgroundColor(COLOR_BG_PANEL);
-                scannerPanel.setPadding(PADDING, PADDING, PADDING, PADDING);
-                scannerPanel.setVisibility(View.GONE.value);
-                const scannerLP = classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(mainActivity, 280), -2);
-                scannerLP.setMargins(0, PADDING * 4, 0, 0);
-                scannerPanel.setLayoutParams(scannerLP);
-
-                const scanControlsRow = classLoader.LinearLayout.$new(mainActivity);
-                scanControlsRow.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-
-                const scanToggle = createToggleButton("SCAN", { 
-                    on() { scanMode = 1; smartListLogs = []; selectedTargetName = null; uiNeedsUpdate = true; setTimeout(() => { if (scanMode === 1) scanMode = 2; }, 3000); }, 
-                    off() { scanMode = 0; } 
-                });
 
                 const btnLimpar = classLoader.TextView.$new(mainActivity);
-                btnLimpar.setText(classLoader.String.$new("LIMPAR")); btnLimpar.setTextColor(classLoader.Color.WHITE.value); btnLimpar.setBackgroundColor(COLOR_OFF); btnLimpar.setPadding(PADDING, PADDING, PADDING, PADDING); btnLimpar.setLayoutParams(btnLP);
+                btnLimpar.setText(classLoader.String.$new("[ LIMPAR SCAN ]")); btnLimpar.setTextColor(classLoader.Color.WHITE.value); btnLimpar.setBackgroundColor(COLOR_OFF); btnLimpar.setPadding(PADDING, PADDING, PADDING, PADDING); btnLimpar.setLayoutParams(btnLP);
                 btnLimpar.setOnClickListener(Java.registerClass({
-                    name: "CL"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: { onClick(v) { smartListLogs = []; interceptedData = {}; selectedTargetName = null; uiNeedsUpdate = true; } }
+                    name: "ClearScan", implements: [Java.use("android.view.View$OnClickListener")],
+                    methods: { onClick(v) { smartListLogs = []; interceptedData = {}; selectedTargetName = null; uiNeedsUpdate = true; showToast(context, "Scanner Limpo"); } }
                 }).$new());
 
-                scanControlsRow.addView(scanToggle.view);
-                scanControlsRow.addView(btnLimpar);
-                scannerPanel.addView(scanControlsRow);
+                const btnSave = classLoader.TextView.$new(mainActivity);
+                btnSave.setText(classLoader.String.$new("[ SAVE TXT ]")); btnSave.setTextColor(classLoader.Color.WHITE.value); btnSave.setBackgroundColor(classLoader.Color.parseColor("#CC000088")); btnSave.setPadding(PADDING, PADDING, PADDING, PADDING); btnSave.setLayoutParams(btnLP);
+                btnSave.setOnClickListener(Java.registerClass({
+                    name: "SaveScan", implements: [Java.use("android.view.View$OnClickListener")],
+                    methods: {
+                        onClick(v) {
+                            if (!selectedTargetName) return;
+                            Java.perform(() => {
+                                try {
+                                    const filePath = Java.use("android.os.Environment").getExternalStorageDirectory().getAbsolutePath() + "/Android/data/" + context.getPackageName() + "/saved_functions.txt";
+                                    let fos = Java.use("java.io.FileOutputStream").$new(filePath, true); 
+                                    fos.write(Java.use("java.lang.String").$new(saveCounter + ". " + selectedTargetName + "\n").getBytes());
+                                    saveCounter++; fos.close(); showToast(context, "Salvo!");
+                                } catch(e) {}
+                            });
+                        }
+                    }
+                }).$new());
+
+                rightCol.addView(btnExecutar);
+                rightCol.addView(btnLimpar);
+                rightCol.addView(btnSave);
+
+
+                // ==========================================
+                // ESQUERDA: GAVETAS MODULARES
+                // ==========================================
+                function createDrawer(titleText, contentLayout) {
+                    const drawerContainer = classLoader.LinearLayout.$new(mainActivity);
+                    drawerContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+                    
+                    const toggleBtn = classLoader.TextView.$new(mainActivity);
+                    let isOpen = false;
+                    toggleBtn.setText(classLoader.String.$new("[ + ] " + titleText));
+                    toggleBtn.setTextColor(classLoader.Color.WHITE.value); toggleBtn.setBackgroundColor(COLOR_OFF); toggleBtn.setPadding(PADDING, PADDING, PADDING, PADDING); toggleBtn.setLayoutParams(btnLP);
+                    
+                    contentLayout.setVisibility(View.GONE.value);
+                    contentLayout.setBackgroundColor(COLOR_BG_PANEL);
+                    contentLayout.setPadding(PADDING, PADDING, PADDING, PADDING);
+                    
+                    toggleBtn.setOnClickListener(Java.registerClass({
+                        name: "Toggle" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                        methods: { onClick(v) { isOpen = !isOpen; contentLayout.setVisibility(isOpen ? View.VISIBLE.value : View.GONE.value); toggleBtn.setText(classLoader.String.$new((isOpen ? "[ - ] " : "[ + ] ") + titleText)); } }
+                    }).$new());
+                    
+                    drawerContainer.addView(toggleBtn);
+                    drawerContainer.addView(contentLayout);
+                    leftCol.addView(drawerContainer);
+                }
+
+                // 1. GAVETA: FUNÇÕES CONHECIDAS (PODERES)
+                const knownContent = classLoader.LinearLayout.$new(mainActivity);
+                knownContent.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+                
+                const healButton = classLoader.TextView.$new(mainActivity);
+                healButton.setText(classLoader.String.$new("[ Vida Máxima ]")); healButton.setTextColor(classLoader.Color.WHITE.value); healButton.setBackgroundColor(COLOR_HEAL); healButton.setPadding(PADDING, PADDING, PADDING, PADDING); healButton.setLayoutParams(btnLP);
+                healButton.setOnClickListener(Java.registerClass({ name: "HC", implements: [Java.use("android.view.View$OnClickListener")], methods: { onClick(v) { const activeplayer = getActivePlayer(); if (forceHeal && !activeplayer.isNull()) forceHeal(activeplayer, 3.0); } } }).$new());
+                knownContent.addView(healButton);
+
+                // Spam Controle
+                const spamRow = classLoader.LinearLayout.$new(mainActivity);
+                spamRow.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+                const spamBtn = classLoader.TextView.$new(mainActivity);
+                spamBtn.setText(classLoader.String.$new("Spam Projétil: OFF")); spamBtn.setTextColor(classLoader.Color.WHITE.value); spamBtn.setBackgroundColor(COLOR_OFF); spamBtn.setPadding(PADDING, PADDING, PADDING, PADDING); spamBtn.setLayoutParams(btnLP);
+                
+                const speedBtn = classLoader.TextView.$new(mainActivity);
+                speedBtn.setTextColor(classLoader.Color.WHITE.value); speedBtn.setBackgroundColor(classLoader.Color.TRANSPARENT.value); speedBtn.setPadding(PADDING, PADDING, PADDING, PADDING); speedBtn.setLayoutParams(btnLP);
+                
+                refreshSpamUI = () => {
+                    Java.scheduleOnMainThread(() => {
+                        spamBtn.setBackgroundColor(isSpamming ? classLoader.Color.parseColor("#CCFF8C00") : COLOR_OFF);
+                        spamBtn.setText(classLoader.String.$new(isSpamming ? "Spam Projétil: ON" : "Spam Projétil: OFF"));
+                        speedBtn.setText(classLoader.String.$new(spamSpeeds[spamSpeedIdx] + "ms"));
+                    });
+                };
+                
+                spamBtn.setOnClickListener(Java.registerClass({
+                    name: "SpamTog", implements: [Java.use("android.view.View$OnClickListener")],
+                    methods: { onClick(v) { isSpamming = !isSpamming; updateSpamState(); } }
+                }).$new());
+
+                const decSpeed = classLoader.TextView.$new(mainActivity); decSpeed.setText(classLoader.String.$new("<")); decSpeed.setTextColor(classLoader.Color.WHITE.value); decSpeed.setBackgroundColor(COLOR_OFF); decSpeed.setPadding(PADDING, PADDING, PADDING, PADDING); decSpeed.setLayoutParams(btnLP);
+                decSpeed.setOnClickListener(Java.registerClass({ name: "SpamDec", implements: [Java.use("android.view.View$OnClickListener")], methods: { onClick(v) { spamSpeedIdx = Math.max(0, spamSpeedIdx - 1); updateSpamState(); } } }).$new());
+                
+                const incSpeed = classLoader.TextView.$new(mainActivity); incSpeed.setText(classLoader.String.$new(">")); incSpeed.setTextColor(classLoader.Color.WHITE.value); incSpeed.setBackgroundColor(COLOR_OFF); incSpeed.setPadding(PADDING, PADDING, PADDING, PADDING); incSpeed.setLayoutParams(btnLP);
+                incSpeed.setOnClickListener(Java.registerClass({ name: "SpamInc", implements: [Java.use("android.view.View$OnClickListener")], methods: { onClick(v) { spamSpeedIdx = Math.min(spamSpeeds.length - 1, spamSpeedIdx + 1); updateSpamState(); } } }).$new());
+
+                spamRow.addView(spamBtn); spamRow.addView(decSpeed); spamRow.addView(speedBtn); spamRow.addView(incSpeed);
+                knownContent.addView(spamRow);
+                refreshSpamUI();
+                createDrawer("Funções Conhecidas", knownContent);
+
+                // 2. GAVETA: SELETOR DE ÂNCORA
+                const anchorContent = classLoader.LinearLayout.$new(mainActivity);
+                anchorContent.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+                
+                anchorOptions.forEach((opt) => {
+                    const btn = classLoader.TextView.$new(mainActivity);
+                    btn.setText(classLoader.String.$new(opt.name)); btn.setTextColor(classLoader.Color.WHITE.value); btn.setPadding(PADDING, PADDING, PADDING, PADDING); btn.setLayoutParams(btnLP);
+                    const updateBg = () => { Java.scheduleOnMainThread(() => { btn.setBackgroundColor(currentAnchorRef === opt.ref ? COLOR_ON : COLOR_OFF); }); };
+                    btn.setOnClickListener(Java.registerClass({
+                        name: "Anchor" + Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
+                        methods: { onClick(v) { currentAnchorRef = opt.ref; updateScannerAnchor(); showToast(context, "Âncora alterada para " + opt.name); for(let i=0; i<anchorContent.getChildCount(); i++) anchorContent.getChildAt(i).setBackgroundColor(COLOR_OFF); v.setBackgroundColor(COLOR_ON); } }
+                    }).$new());
+                    updateBg(); anchorContent.addView(btn);
+                });
+                createDrawer("Âncora do Scan", anchorContent);
+                updateScannerAnchor(); // Inicia com a primeira
+
+                // 3. GAVETA: CONSOLE SCANNER
+                const scanContent = classLoader.LinearLayout.$new(mainActivity);
+                scanContent.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+                
+                const btnScanTog = classLoader.TextView.$new(mainActivity);
+                btnScanTog.setText(classLoader.String.$new("INICIAR SCAN")); btnScanTog.setTextColor(classLoader.Color.WHITE.value); btnScanTog.setBackgroundColor(COLOR_OFF); btnScanTog.setPadding(PADDING, PADDING, PADDING, PADDING); btnScanTog.setLayoutParams(btnLP);
+                btnScanTog.setOnClickListener(Java.registerClass({
+                    name: "ScanTog", implements: [Java.use("android.view.View$OnClickListener")],
+                    methods: { 
+                        onClick(v) { 
+                            if(scanMode === 0) { scanMode = 1; smartListLogs = []; selectedTargetName = null; uiNeedsUpdate = true; v.setBackgroundColor(COLOR_ON); setTimeout(() => { if (scanMode === 1) scanMode = 2; }, 3000); }
+                            else { scanMode = 0; v.setBackgroundColor(COLOR_OFF); }
+                        } 
+                    }
+                }).$new());
+                scanContent.addView(btnScanTog);
 
                 const scrollView = classLoader.ScrollView.$new(mainActivity);
-                const scrollLP = classLoader.LinearLayout_LayoutParams.$new(-1, pixelDensityToPixels(mainActivity, 250));
-                scrollView.setLayoutParams(scrollLP);
-                
+                scrollView.setLayoutParams(classLoader.LinearLayout_LayoutParams.$new(pixelDensityToPixels(context, 250), pixelDensityToPixels(context, 200)));
                 const listContainer = classLoader.LinearLayout.$new(mainActivity);
                 listContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
                 scrollView.addView(listContainer);
-                scannerPanel.addView(scrollView);
+                scanContent.addView(scrollView);
 
                 refreshScannerUI = function() {
                     listContainer.removeAllViews();
@@ -375,13 +512,14 @@ setTimeout(() => {
                         return;
                     }
                     if (smartListLogs.length === 0) {
-                        const emptyTv = classLoader.TextView.$new(mainActivity); emptyTv.setText(classLoader.String.$new("Nenhuma ação capturada.")); emptyTv.setTextColor(classLoader.Color.GRAY.value); listContainer.addView(emptyTv);
+                        const emptyTv = classLoader.TextView.$new(mainActivity); emptyTv.setText(classLoader.String.$new("Vazio.")); emptyTv.setTextColor(classLoader.Color.GRAY.value); listContainer.addView(emptyTv);
                         return;
                     }
                     for (let i = 0; i < smartListLogs.length; i++) {
                         const funcName = smartListLogs[i];
                         const itemTv = classLoader.TextView.$new(mainActivity);
-                        let displayName = funcName.length > 35 ? funcName.substring(0, 35) + "..." : funcName;
+                        let displayName = funcName.length > 30 ? funcName.substring(0, 30) + "..." : funcName;
+                        if(blacklistedFunctions.has(funcName)) displayName = "🚫 " + displayName;
                         itemTv.setText(classLoader.String.$new(displayName));
                         
                         if (funcName === selectedTargetName) { itemTv.setBackgroundColor(COLOR_SELECTED); itemTv.setTextColor(classLoader.Color.BLACK.value); } 
@@ -390,51 +528,38 @@ setTimeout(() => {
                         
                         itemTv.setOnClickListener(Java.registerClass({
                             name: "IC"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")],
-                            methods: { onClick(v) { selectedTargetName = funcName; currentTargetIndex = i; uiNeedsUpdate = true; } }
+                            methods: { onClick(v) { selectedTargetName = funcName; uiNeedsUpdate = true; } }
                         }).$new());
                         listContainer.addView(itemTv);
                     }
                 };
+                createDrawer("Console Scanner", scanContent);
 
-                // ========================================================================
-                // 3. PAINEL INFERIOR E GAVETA DE MENU
-                // ========================================================================
-                const mainBarLayout = classLoader.LinearLayout.$new(mainActivity); mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value); mainBarLayout.setGravity(Gravity.CENTER.value); mainBarLayout.setVisibility(View.GONE.value); 
-                const row1 = classLoader.LinearLayout.$new(mainActivity); row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row1.setGravity(Gravity.CENTER.value);
-                const row2 = classLoader.LinearLayout.$new(mainActivity); row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); row2.setGravity(Gravity.CENTER.value);
-                mainBarLayout.addView(row1); mainBarLayout.addView(row2);
+                // 4. GAVETA: MENU GERAL (Cheats antigos)
+                const menuContent = classLoader.LinearLayout.$new(mainActivity);
+                menuContent.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+                
+                function createToggleButton(text, callbacks) {
+                    const button = classLoader.TextView.$new(mainActivity); let isOn = false;
+                    const reset = () => { if (isOn) { isOn = false; button.setBackgroundColor(COLOR_OFF); if (callbacks.off) callbacks.off(); } };
+                    button.setText(classLoader.String.$new(text)); button.setTextColor(classLoader.Color.WHITE.value); button.setBackgroundColor(COLOR_OFF); button.setPadding(PADDING, PADDING, PADDING, PADDING); button.setLayoutParams(btnLP);
+                    button.setOnClickListener(Java.registerClass({ name: "Tog"+Math.random().toString(36).substring(2), implements: [Java.use("android.view.View$OnClickListener")], methods: { onClick(v) { isOn = !isOn; v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF); if (isOn) callbacks.on(); else callbacks.off(); } } }).$new());
+                    return { view: button, reset: reset };
+                }
 
-                const bottomLayout = classLoader.LinearLayout.$new(mainActivity); const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1); bottomLayout.setLayoutParams(bottomParams); bottomLayout.setGravity(Gravity.BOTTOM.value | Gravity.CENTER_HORIZONTAL.value); bottomLayout.addView(mainBarLayout);
+                const tgUnhit = createToggleButton("Unhit(M1)", { on(){unhit=true;unhit_mode=1;}, off(){unhit=false;} });
+                const tgAuto = createToggleButton("Auto Off", { on(){autoOFF=true;autoOffHasTriggered=false;}, off(){autoOFF=false;} });
+                const tgRadar = createToggleButton("Radar ADM", { on(){showAdmins=true;}, off(){showAdmins=false;} });
+                autoOffButtons.push(tgUnhit, tgAuto, tgRadar);
+                
+                menuContent.addView(tgUnhit.view); menuContent.addView(tgAuto.view); menuContent.addView(tgRadar.view);
+                createDrawer("Menu Geral", menuContent);
 
+                // INFO TEXT FIXO NO TOPO
                 const topInfoTextView = classLoader.TextView.$new(mainActivity); topInfoTextView.setTextColor(classLoader.Color.WHITE.value); topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
-                const topBarLayout = classLoader.LinearLayout.$new(mainActivity); topBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); topBarLayout.setGravity(Gravity.CENTER_VERTICAL.value);
-                const topLayout = classLoader.LinearLayout.$new(mainActivity); const topParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1); topLayout.setLayoutParams(topParams); topLayout.setGravity(Gravity.TOP.value | Gravity.LEFT.value); 
-                
-                const call_hideCheats = { on() { mainBarLayout.setVisibility(View.VISIBLE.value); }, off() { mainBarLayout.setVisibility(View.GONE.value); } };
-                const hideCheatsButton = createToggleButton("[ Menu ]", call_hideCheats, false); 
-                
-                const toggleScannerPanel = { on() { scannerPanel.setVisibility(View.VISIBLE.value); uiNeedsUpdate = true; }, off() { scannerPanel.setVisibility(View.GONE.value); } };
-                const scannerMenuBtn = createToggleButton("[ Painel Scanner ]", toggleScannerPanel, false);
+                leftCol.addView(topInfoTextView);
 
-                topBarLayout.addView(hideCheatsButton.view); topBarLayout.addView(scannerMenuBtn.view); topBarLayout.addView(topInfoTextView);
-                topLayout.addView(topBarLayout); topLayout.addView(scannerPanel);
-
-                const addToggle = (row, text, callbacks, startOn = false) => { const button = createToggleButton(text, callbacks, startOn); row.addView(button.view); autoOffButtons.push(button); };
-                
-                addToggle(row1, "Unhit(M1)", call_unhit_m1, false); addToggle(row1, "Unhit(M2)", call_unhit_m2, false); addToggle(row1, "Anti Afk", call_antiAfk, false); addToggle(row1, "Auto Off", call_autoOFF, false);
-                addToggle(row2, "Wall Hack", call_wallhack, false);
-                const showAdminsButton = createToggleButton("Radar ADM", call_showAdmins, true); row2.addView(showAdminsButton.view);
-
-                const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity); explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value); explosionControlLayout.setGravity(Gravity.CENTER.value);
-                const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode); autoOffButtons.push(explosionButton);
-                const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`)));
-                const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); }; const increaseAction = () => { explosionRadius = Math.min(100, explosionRadius + 1); updateRadiusText(); };
-                explosionControlLayout.addView(createHoldButton("<", decreaseAction)); explosionControlLayout.addView(explosionButton.view); explosionControlLayout.addView(createHoldButton(">", increaseAction));
-                row2.addView(explosionControlLayout);
-
-                mainActivity.addContentView(trRootLayout, trRootParams); 
-                mainActivity.addContentView(topLayout, topParams); 
-                mainActivity.addContentView(bottomLayout, bottomParams);
+                mainActivity.addContentView(rootLayout, classLoader.LinearLayout_LayoutParams.$new(-1, -1)); 
 
                 // ========================================================================
                 // LOOP PRINCIPAL (UI e Anti-Lag)
@@ -443,13 +568,13 @@ setTimeout(() => {
                     Java.scheduleOnMainThread(function() {
                         if (pendingAdminDisable) {
                             pendingAdminDisable = false;
-                            const ctx = mainActivity.getApplicationContext();
-                            Java.use("android.widget.Toast").makeText(ctx, Java.use("java.lang.String").$new('Admin Detectado. Desativando cheats.'), 0).show();
+                            showToast(context, 'Admin Detectado! Desativando SPAM e Cheats.');
                             for (const button of autoOffButtons) { button.reset(); }
+                            // Auto-desliga o spam
+                            if (isSpamming) { isSpamming = false; updateSpamState(); }
                         }
                         if (pendingAdminToastMsg) {
-                            const ctx = mainActivity.getApplicationContext();
-                            Java.use("android.widget.Toast").makeText(ctx, Java.use("java.lang.String").$new(pendingAdminToastMsg), 0).show();
+                            showToast(context, pendingAdminToastMsg);
                             pendingAdminToastMsg = null;
                         }
                         try {
@@ -470,7 +595,7 @@ setTimeout(() => {
                 
                 uiNeedsUpdate = true;
             } catch (uiError) {
-                console.log("Falha crítica ao inflar a UI: " + uiError);
+                console.log("Falha de Interface: " + uiError);
             }
         });
     });
