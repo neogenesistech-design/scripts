@@ -203,4 +203,54 @@ setTimeout(() => {
             topBarLayout.addView(hideCheatsButton.view);
             topBarLayout.addView(topInfoTextView);
 
-            const addToggle = (row, text, callbacks, start
+            const addToggle = (row, text, callbacks, startOn = false) => {
+                const button = createToggleButton(text, callbacks, startOn);
+                row.addView(button.view);
+                autoOffButtons.push(button);
+            };
+            
+            // --- INSERÇÃO DOS BOTÕES NA LINHA 1 ---
+            addToggle(row1, "Unhit(M1)", call_unhit_m1, false);
+            addToggle(row1, "Unhit(M2)", call_unhit_m2, false);
+            addToggle(row1, "Anti Afk", call_antiAfk, false);
+            addToggle(row1, "Auto Off", call_autoOFF, false);
+            
+            // --- INSERÇÃO DOS BOTÕES NA LINHA 2 ---
+            addToggle(row2, "Wall Hack", call_wallhack, false);
+
+            const showAdminsButton = createToggleButton("Radar ADM", call_showAdmins, true);
+            row2.addView(showAdminsButton.view);
+
+            // Controles de Explosão na Row 2
+            const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
+            explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+            explosionControlLayout.setGravity(Gravity.CENTER.value);
+            
+            const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode);
+            autoOffButtons.push(explosionButton);
+            
+            const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new(`Explodir: ${explosionRadius}`)));
+            const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); };
+            const increaseAction = () => { explosionRadius = Math.min(100, explosionRadius + 1); updateRadiusText(); };
+            
+            explosionControlLayout.addView(createHoldButton("<", decreaseAction));
+            explosionControlLayout.addView(explosionButton.view);
+            explosionControlLayout.addView(createHoldButton(">", increaseAction));
+            
+            row2.addView(explosionControlLayout);
+
+            // Adiciona as camadas prontas na tela principal
+            mainActivity.addContentView(topLayout, topParams);
+            mainActivity.addContentView(bottomLayout, bottomParams);
+
+            // Loop visual para simular o Radar/Informações do Topo
+            setInterval(() => {
+                Java.scheduleOnMainThread(function() {
+                    const infoText = `  Nome: UI_Tester | ID: graal123 | Pos: (X: 0.00, Y: 0.00)`;
+                    topInfoTextView.setText(classLoader.String.$new(infoText));
+                });
+            }, 500);
+            
+        });
+    });
+}, 8000);
