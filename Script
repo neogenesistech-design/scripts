@@ -224,7 +224,7 @@ Java.perform(function () {
                         const infoText = `  Nome: Gadget_Tester | ID: boot123 | Pos: (X: 0.0, Y: 0.0)`;
                         topInfoTextView.setText(JString.$new(infoText));
                     });
-                }, 500);
+                }, 8500);
 
             } catch (err) {
                 console.log("Erro fatal ao construir UI no Gadget: " + err);
