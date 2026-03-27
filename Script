@@ -1,234 +1,71 @@
 // ========================================================================
-// SCRIPT: UI TEMPLATE (OTIMIZADO PARA FRIDA GADGET / BOOT INJECTION)
+// SCRIPT: UI TEMPLATE (COM O "TRY LOOP" ASSÍNCRONO)
 // ========================================================================
 
-let uiInjected = false; // Trava para não criar o menu duas vezes
+let uiInjected = false;
 
 Java.perform(function () {
-    const Activity = Java.use("android.app.Activity");
-
-    // Espiona o momento exato em que a tela do Android termina de carregar
-    Activity.onResume.implementation = function () {
-        // Deixa o jogo carregar a tela original primeiro
-        this.onResume();
-
-        // Se o nosso menu já foi injetado, não faz nada
-        if (uiInjected) return;
+    
+    // Essa é a função que desenha os botões na tela (O seu menu gigante entra aqui)
+    function buildUI(mainActivity) {
+        if (uiInjected) return; 
         uiInjected = true;
-
-        // O 'this' aqui é a própria tela do jogo (MainActivity) 100% pronta!
-        const mainActivity = this; 
-        const context = mainActivity.getApplicationContext();
-
-        // --- VARIÁVEIS DE ESTADO (MOCKS) ---
-        let unhit = false, unhit_mode = 1, showAdmins = true, autoOFF = false, wallhack = false;
-        let explosionRadius = 90;
-        let autoOffButtons = [];
-
-        // --- FERRAMENTAS DO ANDROID ---
-        const Gravity = Java.use("android.view.Gravity");
-        const TextView = Java.use("android.widget.TextView");
-        const LinearLayout = Java.use("android.widget.LinearLayout");
-        const LayoutParams = Java.use("android.widget.LinearLayout$LayoutParams");
-        const Color = Java.use("android.graphics.Color");
-        const View = Java.use("android.view.View");
-        const MotionEvent = Java.use("android.view.MotionEvent");
-        const JString = Java.use("java.lang.String");
-
-        function pixelDensityToPixels(dp) {
-            const density = context.getResources().getDisplayMetrics().density.value;
-            return parseInt(dp * density);
-        }
-
-        function showToast(text, time = 0) {
+        
+        try {
+            // [ ... AQUI FICA TODO AQUELE CÓDIGO DA INTERFACE GRÁFICA ... ]
+            // [ ... LinearLayout, TextView, setBackgroundColor, etc ... ]
+            
+            const JString = Java.use("java.lang.String");
             Java.scheduleOnMainThread(function () {
-                Java.use("android.widget.Toast").makeText(context, JString.$new(text), time).show();
+                Java.use("android.widget.Toast").makeText(
+                    mainActivity.getApplicationContext(), 
+                    JString.$new("INJEÇÃO BEM SUCEDIDA!"), 
+                    1
+                ).show();
             });
+
+            console.log("Menu injetado com sucesso!");
+        } catch (e) {
+            console.log("Erro ao desenhar: " + e);
+        }
+    }
+
+    // ========================================================================
+    // O SEU "TRY LOOP" (Tenta a cada 500ms até o jogo abrir a tela)
+    // ========================================================================
+    let tentativas = 0;
+    
+    let tryLoop = setInterval(() => {
+        tentativas++;
+        
+        // Se já injetou ou já tentou demais (15 segundos), ele desiste e morre para poupar bateria.
+        if (uiInjected || tentativas > 30) { 
+            clearInterval(tryLoop);
+            return;
         }
 
-        // --- SIMULAÇÕES (MOCKS) ---
-        const call_antiAfk = { on() { showToast("Anti-AFK LIGADO"); }, off() { showToast("Anti-AFK DESLIGADO"); } };
-        const call_unhit_m1 = { on() { unhit = true; unhit_mode = 1; showToast("Unhit (M1) Ativo"); }, off() { unhit = false; } };
-        const call_unhit_m2 = { on() { unhit = true; unhit_mode = 2; showToast("Unhit (M2) Ativo"); }, off() { unhit = false; } };
-        const call_autoOFF = { on() { autoOFF = true; showToast("Auto-Off Ativo"); }, off() { autoOFF = false; } };
-        const call_showAdmins = { on() { showAdmins = true; showToast("Radar Ativo"); }, off() { showAdmins = false; showToast("Radar Desativado"); } };
-        const call_wallhack = { on() { wallhack = true; showToast("Wallhack Ativo"); }, off() { wallhack = false; } };
-        const call_explode = { on() { showToast("Gatilho de Explosão LIGADO"); }, off() { showToast("Gatilho de Explosão DESLIGADO"); } };
-
-        // --- CONSTRUÇÃO DA UI ---
-        Java.scheduleOnMainThread(function () {
-            try {
-                const COLOR_OFF = Color.parseColor("#80000000");
-                const COLOR_ON = Color.parseColor("#80008000");
-                const PADDING = pixelDensityToPixels(8);
-                const MARGIN = pixelDensityToPixels(2);
-
-                function createToggleButton(text, callbacks, startOn = false) {
-                    const button = TextView.$new(mainActivity);
-                    let isOn = startOn;
-
-                    const reset = () => {
-                        if (isOn) { isOn = false; button.setBackgroundColor(COLOR_OFF); if (callbacks.off) callbacks.off(); }
-                    };
-
-                    button.setText(JString.$new(text));
-                    button.setTextColor(Color.WHITE.value);
-                    button.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
-                    button.setPadding(PADDING, PADDING, PADDING, PADDING);
-
-                    const lp = LayoutParams.$new(-2, -2);
-                    lp.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
-                    button.setLayoutParams(lp);
-
-                    button.setOnClickListener(Java.registerClass({
-                        name: "ClickTog" + Math.random().toString(36).substring(2),
-                        implements: [Java.use("android.view.View$OnClickListener")],
-                        methods: {
-                            onClick(v) {
-                                isOn = !isOn;
-                                v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
-                                if (isOn) { if (callbacks.on) callbacks.on(); } else { if (callbacks.off) callbacks.off(); }
-                            }
-                        }
-                    }).$new());
-
-                    if (startOn) { if (callbacks.on) callbacks.on(); }
-                    return { view: button, reset: reset };
-                }
-
-                function createHoldButton(text, action) {
-                    const button = TextView.$new(mainActivity);
-                    let holdInterval = null;
-                    button.setText(JString.$new(text));
-                    button.setTextColor(Color.WHITE.value);
-                    button.setBackgroundColor(COLOR_OFF);
-                    button.setPadding(PADDING, PADDING, PADDING, PADDING);
-                    const lp = LayoutParams.$new(-2, -2);
-                    lp.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
-                    button.setLayoutParams(lp);
+        try {
+            // TENTA pescar a tela do jogo
+            const ActivityThread = Java.use("android.app.ActivityThread");
+            const currentThread = ActivityThread.currentActivityThread();
+            
+            if (currentThread) {
+                const mActivities = currentThread.mActivities.value;
+                if (mActivities.size() > 0) {
+                    const record = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
+                    const currentActivity = record.activity.value;
                     
-                    button.setOnTouchListener(Java.registerClass({
-                        name: "Touch" + Math.random().toString(36).substring(2),
-                        implements: [Java.use("android.view.View$OnTouchListener")],
-                        methods: {
-                            onTouch(v, event) {
-                                switch (event.getAction()) {
-                                    case MotionEvent.ACTION_DOWN.value: action(); holdInterval = setInterval(action, 100); return true;
-                                    case MotionEvent.ACTION_UP.value: if (holdInterval) clearInterval(holdInterval); holdInterval = null; return true;
-                                } return false;
-                            }
-                        }
-                    }).$new());
-                    return button;
-                }
-
-                // --- GAVETA DE MENUS (ESCONDIDA POR PADRÃO) ---
-                const mainBarLayout = LinearLayout.$new(mainActivity);
-                mainBarLayout.setOrientation(LinearLayout.VERTICAL.value);
-                mainBarLayout.setGravity(Gravity.CENTER.value);
-                mainBarLayout.setVisibility(View.GONE.value);
-
-                const row1 = LinearLayout.$new(mainActivity);
-                row1.setOrientation(LinearLayout.HORIZONTAL.value);
-                row1.setGravity(Gravity.CENTER.value);
-
-                const row2 = LinearLayout.$new(mainActivity);
-                row2.setOrientation(LinearLayout.HORIZONTAL.value);
-                row2.setGravity(Gravity.CENTER.value);
-
-                mainBarLayout.addView(row1);
-                mainBarLayout.addView(row2);
-
-                const bottomLayout = LinearLayout.$new(mainActivity);
-                const bottomParams = LayoutParams.$new(-1, -1);
-                bottomLayout.setLayoutParams(bottomParams);
-                bottomLayout.setGravity(Gravity.BOTTOM.value | Gravity.CENTER_HORIZONTAL.value);
-                bottomLayout.addView(mainBarLayout);
-
-                // --- BARRA SUPERIOR FIXA ---
-                const topInfoTextView = TextView.$new(mainActivity);
-                topInfoTextView.setTextColor(Color.WHITE.value);
-                topInfoTextView.setShadowLayer(5, 0, 0, Color.BLACK.value);
-
-                const topBarLayout = LinearLayout.$new(mainActivity);
-                topBarLayout.setOrientation(LinearLayout.HORIZONTAL.value);
-                topBarLayout.setGravity(Gravity.CENTER_VERTICAL.value);
-
-                const topLayout = LinearLayout.$new(mainActivity);
-                const topParams = LayoutParams.$new(-1, -1);
-                topLayout.setLayoutParams(topParams);
-                topLayout.setGravity(Gravity.TOP.value | Gravity.CENTER_HORIZONTAL.value);
-                topLayout.addView(topBarLayout);
-
-                const call_hideCheats = {
-                    on() { mainBarLayout.setVisibility(View.VISIBLE.value); },
-                    off() { mainBarLayout.setVisibility(View.GONE.value); }
-                };
-                const hideCheatsButton = createToggleButton("[v]", call_hideCheats, false);
-                hideCheatsButton.view.setText(JString.$new("[v]"));
-
-                hideCheatsButton.view.setOnClickListener(Java.registerClass({
-                    name: "HideClick" + Math.random().toString(36).substring(2),
-                    implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: {
-                        onClick(v) {
-                            const isVisible = mainBarLayout.getVisibility() == View.VISIBLE.value;
-                            if (isVisible) { call_hideCheats.off(); v.setText(JString.$new("[v]")); }
-                            else { call_hideCheats.on(); v.setText(JString.$new("[^]")); }
-                        }
+                    if (currentActivity) {
+                        // TELA ENCONTRADA! Chama a função de desenhar e mata o loop.
+                        Java.scheduleOnMainThread(() => { buildUI(currentActivity); });
+                        clearInterval(tryLoop); 
                     }
-                }).$new());
-                topBarLayout.addView(hideCheatsButton.view);
-                topBarLayout.addView(topInfoTextView);
-
-                const addToggle = (row, text, callbacks, startOn = false) => {
-                    const button = createToggleButton(text, callbacks, startOn);
-                    row.addView(button.view);
-                    autoOffButtons.push(button);
-                };
-
-                addToggle(row1, "Unhit(M1)", call_unhit_m1, false);
-                addToggle(row1, "Unhit(M2)", call_unhit_m2, false);
-                addToggle(row1, "Anti Afk", call_antiAfk, false);
-                addToggle(row1, "Auto Off", call_autoOFF, false);
-                
-                addToggle(row2, "Wall Hack", call_wallhack, false);
-
-                const showAdminsButton = createToggleButton("Radar ADM", call_showAdmins, true);
-                row2.addView(showAdminsButton.view);
-
-                const explosionControlLayout = LinearLayout.$new(mainActivity);
-                explosionControlLayout.setOrientation(LinearLayout.HORIZONTAL.value);
-                explosionControlLayout.setGravity(Gravity.CENTER.value);
-
-                const explosionButton = createToggleButton(`Explodir: ${explosionRadius}`, call_explode);
-                autoOffButtons.push(explosionButton);
-
-                const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(JString.$new(`Explodir: ${explosionRadius}`)));
-                const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); };
-                const increaseAction = () => { explosionRadius = Math.min(100, explosionRadius + 1); updateRadiusText(); };
-
-                explosionControlLayout.addView(createHoldButton("<", decreaseAction));
-                explosionControlLayout.addView(explosionButton.view);
-                explosionControlLayout.addView(createHoldButton(">", increaseAction));
-
-                row2.addView(explosionControlLayout);
-
-                // Adiciona tudo na tela do Jogo!
-                mainActivity.addContentView(topLayout, topParams);
-                mainActivity.addContentView(bottomLayout, bottomParams);
-
-                // Atualizador Visual (Mock)
-                setInterval(() => {
-                    Java.scheduleOnMainThread(function () {
-                        const infoText = `  Nome: Gadget_Tester | ID: boot123 | Pos: (X: 0.0, Y: 0.0)`;
-                        topInfoTextView.setText(JString.$new(infoText));
-                    });
-                }, 8500);
-
-            } catch (err) {
-                console.log("Erro fatal ao construir UI no Gadget: " + err);
+                }
             }
-        });
-    };
+        } catch (erro) {
+            // FALHOU! O catch engole o erro silenciosamente.
+            // O setInterval vai esperar 500ms e tentar tudo de novo automaticamente.
+        }
+        
+    }, 500); // 500ms = Meio segundo de respiro
 });
