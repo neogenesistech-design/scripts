@@ -1,71 +1,34 @@
 // ========================================================================
-// SCRIPT: UI TEMPLATE (COM O "TRY LOOP" ASSÍNCRONO)
+// SCRIPT: TESTE DE VIDA (8 SEGUNDOS + TOAST)
 // ========================================================================
 
-let uiInjected = false;
-
-Java.perform(function () {
-    
-    // Essa é a função que desenha os botões na tela (O seu menu gigante entra aqui)
-    function buildUI(mainActivity) {
-        if (uiInjected) return; 
-        uiInjected = true;
-        
+setTimeout(() => {
+    Java.perform(() => {
         try {
-            // [ ... AQUI FICA TODO AQUELE CÓDIGO DA INTERFACE GRÁFICA ... ]
-            // [ ... LinearLayout, TextView, setBackgroundColor, etc ... ]
-            
-            const JString = Java.use("java.lang.String");
-            Java.scheduleOnMainThread(function () {
-                Java.use("android.widget.Toast").makeText(
-                    mainActivity.getApplicationContext(), 
-                    JString.$new("INJEÇÃO BEM SUCEDIDA!"), 
-                    1
-                ).show();
-            });
-
-            console.log("Menu injetado com sucesso!");
-        } catch (e) {
-            console.log("Erro ao desenhar: " + e);
-        }
-    }
-
-    // ========================================================================
-    // O SEU "TRY LOOP" (Tenta a cada 500ms até o jogo abrir a tela)
-    // ========================================================================
-    let tentativas = 0;
-    
-    let tryLoop = setInterval(() => {
-        tentativas++;
-        
-        // Se já injetou ou já tentou demais (15 segundos), ele desiste e morre para poupar bateria.
-        if (uiInjected || tentativas > 30) { 
-            clearInterval(tryLoop);
-            return;
-        }
-
-        try {
-            // TENTA pescar a tela do jogo
+            // Pegamos o contexto geral do app (não precisamos adivinhar a Activity atual)
             const ActivityThread = Java.use("android.app.ActivityThread");
-            const currentThread = ActivityThread.currentActivityThread();
+            const app = ActivityThread.currentApplication();
             
-            if (currentThread) {
-                const mActivities = currentThread.mActivities.value;
-                if (mActivities.size() > 0) {
-                    const record = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
-                    const currentActivity = record.activity.value;
-                    
-                    if (currentActivity) {
-                        // TELA ENCONTRADA! Chama a função de desenhar e mata o loop.
-                        Java.scheduleOnMainThread(() => { buildUI(currentActivity); });
-                        clearInterval(tryLoop); 
-                    }
-                }
+            if (app !== null) {
+                const context = app.getApplicationContext();
+                const Toast = Java.use("android.widget.Toast");
+                const JString = Java.use("java.lang.String");
+
+                // Todo elemento visual no Android (mesmo um Toast) precisa rodar na thread principal
+                Java.scheduleOnMainThread(() => {
+                    Toast.makeText(
+                        context, 
+                        JString.$new("Frida Gadget Injetado com Sucesso!"), 
+                        1 // 1 = Toast.LENGTH_LONG
+                    ).show();
+                });
+                
+                console.log("[*] Toast disparado com sucesso.");
+            } else {
+                console.log("[-] Erro: Application Context está nulo após 8 segundos.");
             }
-        } catch (erro) {
-            // FALHOU! O catch engole o erro silenciosamente.
-            // O setInterval vai esperar 500ms e tentar tudo de novo automaticamente.
+        } catch (e) {
+            console.log("[-] Erro crítico ao tentar exibir o Toast: " + e);
         }
-        
-    }, 500); // 500ms = Meio segundo de respiro
-});
+    });
+}, 8000);
