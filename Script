@@ -1,239 +1,160 @@
-setTimeout(() => {
-    let unhit = false;
-    let unhit_mode = 1; 
-    let showAdmins = true; 
-    let autoOFF = false;
-    let wallhack = false;
-    let explosionRadius = 90;
-    let autoOffButtons = []; 
+// Função para forçar o log direto no painel do Android (Impossível falhar)
+function logNative(msg) {
+    Java.perform(function() {
+        var Log = Java.use("android.util.Log");
+        Log.d("MOTOR", msg);
+    });
+}
 
-    function getClassLoader() {
-        return {
-            Gravity: Java.use("android.view.Gravity"),
-            TextView: Java.use("android.widget.TextView"),
-            LinearLayout: Java.use("android.widget.LinearLayout"),
-            LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-            Color: Java.use("android.graphics.Color"),
-            ActivityThread: Java.use("android.app.ActivityThread"),
-            View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
-            MotionEvent: Java.use("android.view.MotionEvent"),
-            String: Java.use("java.lang.String"),
-            View: Java.use("android.view.View"),
-            DisplayMetrics: Java.use("android.util.DisplayMetrics"),
-            Point: Java.use("android.graphics.Point"),
-        };
-    }
-
-    function getMainActivity(classLoader) { 
-        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-        const mActivities = activityThread.mActivities.value;
-        const activityClientRecord = Java.cast(mActivities.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
-        return activityClientRecord.activity.value;
-    }
-
-    function pixelDensityToPixels(context, dp) { 
-        const density = context.getResources().getDisplayMetrics().density.value;
-        return parseInt(dp * density);
-    }
-
-    function showToast(text, time = 0) { 
-        Java.perform(() => {
-            Java.scheduleOnMainThread(function() {
-                var toast = Java.use("android.widget.Toast");
-                var context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
-                toast.makeText(context, Java.use("java.lang.String").$new(text), time).show();
-            });
-        });
-    }
-
-    const call_antiAfk = { 
-        on() { showToast("Anti-AFK Simulado LIGADO"); }, 
-        off() { showToast("Anti-AFK Simulado DESLIGADO"); } 
-    };
-    const call_unhit_m1 = { on() { unhit = true; unhit_mode = 1; showToast("Unhit M1 Ativo"); }, off() { unhit = false; } };
-    const call_unhit_m2 = { on() { unhit = true; unhit_mode = 2; showToast("Unhit M2 Ativo"); }, off() { unhit = false; } };
-    const call_autoOFF = { on() { autoOFF = true; showToast("Auto-Off Ativo"); }, off() { autoOFF = false; } };
-    const call_showAdmins = { on() { showAdmins = true; showToast("Radar Ativo"); }, off() { showAdmins = false; showToast("Radar Desativado"); } };
-    const call_wallhack = { on() { wallhack = true; showToast("Wallhack Ativo"); }, off() { wallhack = false; } };
-    const call_explode = { 
-        on() { showToast("Explosao Ativada"); }, 
-        off() { showToast("Explosao Desativada"); } 
-    };
-
+setTimeout(function() {
     Java.perform(function () {
-        Java.scheduleOnMainThread(function () {
-            const classLoader = getClassLoader();
-            const mainActivity = getMainActivity(classLoader);
-            const Gravity = classLoader.Gravity;
-            const View = classLoader.View;
+        logNative("Iniciando injeção visual do icone flutuante...");
 
-            const COLOR_OFF = classLoader.Color.parseColor("#80000000");
-            const COLOR_ON = classLoader.Color.parseColor("#80008000");
-            const PADDING = pixelDensityToPixels(mainActivity, 8);
-            const MARGIN = pixelDensityToPixels(mainActivity, 2);
+        // O jeito 100% seguro do Frida achar a tela do jogo
+        Java.choose("android.app.Activity", {
+            onMatch: function (activity) {
+                logNative("Activity encontrada: " + activity.getClass().getName());
 
-            function createToggleButton(text, callbacks, startOn = false) {
-                const button = classLoader.TextView.$new(mainActivity);
-                let isOn = startOn;
-                
-                const reset = () => {
-                    if (isOn) {
-                        isOn = false; 
-                        button.setBackgroundColor(COLOR_OFF);
-                        if (callbacks.off) callbacks.off();
+                Java.scheduleOnMainThread(function () {
+                    try {
+                        var Color = Java.use("android.graphics.Color");
+                        var TextView = Java.use("android.widget.TextView");
+                        var FrameLayout = Java.use("android.widget.FrameLayout");
+                        var LinearLayout = Java.use("android.widget.LinearLayout");
+                        var GradientDrawable = Java.use("android.graphics.drawable.GradientDrawable");
+                        var Gravity = Java.use("android.view.Gravity");
+                        var MotionEvent = Java.use("android.view.MotionEvent");
+                        var String = Java.use("java.lang.String");
+                        var View = Java.use("android.view.View");
+
+                        // Obter tamanho exato da tela do celular para os limites
+                        var metrics = activity.getResources().getDisplayMetrics();
+                        var screenWidth = metrics.widthPixels.value;
+                        var screenHeight = metrics.heightPixels.value;
+                        
+                        var iconSize = 130; // Tamanho do icone redondo (ajuste se quiser maior/menor)
+
+                        // --- 1. MENU PRINCIPAL (Oculto inicialmente, bordas arredondadas) ---
+                        var menuLayout = LinearLayout.$new(activity);
+                        menuLayout.setOrientation(1); // Vertical
+                        
+                        var menuBg = GradientDrawable.$new();
+                        menuBg.setShape(0); // 0 = RECTANGLE
+                        menuBg.setCornerRadius(40.0); // Bordas bem arredondadas
+                        menuBg.setColor(Color.parseColor("#E6151515")); // Preto bem escuro e translúcido
+                        menuBg.setStroke(4, Color.parseColor("#00FF00")); // Borda verde neon
+                        menuLayout.setBackground(menuBg);
+                        menuLayout.setPadding(50, 50, 50, 50);
+                        menuLayout.setVisibility(View.GONE.value); // Começa invisível
+
+                        // A janela vai ocupar quase a largura da tela e ficar no centro
+                        var menuParams = FrameLayout.LayoutParams.$new(screenWidth - 200, -2);
+                        menuParams.gravity = Gravity.CENTER.value; 
+                        menuLayout.setLayoutParams(menuParams);
+
+                        var titulo = TextView.$new(activity);
+                        titulo.setText(String.$new("⚡ GRAAL HACKS ⚡"));
+                        titulo.setTextColor(Color.parseColor("#00FF00"));
+                        titulo.setGravity(Gravity.CENTER.value);
+                        titulo.setTextSize(20.0);
+                        menuLayout.addView(titulo);
+
+                        // --- 2. ÍCONE FLUTUANTE (Redondo, arrastável) ---
+                        var floatIcon = TextView.$new(activity);
+                        floatIcon.setText(String.$new("G")); // Letra do ícone
+                        floatIcon.setTextColor(Color.WHITE.value);
+                        floatIcon.setTextSize(26.0);
+                        floatIcon.setGravity(Gravity.CENTER.value);
+
+                        var iconBg = GradientDrawable.$new();
+                        iconBg.setShape(1); // 1 = OVAL (Redondo perfeito)
+                        iconBg.setColor(Color.parseColor("#CC000000")); // Fundo preto
+                        iconBg.setStroke(5, Color.parseColor("#00FF00")); // Borda verde acompanhando o formato
+                        floatIcon.setBackground(iconBg);
+
+                        var iconParams = FrameLayout.LayoutParams.$new(iconSize, iconSize);
+                        // Spawn milimetricamente no meio da tela
+                        iconParams.leftMargin = parseInt((screenWidth / 2) - (iconSize / 2));
+                        iconParams.topMargin = parseInt((screenHeight / 2) - (iconSize / 2));
+                        floatIcon.setLayoutParams(iconParams);
+
+                        // --- LÓGICA DE ARRASTAR COM LIMITES E CLIQUE ---
+                        var initialX = 0;
+                        var initialY = 0;
+                        var initialTouchX = 0;
+                        var initialTouchY = 0;
+
+                        floatIcon.setOnTouchListener(Java.registerClass({
+                            name: "com.graal.DragIcon_" + Math.random().toString(36).substr(2),
+                            implements: [Java.use("android.view.View$OnTouchListener")],
+                            methods: {
+                                onTouch: function (v, event) {
+                                    var action = event.getAction();
+                                    
+                                    if (action === MotionEvent.ACTION_DOWN.value) {
+                                        initialX = iconParams.leftMargin.value;
+                                        initialY = iconParams.topMargin.value;
+                                        initialTouchX = event.getRawX();
+                                        initialTouchY = event.getRawY();
+                                        return true;
+                                    } 
+                                    else if (action === MotionEvent.ACTION_MOVE.value) {
+                                        var moveX = event.getRawX() - initialTouchX;
+                                        var moveY = event.getRawY() - initialTouchY;
+                                        
+                                        var newX = initialX + parseInt(moveX);
+                                        var newY = initialY + parseInt(moveY);
+
+                                        // AS TRAVAS DA TELA (Impede de arrastar para fora)
+                                        if (newX < 0) newX = 0;
+                                        if (newY < 0) newY = 0;
+                                        if (newX > screenWidth - iconSize) newX = screenWidth - iconSize;
+                                        // Deixa uma margem de segurança na parte inferior (barra de navegação do Android)
+                                        if (newY > screenHeight - iconSize - 100) newY = screenHeight - iconSize - 100;
+
+                                        iconParams.leftMargin = newX;
+                                        iconParams.topMargin = newY;
+                                        v.setLayoutParams(iconParams);
+                                        return true;
+                                    }
+                                    else if (action === MotionEvent.ACTION_UP.value) {
+                                        // Matemática pura: Se o dedo não arrastou muito, foi um clique intencional
+                                        var diffX = Math.abs(event.getRawX() - initialTouchX);
+                                        var diffY = Math.abs(event.getRawY() - initialTouchY);
+                                        
+                                        if (diffX < 15 && diffY < 15) {
+                                            // A Mágica do Botão: Alterna a janela
+                                            var isVisible = menuLayout.getVisibility() === View.VISIBLE.value;
+                                            menuLayout.setVisibility(isVisible ? View.GONE.value : View.VISIBLE.value);
+                                        }
+                                        return true;
+                                    }
+                                    return false;
+                                }
+                            }
+                        }).$new());
+
+                        // --- 3. INJETAR NA TELA (Z-INDEX) ---
+                        var rootLayout = FrameLayout.$new(activity);
+                        
+                        // O menu é adicionado primeiro, então ele fica por baixo
+                        rootLayout.addView(menuLayout); 
+                        // O ícone é adicionado depois, então ele flutua sempre por cima do menu
+                        rootLayout.addView(floatIcon);  
+
+                        var rootParams = FrameLayout.LayoutParams.$new(-1, -1);
+                        activity.addContentView(rootLayout, rootParams);
+                        
+                        logNative("Sucesso absoluto: Interface visual desenhada.");
+
+                    } catch (e) {
+                        logNative("ERRO UI: " + e.toString());
                     }
-                };
-                
-                button.setText(classLoader.String.$new(text));
-                button.setTextColor(classLoader.Color.WHITE.value);
-                button.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
-                button.setPadding(PADDING, PADDING, PADDING, PADDING);
-                
-                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2);
-                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
-                button.setLayoutParams(layoutParams);
-
-                button.setOnClickListener(Java.registerClass({
-                    name: "com.example.ClickListener" + Math.random().toString(36).substring(2),
-                    implements: [Java.use("android.view.View$OnClickListener")],
-                    methods: {
-                        onClick(v) {
-                            isOn = !isOn;
-                            v.setBackgroundColor(isOn ? COLOR_ON : COLOR_OFF);
-                            if (isOn) { if (callbacks.on) callbacks.on(); }
-                            else { if (callbacks.off) callbacks.off(); }
-                        }
-                    }
-                }).$new());
-
-                if (startOn) { if (callbacks.on) callbacks.on(); }
-                return { view: button, reset: reset };
-            }
-
-            function createHoldButton(text, action) { 
-                const button = classLoader.TextView.$new(mainActivity); let holdInterval = null; 
-                button.setText(classLoader.String.$new(text)); 
-                button.setTextColor(classLoader.Color.WHITE.value); 
-                button.setBackgroundColor(COLOR_OFF); 
-                button.setPadding(PADDING, PADDING, PADDING, PADDING); 
-                const layoutParams = classLoader.LinearLayout_LayoutParams.$new(-2, -2); 
-                layoutParams.setMargins(MARGIN, MARGIN, MARGIN, MARGIN); 
-                button.setLayoutParams(layoutParams); 
-                button.setOnTouchListener(Java.registerClass({ 
-                    name: "com.example.TouchListener" + Math.random().toString(36).substring(2), 
-                    implements: [classLoader.View_OnTouchListener], 
-                    methods: { 
-                        onTouch(v, event) { 
-                            switch (event.getAction()) { 
-                                case classLoader.MotionEvent.ACTION_DOWN.value: action(); holdInterval = setInterval(action, 100); return true; 
-                                case classLoader.MotionEvent.ACTION_UP.value: if (holdInterval) clearInterval(holdInterval); holdInterval = null; return true; 
-                            } return false; 
-                        } 
-                    } 
-                }).$new()); 
-                return button; 
-            }
-
-            const mainBarLayout = classLoader.LinearLayout.$new(mainActivity);
-            mainBarLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-            mainBarLayout.setGravity(Gravity.CENTER.value);
-            mainBarLayout.setVisibility(View.GONE.value); 
-            
-            const row1 = classLoader.LinearLayout.$new(mainActivity);
-            row1.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            row1.setGravity(Gravity.CENTER.value);
-            
-            const row2 = classLoader.LinearLayout.$new(mainActivity);
-            row2.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            row2.setGravity(Gravity.CENTER.value);
-
-            mainBarLayout.addView(row1);
-            mainBarLayout.addView(row2);
-
-            const bottomLayout = classLoader.LinearLayout.$new(mainActivity);
-            const bottomParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
-            bottomLayout.setLayoutParams(bottomParams);
-            bottomLayout.setGravity(Gravity.BOTTOM.value | Gravity.CENTER_HORIZONTAL.value);
-            bottomLayout.addView(mainBarLayout);
-
-            const topInfoTextView = classLoader.TextView.$new(mainActivity);
-            topInfoTextView.setTextColor(classLoader.Color.WHITE.value);
-            topInfoTextView.setShadowLayer(5, 0, 0, classLoader.Color.BLACK.value);
-            
-            const topBarLayout = classLoader.LinearLayout.$new(mainActivity); 
-            topBarLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            topBarLayout.setGravity(Gravity.CENTER_VERTICAL.value);
-
-            const topLayout = classLoader.LinearLayout.$new(mainActivity);
-            const topParams = classLoader.LinearLayout_LayoutParams.$new(-1, -1);
-            topLayout.setLayoutParams(topParams);
-            topLayout.setGravity(Gravity.TOP.value | Gravity.CENTER_HORIZONTAL.value);
-            topLayout.addView(topBarLayout); 
-
-            const call_hideCheats = {
-                on() { mainBarLayout.setVisibility(View.VISIBLE.value); },
-                off() { mainBarLayout.setVisibility(View.GONE.value); }
-            };
-            const hideCheatsButton = createToggleButton("[v]", call_hideCheats, false); 
-            hideCheatsButton.view.setText(classLoader.String.$new("[v]"));
-
-            hideCheatsButton.view.setOnClickListener(Java.registerClass({
-                name: "com.example.HideClickListener" + Math.random().toString(36).substring(2),
-                implements: [Java.use("android.view.View$OnClickListener")],
-                methods: {
-                    onClick(v) {
-                        const isVisible = mainBarLayout.getVisibility() == View.VISIBLE.value;
-                        if (isVisible) { call_hideCheats.off(); v.setText(classLoader.String.$new("[v]")); } 
-                        else { call_hideCheats.on(); v.setText(classLoader.String.$new("[^]")); }
-                    }
-                }
-            }).$new());
-            topBarLayout.addView(hideCheatsButton.view);
-            topBarLayout.addView(topInfoTextView);
-
-            const addToggle = (row, text, callbacks, startOn = false) => {
-                const button = createToggleButton(text, callbacks, startOn);
-                row.addView(button.view);
-                autoOffButtons.push(button);
-            };
-            
-            addToggle(row1, "Unhit M1", call_unhit_m1, false);
-            addToggle(row1, "Unhit M2", call_unhit_m2, false);
-            addToggle(row1, "Anti Afk", call_antiAfk, false);
-            addToggle(row1, "Auto Off", call_autoOFF, false);
-            
-            addToggle(row2, "Wall Hack", call_wallhack, false);
-
-            const showAdminsButton = createToggleButton("Radar ADM", call_showAdmins, true);
-            row2.addView(showAdminsButton.view);
-
-            const explosionControlLayout = classLoader.LinearLayout.$new(mainActivity);
-            explosionControlLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-            explosionControlLayout.setGravity(Gravity.CENTER.value);
-            
-            const explosionButton = createToggleButton("Explosao: " + explosionRadius, call_explode);
-            autoOffButtons.push(explosionButton);
-            
-            const updateRadiusText = () => Java.scheduleOnMainThread(() => explosionButton.view.setText(classLoader.String.$new("Explosao: " + explosionRadius)));
-            const decreaseAction = () => { explosionRadius = Math.max(1, explosionRadius - 1); updateRadiusText(); };
-            const increaseAction = () => { explosionRadius = Math.min(100, explosionRadius + 1); updateRadiusText(); };
-            
-            explosionControlLayout.addView(createHoldButton("<", decreaseAction));
-            explosionControlLayout.addView(explosionButton.view);
-            explosionControlLayout.addView(createHoldButton(">", increaseAction));
-            
-            row2.addView(explosionControlLayout);
-
-            mainActivity.addContentView(topLayout, topParams);
-            mainActivity.addContentView(bottomLayout, bottomParams);
-
-            setInterval(() => {
-                Java.scheduleOnMainThread(function() {
-                    const infoText = " Nome: Tester | ID: graal123 | Pos: 0.00";
-                    topInfoTextView.setText(classLoader.String.$new(infoText));
                 });
-            }, 500);
-            
+            },
+            onComplete: function () {
+                logNative("Varredura concluida.");
+            }
         });
     });
-}, 8000);
+}, 5000); // 5s para garantir que o Graal carregou a engine gráfica
