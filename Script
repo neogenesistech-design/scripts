@@ -13,7 +13,7 @@ setTimeout(() => {
                 LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
                 FrameLayout: Java.use("android.widget.FrameLayout"),
                 FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
-                ScrollView: Java.use("android.widget.ScrollView"), // Adicionado o ScrollView
+                ScrollView: Java.use("android.widget.ScrollView"),
                 Color: Java.use("android.graphics.Color"),
                 ActivityThread: Java.use("android.app.ActivityThread"),
                 View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
@@ -54,15 +54,19 @@ setTimeout(() => {
                     corLetraIcone: "#FFFFFF",  
                     iconeTamanho: 100,         
                     menuLargura: 550,          
-                    alturaMaximaScroll: 650,   // Altura que a janela trava e vira scroll (ajuste como quiser)
+                    alturaMenu: Math.round(screenHeight * 0.40), // Força o Scroll a ter 40% da tela (GARANTE ROLAGEM)
                     corFundoMenu: "#CC101010", 
                     corFundoIcone: "#CC000000",
                     corBorda: "#00FF00",       
-                    espessuraBorda: 3          
+                    espessuraBorda: 3,
+                    tamanhoAtalho: 90 // Tamanho dos botões flutuantes soltos
                 };
 
+                // A camada absoluta do Android que vai segurar os atalhos e o menu
+                const rootLayout = classLoader.FrameLayout.$new(mainActivity);
+
                 // ========================================================================
-                // 1. O CONTAINER PAI
+                // 1. O CONTAINER PAI (Menu Principal)
                 // ========================================================================
                 const dragContainer = classLoader.LinearLayout.$new(mainActivity);
                 dragContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
@@ -74,7 +78,7 @@ setTimeout(() => {
                 dragContainer.setLayoutParams(containerParams);
 
                 // ========================================================================
-                // 2. O ÍCONE FLUTUANTE
+                // 2. O ÍCONE FLUTUANTE DO MENU
                 // ========================================================================
                 const floatIcon = classLoader.TextView.$new(mainActivity);
                 floatIcon.setText(classLoader.String.$new(CONF.letraIcone));
@@ -93,7 +97,7 @@ setTimeout(() => {
                 floatIcon.setLayoutParams(iconParams);
 
                 // ========================================================================
-                // 3. A JANELA DO MENU (Com ScrollView Interno)
+                // 3. A JANELA DO MENU (Com Scroll Garantido)
                 // ========================================================================
                 const menuLayout = classLoader.LinearLayout.$new(mainActivity);
                 menuLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
@@ -105,70 +109,182 @@ setTimeout(() => {
                 menuBg.setStroke(CONF.espessuraBorda, Color.parseColor(CONF.corBorda)); 
                 menuLayout.setBackground(menuBg);
                 
-                menuLayout.setPadding(20, 20, 20, 20); // Padding reduzido para dar mais espaço aos botões
+                menuLayout.setPadding(20, 20, 20, 20); 
                 menuLayout.setVisibility(View.GONE.value); 
 
-                // A janela principal se adapta
                 const menuParams = classLoader.LinearLayout_LayoutParams.$new(CONF.menuLargura, -2);
                 menuParams.topMargin.value = 10; 
                 menuParams.gravity.value = Gravity.LEFT.value; 
                 menuLayout.setLayoutParams(menuParams);
 
-                // --- O SCROLL VIEW ---
+                // --- O SCROLL VIEW FIXADO ---
                 const scrollView = classLoader.ScrollView.$new(mainActivity);
-                // -1 = MATCH_PARENT, -2 = WRAP_CONTENT
-                const scrollParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2); 
+                // CORREÇÃO: Força a altura máxima para garantir que o scroll ative
+                const scrollParams = classLoader.LinearLayout_LayoutParams.$new(-1, CONF.alturaMenu); 
                 scrollView.setLayoutParams(scrollParams);
-                // Remove a barra de rolagem visual feia do Android
                 scrollView.setVerticalScrollBarEnabled(false); 
 
-                // --- O CONTAINER DOS BOTÕES (Dentro do Scroll) ---
                 const optionsContainer = classLoader.LinearLayout.$new(mainActivity);
                 optionsContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
                 
                 scrollView.addView(optionsContainer);
                 menuLayout.addView(scrollView);
 
-                // --- FUNÇÃO PARA ADICIONAR BOTÕES DINAMICAMENTE ---
-                function adicionarBotaoTeste(nomeBotao) {
-                    const btn = classLoader.TextView.$new(mainActivity);
-                    btn.setText(classLoader.String.$new(nomeBotao));
-                    btn.setTextColor(Color.WHITE.value);
-                    btn.setGravity(Gravity.CENTER.value);
-                    btn.setPadding(0, 25, 0, 25);
+                // ========================================================================
+                // 4. LÓGICA DE CRIAÇÃO DE ATALHOS FLUTUANTES INDEPENDENTES
+                // ========================================================================
+                function spawnAtalhoFlutuante(nomeBotao) {
+                    const atalho = classLoader.TextView.$new(mainActivity);
                     
-                    // Design do botão individual
+                    // Pega só os 2 primeiros caracteres (Geralmente o Emoji) para o ícone
+                    const iconeSimbolo = nomeBotao.substring(0, 2).trim(); 
+                    atalho.setText(classLoader.String.$new(iconeSimbolo));
+                    
+                    atalho.setTextColor(Color.WHITE.value);
+                    atalho.setTextSize(20.0);
+                    atalho.setGravity(Gravity.CENTER.value);
+
+                    const atalhoBg = classLoader.GradientDrawable.$new();
+                    atalhoBg.setShape(1); // Redondo
+                    atalhoBg.setColor(Color.parseColor("#CCAA0000")); // Fundo vermelho para destacar
+                    atalhoBg.setStroke(2, Color.parseColor("#FFFFFF"));
+                    atalho.setBackground(atalhoBg);
+
+                    const atalhoParams = classLoader.FrameLayout_LayoutParams.$new(CONF.tamanhoAtalho, CONF.tamanhoAtalho);
+                    atalhoParams.gravity.value = Gravity.TOP.value | Gravity.LEFT.value;
+                    
+                    // Spawna no meio da tela para o usuário arrastar para onde quiser
+                    atalhoParams.leftMargin.value = Math.round(screenWidth / 2);
+                    atalhoParams.topMargin.value = Math.round(screenHeight / 2);
+                    atalho.setLayoutParams(atalhoParams);
+
+                    let ax = 0, ay = 0, atx = 0, aty = 0;
+
+                    atalho.setOnTouchListener(Java.registerClass({
+                        name: "com.graal.AtalhoDrag_" + Math.random().toString(36).substr(2),
+                        implements: [classLoader.View_OnTouchListener],
+                        methods: {
+                            onTouch: function (v, event) {
+                                const action = event.getAction();
+                                if (action === MotionEvent.ACTION_DOWN.value) {
+                                    ax = atalhoParams.leftMargin.value;
+                                    ay = atalhoParams.topMargin.value;
+                                    atx = event.getRawX();
+                                    aty = event.getRawY();
+                                    return true;
+                                } else if (action === MotionEvent.ACTION_MOVE.value) {
+                                    let nx = ax + Math.round(event.getRawX() - atx);
+                                    let ny = ay + Math.round(event.getRawY() - aty);
+                                    if (nx < 0) nx = 0;
+                                    if (ny < 0) ny = 0;
+                                    if (nx > screenWidth - CONF.tamanhoAtalho) nx = screenWidth - CONF.tamanhoAtalho;
+                                    if (ny > screenHeight - CONF.tamanhoAtalho - 50) ny = screenHeight - CONF.tamanhoAtalho - 50;
+
+                                    atalhoParams.leftMargin.value = nx;
+                                    atalhoParams.topMargin.value = ny;
+                                    v.setLayoutParams(atalhoParams);
+                                    return true;
+                                } else if (action === MotionEvent.ACTION_UP.value) {
+                                    let dx = Math.abs(event.getRawX() - atx);
+                                    let dy = Math.abs(event.getRawY() - aty);
+                                    if (dx < 15 && dy < 15) {
+                                        // AQUI VAI A EXECUÇÃO REAL DA FUNÇÃO QUANDO ELE CLICAR NO ATALHO!
+                                        console.log("[HACK] Atalho rápido clicado: " + nomeBotao);
+                                    }
+                                    return true;
+                                }
+                                return false;
+                            }
+                        }
+                    }).$new());
+
+                    rootLayout.addView(atalho);
+                    return atalho;
+                }
+
+                // ========================================================================
+                // 5. FUNÇÃO PARA ADICIONAR BOTÕES + OLHO (Row Layout)
+                // ========================================================================
+                function adicionarBotaoTeste(nomeBotao) {
+                    // Linha Horizontal (Row)
+                    const rowLayout = classLoader.LinearLayout.$new(mainActivity);
+                    rowLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
+                    rowLayout.setGravity(Gravity.CENTER_VERTICAL.value);
+                    
+                    const rowParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
+                    rowParams.topMargin.value = 8;
+                    rowParams.bottomMargin.value = 8;
+                    rowLayout.setLayoutParams(rowParams);
+
+                    // --- O Botão Principal (Hack) ---
+                    const btnHack = classLoader.TextView.$new(mainActivity);
+                    btnHack.setText(classLoader.String.$new(nomeBotao));
+                    btnHack.setTextColor(Color.WHITE.value);
+                    btnHack.setGravity(Gravity.CENTER.value);
+                    btnHack.setPadding(0, 25, 0, 25);
+                    
                     const btnBg = classLoader.GradientDrawable.$new();
                     btnBg.setShape(0);
                     btnBg.setCornerRadius(15.0);
-                    btnBg.setColor(Color.parseColor("#44000000")); // Fundo do botão mais transparente
+                    btnBg.setColor(Color.parseColor("#44000000")); 
                     btnBg.setStroke(2, Color.parseColor(CONF.corBorda));
-                    btn.setBackground(btnBg);
+                    btnHack.setBackground(btnBg);
 
-                    const btnParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
-                    btnParams.topMargin.value = 10;
-                    btnParams.bottomMargin.value = 10;
-                    btn.setLayoutParams(btnParams);
+                    // layout_weight = 1.0 (Ocupa todo o espaço possível à esquerda)
+                    const btnHackParams = classLoader.LinearLayout_LayoutParams.$new(0, -2, 1.0);
+                    btnHack.setLayoutParams(btnHackParams);
+                    rowLayout.addView(btnHack);
+
+                    // --- O Botão do Olho (Atalho) ---
+                    const btnOlho = classLoader.TextView.$new(mainActivity);
+                    btnOlho.setText(classLoader.String.$new(" 👁️ ")); // Olho apagado/inativo
+                    btnOlho.setTextColor(Color.GRAY.value);
+                    btnOlho.setGravity(Gravity.CENTER.value);
+                    btnOlho.setTextSize(16.0);
                     
-                    optionsContainer.addView(btn);
+                    const btnOlhoParams = classLoader.LinearLayout_LayoutParams.$new(-2, -1);
+                    btnOlhoParams.leftMargin.value = 15; // Afasta do botão principal
+                    btnOlho.setLayoutParams(btnOlhoParams);
+                    rowLayout.addView(btnOlho);
 
-                    // A MÁGICA DO SCROLL: Se passar de 4 botões, a altura trava e o scroll ativa!
-                    if (optionsContainer.getChildCount() > 4) {
-                        scrollParams.height.value = CONF.alturaMaximaScroll;
-                        scrollView.setLayoutParams(scrollParams);
-                    }
+                    // Lógica do Olho
+                    let atalhoFlutuanteAtivo = null; // Guarda a referência do ícone solto
+                    
+                    btnOlho.setOnClickListener(Java.registerClass({
+                        name: "com.graal.OlhoClick_" + Math.random().toString(36).substr(2),
+                        implements: [classLoader.View_OnTouchListener], // Gambiarra do Frida: Forçando interface
+                        implements: [Java.use("android.view.View$OnClickListener")],
+                        methods: {
+                            onClick: function (v) {
+                                if (atalhoFlutuanteAtivo == null) {
+                                    // ATIVAR ATALHO
+                                    btnOlho.setText(classLoader.String.$new(" 🟢 ")); // Acende
+                                    atalhoFlutuanteAtivo = spawnAtalhoFlutuante(nomeBotao);
+                                } else {
+                                    // DESATIVAR ATALHO
+                                    btnOlho.setText(classLoader.String.$new(" 👁️ ")); // Apaga
+                                    rootLayout.removeView(atalhoFlutuanteAtivo);
+                                    atalhoFlutuanteAtivo = null;
+                                }
+                            }
+                        }
+                    }).$new());
+
+                    optionsContainer.addView(rowLayout);
                 }
 
-                // Injetando 6 botões falsos para testar o Scroll
-                adicionarBotaoTeste("🎯 Hack de Vida");
-                adicionarBotaoTeste("🏃‍♂️ Speed Hack");
-                adicionarBotaoTeste("👁️ Wallhack");
-                adicionarBotaoTeste("🛡️ Anti-Ban");
-                adicionarBotaoTeste("💥 Explosão Área");
-                adicionarBotaoTeste("💰 Farm Automático");
+                // Injetando os testes
+                adicionarBotaoTeste("🎯 Recuperar Vida");
+                adicionarBotaoTeste("🏃‍♂️ Speed Boost");
+                adicionarBotaoTeste("👁️ Atravessar Parede");
+                adicionarBotaoTeste("🛡️ Ignorar Dano");
+                adicionarBotaoTeste("💥 Bomba C4");
+                adicionarBotaoTeste("💰 Auto Coleta");
+                adicionarBotaoTeste("🔫 Tiro Rápido");
+                adicionarBotaoTeste("💀 Morte Instantânea");
 
                 // ========================================================================
-                // 4. LÓGICA DE ARRASTAR
+                // 6. LÓGICA DE ARRASTAR O MENU PRINCIPAL
                 // ========================================================================
                 let initialX = 0, initialY = 0, initialTouchX = 0, initialTouchY = 0;
 
@@ -178,32 +294,26 @@ setTimeout(() => {
                     methods: {
                         onTouch: function (v, event) {
                             const action = event.getAction();
-                            
                             if (action === MotionEvent.ACTION_DOWN.value) {
                                 initialX = containerParams.leftMargin.value;
                                 initialY = containerParams.topMargin.value;
                                 initialTouchX = event.getRawX();
                                 initialTouchY = event.getRawY();
                                 return true;
-                            } 
-                            else if (action === MotionEvent.ACTION_MOVE.value) {
+                            } else if (action === MotionEvent.ACTION_MOVE.value) {
                                 let newX = initialX + Math.round(event.getRawX() - initialTouchX);
                                 let newY = initialY + Math.round(event.getRawY() - initialTouchY);
-
                                 if (newX < 0) newX = 0;
                                 if (newY < 0) newY = 0;
                                 if (newX > screenWidth - CONF.iconeTamanho) newX = screenWidth - CONF.iconeTamanho;
                                 if (newY > screenHeight - CONF.iconeTamanho - 50) newY = screenHeight - CONF.iconeTamanho - 50;
-
                                 containerParams.leftMargin.value = newX;
                                 containerParams.topMargin.value = newY;
                                 dragContainer.setLayoutParams(containerParams);
                                 return true;
-                            } 
-                            else if (action === MotionEvent.ACTION_UP.value) {
+                            } else if (action === MotionEvent.ACTION_UP.value) {
                                 let diffX = Math.abs(event.getRawX() - initialTouchX);
                                 let diffY = Math.abs(event.getRawY() - initialTouchY);
-
                                 if (diffX < 15 && diffY < 15) {
                                     const isVisible = menuLayout.getVisibility() === View.VISIBLE.value;
                                     menuLayout.setVisibility(isVisible ? View.GONE.value : View.VISIBLE.value);
@@ -216,18 +326,17 @@ setTimeout(() => {
                 }).$new());
 
                 // ========================================================================
-                // 5. INJEÇÃO NA TELA
+                // 7. INJEÇÃO FINAL NA TELA
                 // ========================================================================
                 dragContainer.addView(floatIcon);
                 dragContainer.addView(menuLayout);
 
-                const rootLayout = classLoader.FrameLayout.$new(mainActivity);
                 rootLayout.addView(dragContainer);
 
                 const rootParams = classLoader.FrameLayout_LayoutParams.$new(-1, -1);
                 mainActivity.addContentView(rootLayout, rootParams);
                 
-                console.log("[MOTOR] UI com Scroll Automático Injetada!");
+                console.log("[MOTOR] UI com Scroll e Atalhos Ativos!");
 
             } catch (e) {
                 console.log("[MOTOR] Erro na injeção da UI: " + e);
