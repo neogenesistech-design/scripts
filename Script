@@ -13,6 +13,7 @@ setTimeout(() => {
                 LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
                 FrameLayout: Java.use("android.widget.FrameLayout"),
                 FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
+                ScrollView: Java.use("android.widget.ScrollView"), // Adicionado o ScrollView
                 Color: Java.use("android.graphics.Color"),
                 ActivityThread: Java.use("android.app.ActivityThread"),
                 View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
@@ -41,7 +42,6 @@ setTimeout(() => {
                 const Color = classLoader.Color;
                 const MotionEvent = classLoader.MotionEvent;
 
-                // Obter tamanho da tela
                 const metrics = mainActivity.getResources().getDisplayMetrics();
                 const screenWidth = metrics.widthPixels.value;
                 const screenHeight = metrics.heightPixels.value;
@@ -50,35 +50,31 @@ setTimeout(() => {
                 // ⚙️ CONFIGURAÇÕES VISUAIS FÁCEIS ⚙️
                 // ========================================================================
                 const CONF = {
-                    // Ícone
-                    letraIcone: "G",           // Letra do botão flutuante
-                    corLetraIcone: "#FFFFFF",  // Cor da letra
-                    iconeTamanho: 100,         // Tamanho do botão redondo
-                    // Menu
-                    menuLargura: 550,          // Largura da janela dos hacks
-                    menuAltura: -2,            // -2 = WRAP_CONTENT (ajusta automático à quantidade de botões)
-                    // Cores Gerais
-                    corFundoMenu: "#CC101010", // Fundo do painel (Preto quase transparente)
-                    corFundoIcone: "#CC000000",// Fundo do ícone redondo
-                    corBorda: "#00FF00",       // Borda Verde padrão
-                    espessuraBorda: 3          // Grossura da borda
+                    letraIcone: "G",           
+                    corLetraIcone: "#FFFFFF",  
+                    iconeTamanho: 100,         
+                    menuLargura: 550,          
+                    alturaMaximaScroll: 650,   // Altura que a janela trava e vira scroll (ajuste como quiser)
+                    corFundoMenu: "#CC101010", 
+                    corFundoIcone: "#CC000000",
+                    corBorda: "#00FF00",       
+                    espessuraBorda: 3          
                 };
 
                 // ========================================================================
-                // 1. O CONTAINER PAI (Segura tudo)
+                // 1. O CONTAINER PAI
                 // ========================================================================
                 const dragContainer = classLoader.LinearLayout.$new(mainActivity);
                 dragContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
                 
                 const containerParams = classLoader.FrameLayout_LayoutParams.$new(-2, -2);
                 containerParams.gravity.value = Gravity.TOP.value | Gravity.LEFT.value;
-                // Nasce perto da borda esquerda, um pouco pra baixo
                 containerParams.leftMargin.value = 50;
                 containerParams.topMargin.value = Math.round((screenHeight / 4)); 
                 dragContainer.setLayoutParams(containerParams);
 
                 // ========================================================================
-                // 2. O ÍCONE FLUTUANTE (Arrastável, alinhado à esquerda)
+                // 2. O ÍCONE FLUTUANTE
                 // ========================================================================
                 const floatIcon = classLoader.TextView.$new(mainActivity);
                 floatIcon.setText(classLoader.String.$new(CONF.letraIcone));
@@ -87,45 +83,89 @@ setTimeout(() => {
                 floatIcon.setGravity(Gravity.CENTER.value);
 
                 const iconBg = classLoader.GradientDrawable.$new();
-                iconBg.setShape(1); // 1 = OVAL
+                iconBg.setShape(1); 
                 iconBg.setColor(Color.parseColor(CONF.corFundoIcone)); 
                 iconBg.setStroke(CONF.espessuraBorda, Color.parseColor(CONF.corBorda)); 
                 floatIcon.setBackground(iconBg);
 
                 const iconParams = classLoader.LinearLayout_LayoutParams.$new(CONF.iconeTamanho, CONF.iconeTamanho);
-                // Ancorado à esquerda em relação ao container (não mais no centro)
                 iconParams.gravity.value = Gravity.LEFT.value; 
                 floatIcon.setLayoutParams(iconParams);
 
                 // ========================================================================
-                // 3. A JANELA DO MENU PRINCIPAL (Cai logo abaixo, sem título)
+                // 3. A JANELA DO MENU (Com ScrollView Interno)
                 // ========================================================================
                 const menuLayout = classLoader.LinearLayout.$new(mainActivity);
                 menuLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
 
                 const menuBg = classLoader.GradientDrawable.$new();
                 menuBg.setShape(0); 
-                menuBg.setCornerRadius(20.0); // Bordas menos arredondadas para parecer mais com uma gaveta
+                menuBg.setCornerRadius(20.0); 
                 menuBg.setColor(Color.parseColor(CONF.corFundoMenu)); 
                 menuBg.setStroke(CONF.espessuraBorda, Color.parseColor(CONF.corBorda)); 
                 menuLayout.setBackground(menuBg);
                 
-                menuLayout.setPadding(30, 30, 30, 30);
+                menuLayout.setPadding(20, 20, 20, 20); // Padding reduzido para dar mais espaço aos botões
                 menuLayout.setVisibility(View.GONE.value); 
 
-                const menuParams = classLoader.LinearLayout_LayoutParams.$new(CONF.menuLargura, CONF.menuAltura);
-                menuParams.topMargin.value = 10; // Espaçamento pequeno do ícone
-                menuParams.gravity.value = Gravity.LEFT.value; // Garante que a caixa nasça colada à esquerda
+                // A janela principal se adapta
+                const menuParams = classLoader.LinearLayout_LayoutParams.$new(CONF.menuLargura, -2);
+                menuParams.topMargin.value = 10; 
+                menuParams.gravity.value = Gravity.LEFT.value; 
                 menuLayout.setLayoutParams(menuParams);
 
-                // (TÍTUO REMOVIDO PARA POUPAR ESPAÇO)
+                // --- O SCROLL VIEW ---
+                const scrollView = classLoader.ScrollView.$new(mainActivity);
+                // -1 = MATCH_PARENT, -2 = WRAP_CONTENT
+                const scrollParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2); 
+                scrollView.setLayoutParams(scrollParams);
+                // Remove a barra de rolagem visual feia do Android
+                scrollView.setVerticalScrollBarEnabled(false); 
+
+                // --- O CONTAINER DOS BOTÕES (Dentro do Scroll) ---
+                const optionsContainer = classLoader.LinearLayout.$new(mainActivity);
+                optionsContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
                 
-                // MOCK DE BOTÃO (Apenas para você ver a largura da caixa antes de colocarmos os scripts)
-                const mockTexto = classLoader.TextView.$new(mainActivity);
-                mockTexto.setText(classLoader.String.$new("...Aguardando Scripts..."));
-                mockTexto.setTextColor(Color.GRAY.value);
-                mockTexto.setGravity(Gravity.CENTER.value);
-                menuLayout.addView(mockTexto);
+                scrollView.addView(optionsContainer);
+                menuLayout.addView(scrollView);
+
+                // --- FUNÇÃO PARA ADICIONAR BOTÕES DINAMICAMENTE ---
+                function adicionarBotaoTeste(nomeBotao) {
+                    const btn = classLoader.TextView.$new(mainActivity);
+                    btn.setText(classLoader.String.$new(nomeBotao));
+                    btn.setTextColor(Color.WHITE.value);
+                    btn.setGravity(Gravity.CENTER.value);
+                    btn.setPadding(0, 25, 0, 25);
+                    
+                    // Design do botão individual
+                    const btnBg = classLoader.GradientDrawable.$new();
+                    btnBg.setShape(0);
+                    btnBg.setCornerRadius(15.0);
+                    btnBg.setColor(Color.parseColor("#44000000")); // Fundo do botão mais transparente
+                    btnBg.setStroke(2, Color.parseColor(CONF.corBorda));
+                    btn.setBackground(btnBg);
+
+                    const btnParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
+                    btnParams.topMargin.value = 10;
+                    btnParams.bottomMargin.value = 10;
+                    btn.setLayoutParams(btnParams);
+                    
+                    optionsContainer.addView(btn);
+
+                    // A MÁGICA DO SCROLL: Se passar de 4 botões, a altura trava e o scroll ativa!
+                    if (optionsContainer.getChildCount() > 4) {
+                        scrollParams.height.value = CONF.alturaMaximaScroll;
+                        scrollView.setLayoutParams(scrollParams);
+                    }
+                }
+
+                // Injetando 6 botões falsos para testar o Scroll
+                adicionarBotaoTeste("🎯 Hack de Vida");
+                adicionarBotaoTeste("🏃‍♂️ Speed Hack");
+                adicionarBotaoTeste("👁️ Wallhack");
+                adicionarBotaoTeste("🛡️ Anti-Ban");
+                adicionarBotaoTeste("💥 Explosão Área");
+                adicionarBotaoTeste("💰 Farm Automático");
 
                 // ========================================================================
                 // 4. LÓGICA DE ARRASTAR
@@ -152,7 +192,6 @@ setTimeout(() => {
 
                                 if (newX < 0) newX = 0;
                                 if (newY < 0) newY = 0;
-                                // Limite seguro para o painel não sumir pela direita
                                 if (newX > screenWidth - CONF.iconeTamanho) newX = screenWidth - CONF.iconeTamanho;
                                 if (newY > screenHeight - CONF.iconeTamanho - 50) newY = screenHeight - CONF.iconeTamanho - 50;
 
@@ -188,7 +227,7 @@ setTimeout(() => {
                 const rootParams = classLoader.FrameLayout_LayoutParams.$new(-1, -1);
                 mainActivity.addContentView(rootLayout, rootParams);
                 
-                console.log("[MOTOR] UI Clássica Injetada com sucesso!");
+                console.log("[MOTOR] UI com Scroll Automático Injetada!");
 
             } catch (e) {
                 console.log("[MOTOR] Erro na injeção da UI: " + e);
