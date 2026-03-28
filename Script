@@ -1,153 +1,171 @@
-function logNative(msg) {
-    Java.perform(function() {
-        var Log = Java.use("android.util.Log");
-        Log.d("MOTOR", msg);
-    });
-}
-
-setTimeout(function() {
+// ========================================================================
+// DELAY PRINCIPAL DO SCRIPT PARA CARREGAMENTO
+// ========================================================================
+setTimeout(() => {
     Java.perform(function () {
-        logNative("Iniciando injeção visual na camada DecorView...");
+        
+        // --- FUNÇÕES UTILITÁRIAS (Do seu código original) ---
+        function getClassLoader() {
+            return {
+                Gravity: Java.use("android.view.Gravity"),
+                TextView: Java.use("android.widget.TextView"),
+                LinearLayout: Java.use("android.widget.LinearLayout"),
+                FrameLayout: Java.use("android.widget.FrameLayout"),
+                FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
+                Color: Java.use("android.graphics.Color"),
+                ActivityThread: Java.use("android.app.ActivityThread"),
+                View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
+                MotionEvent: Java.use("android.view.MotionEvent"),
+                String: Java.use("java.lang.String"),
+                View: Java.use("android.view.View"),
+                DisplayMetrics: Java.use("android.util.DisplayMetrics"),
+                GradientDrawable: Java.use("android.graphics.drawable.GradientDrawable") // Adicionado para bordas redondas
+            };
+        }
 
-        Java.choose("android.app.Activity", {
-            onMatch: function (activity) {
-                logNative("Activity encontrada: " + activity.getClass().getName());
+        function getMainActivity(classLoader) { 
+            const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
+            const activityClientRecord = Java.cast(activityThread.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
+            return activityClientRecord.activity.value;
+        }
 
-                Java.scheduleOnMainThread(function () {
-                    try {
-                        var Color = Java.use("android.graphics.Color");
-                        var TextView = Java.use("android.widget.TextView");
-                        var FrameLayout = Java.use("android.widget.FrameLayout");
-                        var LinearLayout = Java.use("android.widget.LinearLayout");
-                        var GradientDrawable = Java.use("android.graphics.drawable.GradientDrawable");
-                        var Gravity = Java.use("android.view.Gravity");
-                        var MotionEvent = Java.use("android.view.MotionEvent");
-                        var String = Java.use("java.lang.String");
-                        var View = Java.use("android.view.View");
-                        var ViewGroup = Java.use("android.view.ViewGroup");
+        // --- INICIALIZAÇÃO DA UI ---
+        Java.scheduleOnMainThread(function () {
+            try {
+                const classLoader = getClassLoader();
+                const mainActivity = getMainActivity(classLoader);
+                
+                const Gravity = classLoader.Gravity;
+                const View = classLoader.View;
+                const Color = classLoader.Color;
+                const MotionEvent = classLoader.MotionEvent;
 
-                        var metrics = activity.getResources().getDisplayMetrics();
-                        var screenWidth = metrics.widthPixels.value;
-                        var screenHeight = metrics.heightPixels.value;
-                        var iconSize = 130;
+                // Obter tamanho da tela para as travas (impedir de sair da tela)
+                const metrics = mainActivity.getResources().getDisplayMetrics();
+                const screenWidth = metrics.widthPixels.value;
+                const screenHeight = metrics.heightPixels.value;
 
-                        // --- 1. MENU PRINCIPAL ---
-                        var menuLayout = LinearLayout.$new(activity);
-                        menuLayout.setOrientation(1); 
-                        
-                        var menuBg = GradientDrawable.$new();
-                        menuBg.setShape(0); 
-                        menuBg.setCornerRadius(40.0); 
-                        menuBg.setColor(Color.parseColor("#E6151515")); 
-                        menuBg.setStroke(4, Color.parseColor("#00FF00")); 
-                        menuLayout.setBackground(menuBg);
-                        menuLayout.setPadding(50, 50, 50, 50);
-                        menuLayout.setVisibility(View.GONE.value); 
+                // ========================================================================
+                // 1. A JANELA DO MENU (Bordas arredondadas, começa invisível)
+                // ========================================================================
+                const menuLayout = classLoader.LinearLayout.$new(mainActivity);
+                menuLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
 
-                        var menuParams = FrameLayout.LayoutParams.$new(screenWidth - 200, -2);
-                        menuParams.gravity = Gravity.CENTER.value; 
-                        menuLayout.setLayoutParams(menuParams);
+                // Criando o fundo arredondado via código
+                const menuBg = classLoader.GradientDrawable.$new();
+                menuBg.setShape(0); // 0 = RECTANGLE
+                menuBg.setCornerRadius(40.0); // Borda arredondada
+                menuBg.setColor(Color.parseColor("#E6151515")); // Preto transparente
+                menuBg.setStroke(4, Color.parseColor("#00FF00")); // Linha verde neon
+                menuLayout.setBackground(menuBg);
+                
+                menuLayout.setPadding(50, 50, 50, 50);
+                menuLayout.setVisibility(View.GONE.value); // Oculto no início
 
-                        var titulo = TextView.$new(activity);
-                        titulo.setText(String.$new("⚡ GRAAL HACKS ⚡"));
-                        titulo.setTextColor(Color.parseColor("#00FF00"));
-                        titulo.setGravity(Gravity.CENTER.value);
-                        titulo.setTextSize(20.0);
-                        menuLayout.addView(titulo);
+                // Centralizado na tela
+                const menuParams = classLoader.FrameLayout_LayoutParams.$new(screenWidth - 200, -2);
+                menuParams.gravity = Gravity.CENTER.value; 
+                menuLayout.setLayoutParams(menuParams);
 
-                        // --- 2. ÍCONE FLUTUANTE ---
-                        var floatIcon = TextView.$new(activity);
-                        floatIcon.setText(String.$new("G")); 
-                        floatIcon.setTextColor(Color.WHITE.value);
-                        floatIcon.setTextSize(26.0);
-                        floatIcon.setGravity(Gravity.CENTER.value);
+                const titulo = classLoader.TextView.$new(mainActivity);
+                titulo.setText(classLoader.String.$new("⚡ GRAAL HACKS ⚡"));
+                titulo.setTextColor(Color.parseColor("#00FF00"));
+                titulo.setGravity(Gravity.CENTER.value);
+                titulo.setTextSize(20.0);
+                menuLayout.addView(titulo);
 
-                        var iconBg = GradientDrawable.$new();
-                        iconBg.setShape(1); 
-                        iconBg.setColor(Color.parseColor("#CC000000")); 
-                        iconBg.setStroke(5, Color.parseColor("#00FF00")); 
-                        floatIcon.setBackground(iconBg);
+                // (AQUI DENTRO VOCÊ VAI ADICIONAR OS BOTÕES DOS HACKS DEPOIS)
 
-                        var iconParams = FrameLayout.LayoutParams.$new(iconSize, iconSize);
-                        iconParams.leftMargin = parseInt((screenWidth / 2) - (iconSize / 2));
-                        iconParams.topMargin = parseInt((screenHeight / 2) - (iconSize / 2));
-                        floatIcon.setLayoutParams(iconParams);
+                // ========================================================================
+                // 2. O ÍCONE FLUTUANTE (Redondo perfeito e Arrastável)
+                // ========================================================================
+                const iconSize = 130;
+                const floatIcon = classLoader.TextView.$new(mainActivity);
+                floatIcon.setText(classLoader.String.$new("G"));
+                floatIcon.setTextColor(Color.WHITE.value);
+                floatIcon.setTextSize(26.0);
+                floatIcon.setGravity(Gravity.CENTER.value);
 
-                        var initialX = 0, initialY = 0, initialTouchX = 0, initialTouchY = 0;
+                // Criando o fundo redondo (OVAL)
+                const iconBg = classLoader.GradientDrawable.$new();
+                iconBg.setShape(1); // 1 = OVAL
+                iconBg.setColor(Color.parseColor("#CC000000")); // Fundo preto
+                iconBg.setStroke(5, Color.parseColor("#00FF00")); // Borda verde
+                floatIcon.setBackground(iconBg);
 
-                        floatIcon.setOnTouchListener(Java.registerClass({
-                            name: "com.graal.DragIcon_" + Math.random().toString(36).substr(2),
-                            implements: [Java.use("android.view.View$OnTouchListener")],
-                            methods: {
-                                onTouch: function (v, event) {
-                                    var action = event.getAction();
-                                    if (action === MotionEvent.ACTION_DOWN.value) {
-                                        initialX = iconParams.leftMargin.value;
-                                        initialY = iconParams.topMargin.value;
-                                        initialTouchX = event.getRawX();
-                                        initialTouchY = event.getRawY();
-                                        return true;
-                                    } else if (action === MotionEvent.ACTION_MOVE.value) {
-                                        var newX = initialX + parseInt(event.getRawX() - initialTouchX);
-                                        var newY = initialY + parseInt(event.getRawY() - initialTouchY);
-                                        
-                                        if (newX < 0) newX = 0;
-                                        if (newY < 0) newY = 0;
-                                        if (newX > screenWidth - iconSize) newX = screenWidth - iconSize;
-                                        if (newY > screenHeight - iconSize - 100) newY = screenHeight - iconSize - 100;
+                // Posicionamento inicial (Bem no meio da tela)
+                const iconParams = classLoader.FrameLayout_LayoutParams.$new(iconSize, iconSize);
+                iconParams.leftMargin = parseInt((screenWidth / 2) - (iconSize / 2));
+                iconParams.topMargin = parseInt((screenHeight / 2) - (iconSize / 2));
+                floatIcon.setLayoutParams(iconParams);
 
-                                        iconParams.leftMargin = newX;
-                                        iconParams.topMargin = newY;
-                                        v.setLayoutParams(iconParams);
-                                        return true;
-                                    } else if (action === MotionEvent.ACTION_UP.value) {
-                                        var diffX = Math.abs(event.getRawX() - initialTouchX);
-                                        var diffY = Math.abs(event.getRawY() - initialTouchY);
-                                        
-                                        if (diffX < 15 && diffY < 15) {
-                                            var isVisible = menuLayout.getVisibility() === View.VISIBLE.value;
-                                            menuLayout.setVisibility(isVisible ? View.GONE.value : View.VISIBLE.value);
-                                        }
-                                        return true;
-                                    }
-                                    return false;
+                // Variáveis para a matemática do arrasto
+                let initialX = 0, initialY = 0, initialTouchX = 0, initialTouchY = 0;
+
+                floatIcon.setOnTouchListener(Java.registerClass({
+                    name: "com.graal.DragIcon_" + Math.random().toString(36).substr(2),
+                    implements: [classLoader.View_OnTouchListener],
+                    methods: {
+                        onTouch: function (v, event) {
+                            const action = event.getAction();
+                            
+                            if (action === MotionEvent.ACTION_DOWN.value) {
+                                initialX = iconParams.leftMargin.value;
+                                initialY = iconParams.topMargin.value;
+                                initialTouchX = event.getRawX();
+                                initialTouchY = event.getRawY();
+                                return true;
+                            } 
+                            else if (action === MotionEvent.ACTION_MOVE.value) {
+                                let newX = initialX + parseInt(event.getRawX() - initialTouchX);
+                                let newY = initialY + parseInt(event.getRawY() - initialTouchY);
+
+                                // TRAVAS - Não deixa o ícone sair da tela
+                                if (newX < 0) newX = 0;
+                                if (newY < 0) newY = 0;
+                                if (newX > screenWidth - iconSize) newX = screenWidth - iconSize;
+                                if (newY > screenHeight - iconSize - 100) newY = screenHeight - iconSize - 100;
+
+                                iconParams.leftMargin = newX;
+                                iconParams.topMargin = newY;
+                                v.setLayoutParams(iconParams);
+                                return true;
+                            } 
+                            else if (action === MotionEvent.ACTION_UP.value) {
+                                // Se o dedo não moveu mais de 15 pixels, conta como um CLIQUE
+                                let diffX = Math.abs(event.getRawX() - initialTouchX);
+                                let diffY = Math.abs(event.getRawY() - initialTouchY);
+
+                                if (diffX < 15 && diffY < 15) {
+                                    // Alterna a janela principal entre visível e invisível
+                                    const isVisible = menuLayout.getVisibility() === View.VISIBLE.value;
+                                    menuLayout.setVisibility(isVisible ? View.GONE.value : View.VISIBLE.value);
                                 }
+                                return true;
                             }
-                        }).$new());
-
-                        // --- 3. INJEÇÃO FORÇADA NA CAMADA SUPREMA (DecorView) ---
-                        var rootLayout = FrameLayout.$new(activity);
-                        rootLayout.addView(menuLayout); 
-                        rootLayout.addView(floatIcon);  
-
-                        var rootParams = FrameLayout.LayoutParams.$new(-1, -1);
-                        
-                        // Pegamos a janela absoluta do Android
-                        var window = activity.getWindow();
-                        var decorView = window.getDecorView();
-                        // 16908290 é o ID fixo do android.R.id.content (A raiz visual)
-                        var androidContent = decorView.findViewById(16908290); 
-                        
-                        if (androidContent != null) {
-                            var contentGroup = Java.cast(androidContent, ViewGroup);
-                            contentGroup.addView(rootLayout, rootParams);
-                            
-                            // A MÁGICA: Joga a nossa camada por cima dos gráficos do jogo
-                            rootLayout.bringToFront(); 
-                            
-                            logNative("Sucesso absoluto: Interface atropelou os graficos e foi desenhada.");
-                        } else {
-                            logNative("ERRO: Nao achou a raiz do Android.");
+                            return false;
                         }
-
-                    } catch (e) {
-                        logNative("ERRO UI: " + e.toString());
                     }
-                });
-            },
-            onComplete: function () {
-                logNative("Varredura concluida.");
+                }).$new());
+
+                // ========================================================================
+                // 3. INJEÇÃO BASEADA NO SEU CÓDIGO (addContentView direto na mainActivity)
+                // ========================================================================
+                const rootLayout = classLoader.FrameLayout.$new(mainActivity);
+                
+                // Adiciona o menu primeiro (fica no fundo)
+                rootLayout.addView(menuLayout);
+                // Adiciona o ícone depois (fica flutuando por cima)
+                rootLayout.addView(floatIcon);
+
+                const rootParams = classLoader.FrameLayout_LayoutParams.$new(-1, -1);
+                mainActivity.addContentView(rootLayout, rootParams);
+                
+                console.log("[MOTOR] UI Injetada com sucesso!");
+
+            } catch (e) {
+                console.log("[MOTOR] Erro na injeção da UI: " + e);
             }
         });
     });
-}, 5000);
+}, 8000);
