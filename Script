@@ -50,75 +50,85 @@ setTimeout(() => {
                 // ⚙️ CONFIGURAÇÕES VISUAIS FÁCEIS ⚙️
                 // ========================================================================
                 const CONF = {
-                    iconeTamanho: 100,       // Diminui o ícone (antes era 130)
-                    menuLargura: 550,        // Largura do painel (-2 faz adaptar automático)
-                    menuAltura: -2,          // -2 = WRAP_CONTENT (cresce conforme adiciona botões)
-                    corFundoMenu: "#E6101010", // Preto bem escuro e um pouco transparente
-                    corBordaMenu: "#00FF00",   // Borda Verde
-                    espessuraBorda: 3        // Grossura da borda
+                    // Ícone
+                    letraIcone: "G",           // Letra do botão flutuante
+                    corLetraIcone: "#FFFFFF",  // Cor da letra
+                    iconeTamanho: 100,         // Tamanho do botão redondo
+                    // Menu
+                    menuLargura: 550,          // Largura da janela dos hacks
+                    menuAltura: -2,            // -2 = WRAP_CONTENT (ajusta automático à quantidade de botões)
+                    // Cores Gerais
+                    corFundoMenu: "#CC101010", // Fundo do painel (Preto quase transparente)
+                    corFundoIcone: "#CC000000",// Fundo do ícone redondo
+                    corBorda: "#00FF00",       // Borda Verde padrão
+                    espessuraBorda: 3          // Grossura da borda
                 };
 
                 // ========================================================================
-                // 1. O CONTAINER PAI (A "Caixa" que segura o Ícone e o Menu juntos)
+                // 1. O CONTAINER PAI (Segura tudo)
                 // ========================================================================
                 const dragContainer = classLoader.LinearLayout.$new(mainActivity);
                 dragContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
                 
                 const containerParams = classLoader.FrameLayout_LayoutParams.$new(-2, -2);
                 containerParams.gravity.value = Gravity.TOP.value | Gravity.LEFT.value;
-                // Nasce no meio da tela
-                containerParams.leftMargin.value = Math.round((screenWidth / 2) - (CONF.iconeTamanho / 2));
+                // Nasce perto da borda esquerda, um pouco pra baixo
+                containerParams.leftMargin.value = 50;
                 containerParams.topMargin.value = Math.round((screenHeight / 4)); 
                 dragContainer.setLayoutParams(containerParams);
 
                 // ========================================================================
-                // 2. O ÍCONE FLUTUANTE (Arrastável)
+                // 2. O ÍCONE FLUTUANTE (Arrastável, alinhado à esquerda)
                 // ========================================================================
                 const floatIcon = classLoader.TextView.$new(mainActivity);
-                floatIcon.setText(classLoader.String.$new("G"));
-                floatIcon.setTextColor(Color.WHITE.value);
-                floatIcon.setTextSize(22.0); // Fonte um pouco menor
+                floatIcon.setText(classLoader.String.$new(CONF.letraIcone));
+                floatIcon.setTextColor(Color.parseColor(CONF.corLetraIcone));
+                floatIcon.setTextSize(22.0); 
                 floatIcon.setGravity(Gravity.CENTER.value);
 
                 const iconBg = classLoader.GradientDrawable.$new();
                 iconBg.setShape(1); // 1 = OVAL
-                iconBg.setColor(Color.parseColor("#CC000000")); 
-                iconBg.setStroke(4, Color.parseColor(CONF.corBordaMenu)); 
+                iconBg.setColor(Color.parseColor(CONF.corFundoIcone)); 
+                iconBg.setStroke(CONF.espessuraBorda, Color.parseColor(CONF.corBorda)); 
                 floatIcon.setBackground(iconBg);
 
                 const iconParams = classLoader.LinearLayout_LayoutParams.$new(CONF.iconeTamanho, CONF.iconeTamanho);
-                iconParams.gravity.value = Gravity.CENTER_HORIZONTAL.value; // Centraliza o ícone em relação ao menu
+                // Ancorado à esquerda em relação ao container (não mais no centro)
+                iconParams.gravity.value = Gravity.LEFT.value; 
                 floatIcon.setLayoutParams(iconParams);
 
                 // ========================================================================
-                // 3. A JANELA DO MENU PRINCIPAL (Fica embaixo do ícone)
+                // 3. A JANELA DO MENU PRINCIPAL (Cai logo abaixo, sem título)
                 // ========================================================================
                 const menuLayout = classLoader.LinearLayout.$new(mainActivity);
                 menuLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
 
                 const menuBg = classLoader.GradientDrawable.$new();
                 menuBg.setShape(0); 
-                menuBg.setCornerRadius(30.0); // Bordas arredondadas
+                menuBg.setCornerRadius(20.0); // Bordas menos arredondadas para parecer mais com uma gaveta
                 menuBg.setColor(Color.parseColor(CONF.corFundoMenu)); 
-                menuBg.setStroke(CONF.espessuraBorda, Color.parseColor(CONF.corBordaMenu)); 
+                menuBg.setStroke(CONF.espessuraBorda, Color.parseColor(CONF.corBorda)); 
                 menuLayout.setBackground(menuBg);
                 
                 menuLayout.setPadding(30, 30, 30, 30);
-                menuLayout.setVisibility(View.GONE.value); // Oculto no início
+                menuLayout.setVisibility(View.GONE.value); 
 
                 const menuParams = classLoader.LinearLayout_LayoutParams.$new(CONF.menuLargura, CONF.menuAltura);
-                menuParams.topMargin.value = 15; // Espaçamento entre o ícone e o painel
+                menuParams.topMargin.value = 10; // Espaçamento pequeno do ícone
+                menuParams.gravity.value = Gravity.LEFT.value; // Garante que a caixa nasça colada à esquerda
                 menuLayout.setLayoutParams(menuParams);
 
-                const titulo = classLoader.TextView.$new(mainActivity);
-                titulo.setText(classLoader.String.$new("⚡ GRAAL HACKS ⚡"));
-                titulo.setTextColor(Color.parseColor(CONF.corBordaMenu));
-                titulo.setGravity(Gravity.CENTER.value);
-                titulo.setTextSize(18.0);
-                menuLayout.addView(titulo);
+                // (TÍTUO REMOVIDO PARA POUPAR ESPAÇO)
+                
+                // MOCK DE BOTÃO (Apenas para você ver a largura da caixa antes de colocarmos os scripts)
+                const mockTexto = classLoader.TextView.$new(mainActivity);
+                mockTexto.setText(classLoader.String.$new("...Aguardando Scripts..."));
+                mockTexto.setTextColor(Color.GRAY.value);
+                mockTexto.setGravity(Gravity.CENTER.value);
+                menuLayout.addView(mockTexto);
 
                 // ========================================================================
-                // 4. LÓGICA DE ARRASTAR (Move o Container Pai inteiro)
+                // 4. LÓGICA DE ARRASTAR
                 // ========================================================================
                 let initialX = 0, initialY = 0, initialTouchX = 0, initialTouchY = 0;
 
@@ -130,7 +140,6 @@ setTimeout(() => {
                             const action = event.getAction();
                             
                             if (action === MotionEvent.ACTION_DOWN.value) {
-                                // Pega a posição do CONTAINER, não só do ícone
                                 initialX = containerParams.leftMargin.value;
                                 initialY = containerParams.topMargin.value;
                                 initialTouchX = event.getRawX();
@@ -141,12 +150,12 @@ setTimeout(() => {
                                 let newX = initialX + Math.round(event.getRawX() - initialTouchX);
                                 let newY = initialY + Math.round(event.getRawY() - initialTouchY);
 
-                                // Travas simples da tela
                                 if (newX < 0) newX = 0;
                                 if (newY < 0) newY = 0;
-                                if (newX > screenWidth - 100) newX = screenWidth - 100;
+                                // Limite seguro para o painel não sumir pela direita
+                                if (newX > screenWidth - CONF.iconeTamanho) newX = screenWidth - CONF.iconeTamanho;
+                                if (newY > screenHeight - CONF.iconeTamanho - 50) newY = screenHeight - CONF.iconeTamanho - 50;
 
-                                // Aplica a nova posição no CONTAINER
                                 containerParams.leftMargin.value = newX;
                                 containerParams.topMargin.value = newY;
                                 dragContainer.setLayoutParams(containerParams);
@@ -179,7 +188,7 @@ setTimeout(() => {
                 const rootParams = classLoader.FrameLayout_LayoutParams.$new(-1, -1);
                 mainActivity.addContentView(rootLayout, rootParams);
                 
-                console.log("[MOTOR] UI Injetada e Arrastavel com sucesso!");
+                console.log("[MOTOR] UI Clássica Injetada com sucesso!");
 
             } catch (e) {
                 console.log("[MOTOR] Erro na injeção da UI: " + e);
