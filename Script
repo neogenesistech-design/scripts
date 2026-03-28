@@ -21,7 +21,8 @@ setTimeout(() => {
                 String: Java.use("java.lang.String"),
                 View: Java.use("android.view.View"),
                 DisplayMetrics: Java.use("android.util.DisplayMetrics"),
-                GradientDrawable: Java.use("android.graphics.drawable.GradientDrawable")
+                GradientDrawable: Java.use("android.graphics.drawable.GradientDrawable"),
+                File: Java.use("java.io.File") // Adicionado para gerenciar pastas
             };
         }
 
@@ -47,6 +48,22 @@ setTimeout(() => {
                 const screenHeight = metrics.heightPixels.value;
 
                 // ========================================================================
+                // ⚙️ GERAÇÃO DA PASTA GSCRIPTS NA RAIZ DO JOGO ⚙️
+                // ========================================================================
+                const currentApp = classLoader.ActivityThread.currentApplication();
+                const context = currentApp.getApplicationContext();
+                // O caminho será: /data/user/0/com.quattroplay.GraalClassic/files/GScripts/
+                const scriptsPath = context.getFilesDir().getAbsolutePath() + "/GScripts/";
+                const scriptsFolder = classLoader.File.$new(scriptsPath);
+                
+                if (!scriptsFolder.exists()) {
+                    scriptsFolder.mkdirs();
+                    console.log("[MOTOR] Pasta GScripts criada com sucesso em: " + scriptsPath);
+                } else {
+                    console.log("[MOTOR] Pasta GScripts ja existe. Pronto para ler filhos.");
+                }
+
+                // ========================================================================
                 // ⚙️ CONFIGURAÇÕES VISUAIS FÁCEIS ⚙️
                 // ========================================================================
                 const CONF = {
@@ -54,19 +71,20 @@ setTimeout(() => {
                     corLetraIcone: "#FFFFFF",  
                     iconeTamanho: 100,         
                     menuLargura: 550,          
-                    alturaMenu: Math.round(screenHeight * 0.40), // Força o Scroll a ter 40% da tela (GARANTE ROLAGEM)
+                    alturaMenu: Math.round(screenHeight * 0.40), 
                     corFundoMenu: "#CC101010", 
                     corFundoIcone: "#CC000000",
                     corBorda: "#00FF00",       
                     espessuraBorda: 3,
-                    tamanhoAtalho: 90 // Tamanho dos botões flutuantes soltos
+                    tamanhoAtalho: 90, 
+                    corAtivo: "#CC00AA00",     // Fundo Verde quando ativado (Loop)
+                    corInativo: "#44000000"    // Fundo Escuro Normal
                 };
 
-                // A camada absoluta do Android que vai segurar os atalhos e o menu
                 const rootLayout = classLoader.FrameLayout.$new(mainActivity);
 
                 // ========================================================================
-                // 1. O CONTAINER PAI (Menu Principal)
+                // 1. O CONTAINER PAI E O ÍCONE FLUTUANTE DO MENU
                 // ========================================================================
                 const dragContainer = classLoader.LinearLayout.$new(mainActivity);
                 dragContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
@@ -77,9 +95,6 @@ setTimeout(() => {
                 containerParams.topMargin.value = Math.round((screenHeight / 4)); 
                 dragContainer.setLayoutParams(containerParams);
 
-                // ========================================================================
-                // 2. O ÍCONE FLUTUANTE DO MENU
-                // ========================================================================
                 const floatIcon = classLoader.TextView.$new(mainActivity);
                 floatIcon.setText(classLoader.String.$new(CONF.letraIcone));
                 floatIcon.setTextColor(Color.parseColor(CONF.corLetraIcone));
@@ -97,7 +112,7 @@ setTimeout(() => {
                 floatIcon.setLayoutParams(iconParams);
 
                 // ========================================================================
-                // 3. A JANELA DO MENU (Com Scroll Garantido)
+                // 2. A JANELA DO MENU (Com Scroll)
                 // ========================================================================
                 const menuLayout = classLoader.LinearLayout.$new(mainActivity);
                 menuLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
@@ -117,9 +132,7 @@ setTimeout(() => {
                 menuParams.gravity.value = Gravity.LEFT.value; 
                 menuLayout.setLayoutParams(menuParams);
 
-                // --- O SCROLL VIEW FIXADO ---
                 const scrollView = classLoader.ScrollView.$new(mainActivity);
-                // CORREÇÃO: Força a altura máxima para garantir que o scroll ative
                 const scrollParams = classLoader.LinearLayout_LayoutParams.$new(-1, CONF.alturaMenu); 
                 scrollView.setLayoutParams(scrollParams);
                 scrollView.setVerticalScrollBarEnabled(false); 
@@ -131,29 +144,27 @@ setTimeout(() => {
                 menuLayout.addView(scrollView);
 
                 // ========================================================================
-                // 4. LÓGICA DE CRIAÇÃO DE ATALHOS FLUTUANTES INDEPENDENTES
+                // 3. ATALHOS FLUTUANTES (Agora Quadrados com Bordas Arredondadas)
                 // ========================================================================
                 function spawnAtalhoFlutuante(nomeBotao) {
                     const atalho = classLoader.TextView.$new(mainActivity);
                     
-                    // Pega só os 2 primeiros caracteres (Geralmente o Emoji) para o ícone
                     const iconeSimbolo = nomeBotao.substring(0, 2).trim(); 
                     atalho.setText(classLoader.String.$new(iconeSimbolo));
-                    
                     atalho.setTextColor(Color.WHITE.value);
                     atalho.setTextSize(20.0);
                     atalho.setGravity(Gravity.CENTER.value);
 
+                    // Novo formato: Retângulo arredondado
                     const atalhoBg = classLoader.GradientDrawable.$new();
-                    atalhoBg.setShape(1); // Redondo
-                    atalhoBg.setColor(Color.parseColor("#CCAA0000")); // Fundo vermelho para destacar
+                    atalhoBg.setShape(0); // 0 = Retângulo
+                    atalhoBg.setCornerRadius(15.0); // Borda arredondada
+                    atalhoBg.setColor(Color.parseColor("#CCAA0000")); // Fundo vermelho
                     atalhoBg.setStroke(2, Color.parseColor("#FFFFFF"));
                     atalho.setBackground(atalhoBg);
 
                     const atalhoParams = classLoader.FrameLayout_LayoutParams.$new(CONF.tamanhoAtalho, CONF.tamanhoAtalho);
                     atalhoParams.gravity.value = Gravity.TOP.value | Gravity.LEFT.value;
-                    
-                    // Spawna no meio da tela para o usuário arrastar para onde quiser
                     atalhoParams.leftMargin.value = Math.round(screenWidth / 2);
                     atalhoParams.topMargin.value = Math.round(screenHeight / 2);
                     atalho.setLayoutParams(atalhoParams);
@@ -167,33 +178,28 @@ setTimeout(() => {
                             onTouch: function (v, event) {
                                 const action = event.getAction();
                                 if (action === MotionEvent.ACTION_DOWN.value) {
-                                    ax = atalhoParams.leftMargin.value;
-                                    ay = atalhoParams.topMargin.value;
-                                    atx = event.getRawX();
-                                    aty = event.getRawY();
+                                    ax = atalhoParams.leftMargin.value; ay = atalhoParams.topMargin.value;
+                                    atx = event.getRawX(); aty = event.getRawY();
                                     return true;
                                 } else if (action === MotionEvent.ACTION_MOVE.value) {
                                     let nx = ax + Math.round(event.getRawX() - atx);
                                     let ny = ay + Math.round(event.getRawY() - aty);
-                                    if (nx < 0) nx = 0;
-                                    if (ny < 0) ny = 0;
+                                    if (nx < 0) nx = 0; if (ny < 0) ny = 0;
                                     if (nx > screenWidth - CONF.tamanhoAtalho) nx = screenWidth - CONF.tamanhoAtalho;
                                     if (ny > screenHeight - CONF.tamanhoAtalho - 50) ny = screenHeight - CONF.tamanhoAtalho - 50;
 
-                                    atalhoParams.leftMargin.value = nx;
-                                    atalhoParams.topMargin.value = ny;
-                                    v.setLayoutParams(atalhoParams);
-                                    return true;
+                                    atalhoParams.leftMargin.value = nx; atalhoParams.topMargin.value = ny;
+                                    v.setLayoutParams(atalhoParams); return true;
                                 } else if (action === MotionEvent.ACTION_UP.value) {
-                                    let dx = Math.abs(event.getRawX() - atx);
-                                    let dy = Math.abs(event.getRawY() - aty);
+                                    let dx = Math.abs(event.getRawX() - atx); let dy = Math.abs(event.getRawY() - aty);
                                     if (dx < 15 && dy < 15) {
-                                        // AQUI VAI A EXECUÇÃO REAL DA FUNÇÃO QUANDO ELE CLICAR NO ATALHO!
                                         console.log("[HACK] Atalho rápido clicado: " + nomeBotao);
+                                        // PISCAR O ATALHO PARA CONFIRMAR CLIQUE
+                                        atalhoBg.setColor(Color.parseColor("#CC00FF00"));
+                                        setTimeout(() => { atalhoBg.setColor(Color.parseColor("#CCAA0000")); }, 200);
                                     }
                                     return true;
-                                }
-                                return false;
+                                } return false;
                             }
                         }
                     }).$new());
@@ -203,20 +209,19 @@ setTimeout(() => {
                 }
 
                 // ========================================================================
-                // 5. FUNÇÃO PARA ADICIONAR BOTÕES + OLHO (Row Layout)
+                // 4. FUNÇÃO PARA ADICIONAR BOTÕES (Com Efeitos de Click / Loop)
                 // ========================================================================
-                function adicionarBotaoTeste(nomeBotao) {
-                    // Linha Horizontal (Row)
+                // O parâmetro 'tipo' define se é "click" (pisca) ou "loop" (fica verde)
+                function adicionarBotaoTeste(nomeBotao, tipo = "click") {
                     const rowLayout = classLoader.LinearLayout.$new(mainActivity);
                     rowLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
                     rowLayout.setGravity(Gravity.CENTER_VERTICAL.value);
                     
                     const rowParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
-                    rowParams.topMargin.value = 8;
-                    rowParams.bottomMargin.value = 8;
+                    rowParams.topMargin.value = 8; rowParams.bottomMargin.value = 8;
                     rowLayout.setLayoutParams(rowParams);
 
-                    // --- O Botão Principal (Hack) ---
+                    // --- O Botão Principal ---
                     const btnHack = classLoader.TextView.$new(mainActivity);
                     btnHack.setText(classLoader.String.$new(nomeBotao));
                     btnHack.setTextColor(Color.WHITE.value);
@@ -226,43 +231,63 @@ setTimeout(() => {
                     const btnBg = classLoader.GradientDrawable.$new();
                     btnBg.setShape(0);
                     btnBg.setCornerRadius(15.0);
-                    btnBg.setColor(Color.parseColor("#44000000")); 
+                    btnBg.setColor(Color.parseColor(CONF.corInativo)); 
                     btnBg.setStroke(2, Color.parseColor(CONF.corBorda));
                     btnHack.setBackground(btnBg);
 
-                    // layout_weight = 1.0 (Ocupa todo o espaço possível à esquerda)
                     const btnHackParams = classLoader.LinearLayout_LayoutParams.$new(0, -2, 1.0);
                     btnHack.setLayoutParams(btnHackParams);
+                    
+                    let isOn = false;
+
+                    // Lógica de Efeitos Visuais (Click vs Loop)
+                    btnHack.setOnClickListener(Java.registerClass({
+                        name: "com.graal.HackClick_" + Math.random().toString(36).substr(2),
+                        implements: [Java.use("android.view.View$OnClickListener")],
+                        methods: {
+                            onClick: function (v) {
+                                if (tipo === "click") {
+                                    // Efeito Click Único: Pisca verde por 200ms e volta ao escuro
+                                    btnBg.setColor(Color.parseColor(CONF.corAtivo));
+                                    setTimeout(() => { 
+                                        Java.scheduleOnMainThread(() => { btnBg.setColor(Color.parseColor(CONF.corInativo)); });
+                                    }, 200);
+                                    console.log("[EXEC] " + nomeBotao);
+                                } else if (tipo === "loop") {
+                                    // Efeito Loop: Alterna entre ligado (verde) e desligado (escuro)
+                                    isOn = !isOn;
+                                    btnBg.setColor(Color.parseColor(isOn ? CONF.corAtivo : CONF.corInativo));
+                                    console.log(isOn ? "[ON] " + nomeBotao : "[OFF] " + nomeBotao);
+                                }
+                            }
+                        }
+                    }).$new());
+                    
                     rowLayout.addView(btnHack);
 
                     // --- O Botão do Olho (Atalho) ---
                     const btnOlho = classLoader.TextView.$new(mainActivity);
-                    btnOlho.setText(classLoader.String.$new(" 👁️ ")); // Olho apagado/inativo
+                    btnOlho.setText(classLoader.String.$new(" 👁️ ")); 
                     btnOlho.setTextColor(Color.GRAY.value);
                     btnOlho.setGravity(Gravity.CENTER.value);
                     btnOlho.setTextSize(16.0);
                     
                     const btnOlhoParams = classLoader.LinearLayout_LayoutParams.$new(-2, -1);
-                    btnOlhoParams.leftMargin.value = 15; // Afasta do botão principal
+                    btnOlhoParams.leftMargin.value = 15;
                     btnOlho.setLayoutParams(btnOlhoParams);
                     rowLayout.addView(btnOlho);
 
-                    // Lógica do Olho
-                    let atalhoFlutuanteAtivo = null; // Guarda a referência do ícone solto
-                    
+                    let atalhoFlutuanteAtivo = null; 
                     btnOlho.setOnClickListener(Java.registerClass({
                         name: "com.graal.OlhoClick_" + Math.random().toString(36).substr(2),
-                        implements: [classLoader.View_OnTouchListener], // Gambiarra do Frida: Forçando interface
                         implements: [Java.use("android.view.View$OnClickListener")],
                         methods: {
                             onClick: function (v) {
                                 if (atalhoFlutuanteAtivo == null) {
-                                    // ATIVAR ATALHO
-                                    btnOlho.setText(classLoader.String.$new(" 🟢 ")); // Acende
+                                    btnOlho.setText(classLoader.String.$new(" 🟢 ")); 
                                     atalhoFlutuanteAtivo = spawnAtalhoFlutuante(nomeBotao);
                                 } else {
-                                    // DESATIVAR ATALHO
-                                    btnOlho.setText(classLoader.String.$new(" 👁️ ")); // Apaga
+                                    btnOlho.setText(classLoader.String.$new(" 👁️ ")); 
                                     rootLayout.removeView(atalhoFlutuanteAtivo);
                                     atalhoFlutuanteAtivo = null;
                                 }
@@ -273,18 +298,16 @@ setTimeout(() => {
                     optionsContainer.addView(rowLayout);
                 }
 
-                // Injetando os testes
-                adicionarBotaoTeste("🎯 Recuperar Vida");
-                adicionarBotaoTeste("🏃‍♂️ Speed Boost");
-                adicionarBotaoTeste("👁️ Atravessar Parede");
-                adicionarBotaoTeste("🛡️ Ignorar Dano");
-                adicionarBotaoTeste("💥 Bomba C4");
-                adicionarBotaoTeste("💰 Auto Coleta");
-                adicionarBotaoTeste("🔫 Tiro Rápido");
-                adicionarBotaoTeste("💀 Morte Instantânea");
+                // Injetando testes com tipos diferentes para você ver o efeito visual
+                adicionarBotaoTeste("🎯 Curar Agora", "click"); // Pisca e some
+                adicionarBotaoTeste("🛡️ Invencível", "loop");  // Liga/Desliga
+                adicionarBotaoTeste("🏃‍♂️ Super Velocidade", "loop");
+                adicionarBotaoTeste("💥 Lançar Bomba", "click");
+                adicionarBotaoTeste("👁️ Ver Inimigos", "loop");
+                adicionarBotaoTeste("💀 Auto-Kill", "loop");
 
                 // ========================================================================
-                // 6. LÓGICA DE ARRASTAR O MENU PRINCIPAL
+                // 5. LÓGICA DE ARRASTAR O MENU PRINCIPAL
                 // ========================================================================
                 let initialX = 0, initialY = 0, initialTouchX = 0, initialTouchY = 0;
 
@@ -295,48 +318,40 @@ setTimeout(() => {
                         onTouch: function (v, event) {
                             const action = event.getAction();
                             if (action === MotionEvent.ACTION_DOWN.value) {
-                                initialX = containerParams.leftMargin.value;
-                                initialY = containerParams.topMargin.value;
-                                initialTouchX = event.getRawX();
-                                initialTouchY = event.getRawY();
+                                initialX = containerParams.leftMargin.value; initialY = containerParams.topMargin.value;
+                                initialTouchX = event.getRawX(); initialTouchY = event.getRawY();
                                 return true;
                             } else if (action === MotionEvent.ACTION_MOVE.value) {
                                 let newX = initialX + Math.round(event.getRawX() - initialTouchX);
                                 let newY = initialY + Math.round(event.getRawY() - initialTouchY);
-                                if (newX < 0) newX = 0;
-                                if (newY < 0) newY = 0;
+                                if (newX < 0) newX = 0; if (newY < 0) newY = 0;
                                 if (newX > screenWidth - CONF.iconeTamanho) newX = screenWidth - CONF.iconeTamanho;
                                 if (newY > screenHeight - CONF.iconeTamanho - 50) newY = screenHeight - CONF.iconeTamanho - 50;
-                                containerParams.leftMargin.value = newX;
-                                containerParams.topMargin.value = newY;
+                                containerParams.leftMargin.value = newX; containerParams.topMargin.value = newY;
                                 dragContainer.setLayoutParams(containerParams);
                                 return true;
                             } else if (action === MotionEvent.ACTION_UP.value) {
-                                let diffX = Math.abs(event.getRawX() - initialTouchX);
-                                let diffY = Math.abs(event.getRawY() - initialTouchY);
+                                let diffX = Math.abs(event.getRawX() - initialTouchX); let diffY = Math.abs(event.getRawY() - initialTouchY);
                                 if (diffX < 15 && diffY < 15) {
                                     const isVisible = menuLayout.getVisibility() === View.VISIBLE.value;
                                     menuLayout.setVisibility(isVisible ? View.GONE.value : View.VISIBLE.value);
-                                }
-                                return true;
-                            }
-                            return false;
+                                } return true;
+                            } return false;
                         }
                     }
                 }).$new());
 
                 // ========================================================================
-                // 7. INJEÇÃO FINAL NA TELA
+                // 6. INJEÇÃO FINAL NA TELA
                 // ========================================================================
                 dragContainer.addView(floatIcon);
                 dragContainer.addView(menuLayout);
-
                 rootLayout.addView(dragContainer);
 
                 const rootParams = classLoader.FrameLayout_LayoutParams.$new(-1, -1);
                 mainActivity.addContentView(rootLayout, rootParams);
                 
-                console.log("[MOTOR] UI com Scroll e Atalhos Ativos!");
+                console.log("[MOTOR] Visual Loader Pronto!");
 
             } catch (e) {
                 console.log("[MOTOR] Erro na injeção da UI: " + e);
