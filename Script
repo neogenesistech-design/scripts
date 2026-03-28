@@ -10,6 +10,7 @@ setTimeout(() => {
                 Gravity: Java.use("android.view.Gravity"),
                 TextView: Java.use("android.widget.TextView"),
                 LinearLayout: Java.use("android.widget.LinearLayout"),
+                LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
                 FrameLayout: Java.use("android.widget.FrameLayout"),
                 FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
                 Color: Java.use("android.graphics.Color"),
@@ -46,58 +47,79 @@ setTimeout(() => {
                 const screenHeight = metrics.heightPixels.value;
 
                 // ========================================================================
-                // 1. A JANELA DO MENU PRINCIPAL
+                // ⚙️ CONFIGURAÇÕES VISUAIS FÁCEIS ⚙️
+                // ========================================================================
+                const CONF = {
+                    iconeTamanho: 100,       // Diminui o ícone (antes era 130)
+                    menuLargura: 550,        // Largura do painel (-2 faz adaptar automático)
+                    menuAltura: -2,          // -2 = WRAP_CONTENT (cresce conforme adiciona botões)
+                    corFundoMenu: "#E6101010", // Preto bem escuro e um pouco transparente
+                    corBordaMenu: "#00FF00",   // Borda Verde
+                    espessuraBorda: 3        // Grossura da borda
+                };
+
+                // ========================================================================
+                // 1. O CONTAINER PAI (A "Caixa" que segura o Ícone e o Menu juntos)
+                // ========================================================================
+                const dragContainer = classLoader.LinearLayout.$new(mainActivity);
+                dragContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
+                
+                const containerParams = classLoader.FrameLayout_LayoutParams.$new(-2, -2);
+                containerParams.gravity.value = Gravity.TOP.value | Gravity.LEFT.value;
+                // Nasce no meio da tela
+                containerParams.leftMargin.value = Math.round((screenWidth / 2) - (CONF.iconeTamanho / 2));
+                containerParams.topMargin.value = Math.round((screenHeight / 4)); 
+                dragContainer.setLayoutParams(containerParams);
+
+                // ========================================================================
+                // 2. O ÍCONE FLUTUANTE (Arrastável)
+                // ========================================================================
+                const floatIcon = classLoader.TextView.$new(mainActivity);
+                floatIcon.setText(classLoader.String.$new("G"));
+                floatIcon.setTextColor(Color.WHITE.value);
+                floatIcon.setTextSize(22.0); // Fonte um pouco menor
+                floatIcon.setGravity(Gravity.CENTER.value);
+
+                const iconBg = classLoader.GradientDrawable.$new();
+                iconBg.setShape(1); // 1 = OVAL
+                iconBg.setColor(Color.parseColor("#CC000000")); 
+                iconBg.setStroke(4, Color.parseColor(CONF.corBordaMenu)); 
+                floatIcon.setBackground(iconBg);
+
+                const iconParams = classLoader.LinearLayout_LayoutParams.$new(CONF.iconeTamanho, CONF.iconeTamanho);
+                iconParams.gravity.value = Gravity.CENTER_HORIZONTAL.value; // Centraliza o ícone em relação ao menu
+                floatIcon.setLayoutParams(iconParams);
+
+                // ========================================================================
+                // 3. A JANELA DO MENU PRINCIPAL (Fica embaixo do ícone)
                 // ========================================================================
                 const menuLayout = classLoader.LinearLayout.$new(mainActivity);
                 menuLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
 
                 const menuBg = classLoader.GradientDrawable.$new();
                 menuBg.setShape(0); 
-                menuBg.setCornerRadius(40.0); 
-                menuBg.setColor(Color.parseColor("#E6151515")); 
-                menuBg.setStroke(4, Color.parseColor("#00FF00")); 
+                menuBg.setCornerRadius(30.0); // Bordas arredondadas
+                menuBg.setColor(Color.parseColor(CONF.corFundoMenu)); 
+                menuBg.setStroke(CONF.espessuraBorda, Color.parseColor(CONF.corBordaMenu)); 
                 menuLayout.setBackground(menuBg);
                 
-                menuLayout.setPadding(50, 50, 50, 50);
-                menuLayout.setVisibility(View.GONE.value); 
+                menuLayout.setPadding(30, 30, 30, 30);
+                menuLayout.setVisibility(View.GONE.value); // Oculto no início
 
-                const menuParams = classLoader.FrameLayout_LayoutParams.$new(screenWidth - 200, -2);
-                // CORREÇÃO: Usar .value nas propriedades do Java
-                menuParams.gravity.value = Gravity.CENTER.value; 
+                const menuParams = classLoader.LinearLayout_LayoutParams.$new(CONF.menuLargura, CONF.menuAltura);
+                menuParams.topMargin.value = 15; // Espaçamento entre o ícone e o painel
                 menuLayout.setLayoutParams(menuParams);
 
                 const titulo = classLoader.TextView.$new(mainActivity);
                 titulo.setText(classLoader.String.$new("⚡ GRAAL HACKS ⚡"));
-                titulo.setTextColor(Color.parseColor("#00FF00"));
+                titulo.setTextColor(Color.parseColor(CONF.corBordaMenu));
                 titulo.setGravity(Gravity.CENTER.value);
-                titulo.setTextSize(20.0);
+                titulo.setTextSize(18.0);
                 menuLayout.addView(titulo);
 
                 // ========================================================================
-                // 2. O ÍCONE FLUTUANTE (Arrastável)
+                // 4. LÓGICA DE ARRASTAR (Move o Container Pai inteiro)
                 // ========================================================================
-                const iconSize = 130;
-                const floatIcon = classLoader.TextView.$new(mainActivity);
-                floatIcon.setText(classLoader.String.$new("G"));
-                floatIcon.setTextColor(Color.WHITE.value);
-                floatIcon.setTextSize(26.0);
-                floatIcon.setGravity(Gravity.CENTER.value);
-
-                const iconBg = classLoader.GradientDrawable.$new();
-                iconBg.setShape(1); 
-                iconBg.setColor(Color.parseColor("#CC000000")); 
-                iconBg.setStroke(5, Color.parseColor("#00FF00")); 
-                floatIcon.setBackground(iconBg);
-
-                const iconParams = classLoader.FrameLayout_LayoutParams.$new(iconSize, iconSize);
-                // CORREÇÃO: Forçar gravidade Top-Left para as margens funcionarem
-                iconParams.gravity.value = Gravity.TOP.value | Gravity.LEFT.value;
-                
-                // CORREÇÃO: .value nas variáveis de margem para o Java aceitar a posição
-                iconParams.leftMargin.value = Math.round((screenWidth / 2) - (iconSize / 2));
-                iconParams.topMargin.value = Math.round((screenHeight / 2) - (iconSize / 2));
-                floatIcon.setLayoutParams(iconParams);
-
                 let initialX = 0, initialY = 0, initialTouchX = 0, initialTouchY = 0;
 
                 floatIcon.setOnTouchListener(Java.registerClass({
@@ -108,9 +130,9 @@ setTimeout(() => {
                             const action = event.getAction();
                             
                             if (action === MotionEvent.ACTION_DOWN.value) {
-                                // CORREÇÃO: Pegar as margens atuais usando .value
-                                initialX = iconParams.leftMargin.value;
-                                initialY = iconParams.topMargin.value;
+                                // Pega a posição do CONTAINER, não só do ícone
+                                initialX = containerParams.leftMargin.value;
+                                initialY = containerParams.topMargin.value;
                                 initialTouchX = event.getRawX();
                                 initialTouchY = event.getRawY();
                                 return true;
@@ -119,16 +141,15 @@ setTimeout(() => {
                                 let newX = initialX + Math.round(event.getRawX() - initialTouchX);
                                 let newY = initialY + Math.round(event.getRawY() - initialTouchY);
 
-                                // TRAVAS
+                                // Travas simples da tela
                                 if (newX < 0) newX = 0;
                                 if (newY < 0) newY = 0;
-                                if (newX > screenWidth - iconSize) newX = screenWidth - iconSize;
-                                if (newY > screenHeight - iconSize - 100) newY = screenHeight - iconSize - 100;
+                                if (newX > screenWidth - 100) newX = screenWidth - 100;
 
-                                // CORREÇÃO: Aplicar as novas margens usando .value
-                                iconParams.leftMargin.value = newX;
-                                iconParams.topMargin.value = newY;
-                                v.setLayoutParams(iconParams);
+                                // Aplica a nova posição no CONTAINER
+                                containerParams.leftMargin.value = newX;
+                                containerParams.topMargin.value = newY;
+                                dragContainer.setLayoutParams(containerParams);
                                 return true;
                             } 
                             else if (action === MotionEvent.ACTION_UP.value) {
@@ -147,12 +168,13 @@ setTimeout(() => {
                 }).$new());
 
                 // ========================================================================
-                // 3. INJEÇÃO NA TELA
+                // 5. INJEÇÃO NA TELA
                 // ========================================================================
+                dragContainer.addView(floatIcon);
+                dragContainer.addView(menuLayout);
+
                 const rootLayout = classLoader.FrameLayout.$new(mainActivity);
-                
-                rootLayout.addView(menuLayout);
-                rootLayout.addView(floatIcon);
+                rootLayout.addView(dragContainer);
 
                 const rootParams = classLoader.FrameLayout_LayoutParams.$new(-1, -1);
                 mainActivity.addContentView(rootLayout, rootParams);
