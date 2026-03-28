@@ -157,4 +157,4 @@ setTimeout(function() {
             }
         });
     });
-}, 5000); // 5s para garantir que o Graal carregou a engine gráfica
+}, 8000); // 5s para garantir que o Graal carregou a engine gráfica
