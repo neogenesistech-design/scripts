@@ -1,361 +1,167 @@
-// ========================================================================
-// DELAY PRINCIPAL DO SCRIPT PARA CARREGAMENTO
-// ========================================================================
-setTimeout(() => {
-    Java.perform(function () {
-        
-        // --- FUNÇÕES UTILITÁRIAS ---
-        function getClassLoader() {
-            return {
-                Gravity: Java.use("android.view.Gravity"),
-                TextView: Java.use("android.widget.TextView"),
-                LinearLayout: Java.use("android.widget.LinearLayout"),
-                LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-                FrameLayout: Java.use("android.widget.FrameLayout"),
-                FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
-                ScrollView: Java.use("android.widget.ScrollView"),
-                Color: Java.use("android.graphics.Color"),
-                ActivityThread: Java.use("android.app.ActivityThread"),
-                View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
-                MotionEvent: Java.use("android.view.MotionEvent"),
-                String: Java.use("java.lang.String"),
-                View: Java.use("android.view.View"),
-                DisplayMetrics: Java.use("android.util.DisplayMetrics"),
-                GradientDrawable: Java.use("android.graphics.drawable.GradientDrawable"),
-                File: Java.use("java.io.File") // Adicionado para gerenciar pastas
-            };
-        }
+(function(root) {
+    setTimeout(() => {
+        const libName = "libqplay.so";
+        const mod = Process.findModuleByName(libName);
+        if (!mod) return;
 
-        function getMainActivity(classLoader) { 
-            const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-            const activityClientRecord = Java.cast(activityThread.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
-            return activityClientRecord.activity.value;
-        }
+        console.log("\n[🛡️] RADAR ADMIN + AUTO-LIMPEZA + TOAST ATIVO");
 
-        // --- INICIALIZAÇÃO DA UI ---
-        Java.scheduleOnMainThread(function () {
-            try {
-                const classLoader = getClassLoader();
-                const mainActivity = getMainActivity(classLoader);
-                
-                const Gravity = classLoader.Gravity;
-                const View = classLoader.View;
-                const Color = classLoader.Color;
-                const MotionEvent = classLoader.MotionEvent;
+        // =========================================================
+        // 1. ENDEREÇOS E FUNÇÕES
+        // =========================================================
+        let addrSetVar = null;
+        let addrGetPlayer = null;
+        let addrDeletePlayer = null; 
+        let addrActiveGlobal = null;
+        let addrDestructor = null;   
 
-                const metrics = mainActivity.getResources().getDisplayMetrics();
-                const screenWidth = metrics.widthPixels.value;
-                const screenHeight = metrics.heightPixels.value;
-
-                // ========================================================================
-                // ⚙️ GERAÇÃO DA PASTA GSCRIPTS NA RAIZ DO JOGO ⚙️
-                // ========================================================================
-                const currentApp = classLoader.ActivityThread.currentApplication();
-                const context = currentApp.getApplicationContext();
-                // O caminho será: /data/user/0/com.quattroplay.GraalClassic/files/GScripts/
-                const scriptsPath = context.getFilesDir().getAbsolutePath() + "/GScripts/";
-                const scriptsFolder = classLoader.File.$new(scriptsPath);
-                
-                if (!scriptsFolder.exists()) {
-                    scriptsFolder.mkdirs();
-                    console.log("[MOTOR] Pasta GScripts criada com sucesso em: " + scriptsPath);
-                } else {
-                    console.log("[MOTOR] Pasta GScripts ja existe. Pronto para ler filhos.");
-                }
-
-                // ========================================================================
-                // ⚙️ CONFIGURAÇÕES VISUAIS FÁCEIS ⚙️
-                // ========================================================================
-                const CONF = {
-                    letraIcone: "G",           
-                    corLetraIcone: "#FFFFFF",  
-                    iconeTamanho: 100,         
-                    menuLargura: 550,          
-                    alturaMenu: Math.round(screenHeight * 0.40), 
-                    corFundoMenu: "#CC101010", 
-                    corFundoIcone: "#CC000000",
-                    corBorda: "#00FF00",       
-                    espessuraBorda: 3,
-                    tamanhoAtalho: 90, 
-                    corAtivo: "#CC00AA00",     // Fundo Verde quando ativado (Loop)
-                    corInativo: "#44000000"    // Fundo Escuro Normal
-                };
-
-                const rootLayout = classLoader.FrameLayout.$new(mainActivity);
-
-                // ========================================================================
-                // 1. O CONTAINER PAI E O ÍCONE FLUTUANTE DO MENU
-                // ========================================================================
-                const dragContainer = classLoader.LinearLayout.$new(mainActivity);
-                dragContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-                
-                const containerParams = classLoader.FrameLayout_LayoutParams.$new(-2, -2);
-                containerParams.gravity.value = Gravity.TOP.value | Gravity.LEFT.value;
-                containerParams.leftMargin.value = 50;
-                containerParams.topMargin.value = Math.round((screenHeight / 4)); 
-                dragContainer.setLayoutParams(containerParams);
-
-                const floatIcon = classLoader.TextView.$new(mainActivity);
-                floatIcon.setText(classLoader.String.$new(CONF.letraIcone));
-                floatIcon.setTextColor(Color.parseColor(CONF.corLetraIcone));
-                floatIcon.setTextSize(22.0); 
-                floatIcon.setGravity(Gravity.CENTER.value);
-
-                const iconBg = classLoader.GradientDrawable.$new();
-                iconBg.setShape(1); 
-                iconBg.setColor(Color.parseColor(CONF.corFundoIcone)); 
-                iconBg.setStroke(CONF.espessuraBorda, Color.parseColor(CONF.corBorda)); 
-                floatIcon.setBackground(iconBg);
-
-                const iconParams = classLoader.LinearLayout_LayoutParams.$new(CONF.iconeTamanho, CONF.iconeTamanho);
-                iconParams.gravity.value = Gravity.LEFT.value; 
-                floatIcon.setLayoutParams(iconParams);
-
-                // ========================================================================
-                // 2. A JANELA DO MENU (Com Scroll)
-                // ========================================================================
-                const menuLayout = classLoader.LinearLayout.$new(mainActivity);
-                menuLayout.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-
-                const menuBg = classLoader.GradientDrawable.$new();
-                menuBg.setShape(0); 
-                menuBg.setCornerRadius(20.0); 
-                menuBg.setColor(Color.parseColor(CONF.corFundoMenu)); 
-                menuBg.setStroke(CONF.espessuraBorda, Color.parseColor(CONF.corBorda)); 
-                menuLayout.setBackground(menuBg);
-                
-                menuLayout.setPadding(20, 20, 20, 20); 
-                menuLayout.setVisibility(View.GONE.value); 
-
-                const menuParams = classLoader.LinearLayout_LayoutParams.$new(CONF.menuLargura, -2);
-                menuParams.topMargin.value = 10; 
-                menuParams.gravity.value = Gravity.LEFT.value; 
-                menuLayout.setLayoutParams(menuParams);
-
-                const scrollView = classLoader.ScrollView.$new(mainActivity);
-                const scrollParams = classLoader.LinearLayout_LayoutParams.$new(-1, CONF.alturaMenu); 
-                scrollView.setLayoutParams(scrollParams);
-                scrollView.setVerticalScrollBarEnabled(false); 
-
-                const optionsContainer = classLoader.LinearLayout.$new(mainActivity);
-                optionsContainer.setOrientation(classLoader.LinearLayout.VERTICAL.value);
-                
-                scrollView.addView(optionsContainer);
-                menuLayout.addView(scrollView);
-
-                // ========================================================================
-                // 3. ATALHOS FLUTUANTES (Agora Quadrados com Bordas Arredondadas)
-                // ========================================================================
-                function spawnAtalhoFlutuante(nomeBotao) {
-                    const atalho = classLoader.TextView.$new(mainActivity);
-                    
-                    const iconeSimbolo = nomeBotao.substring(0, 2).trim(); 
-                    atalho.setText(classLoader.String.$new(iconeSimbolo));
-                    atalho.setTextColor(Color.WHITE.value);
-                    atalho.setTextSize(20.0);
-                    atalho.setGravity(Gravity.CENTER.value);
-
-                    // Novo formato: Retângulo arredondado
-                    const atalhoBg = classLoader.GradientDrawable.$new();
-                    atalhoBg.setShape(0); // 0 = Retângulo
-                    atalhoBg.setCornerRadius(15.0); // Borda arredondada
-                    atalhoBg.setColor(Color.parseColor("#CCAA0000")); // Fundo vermelho
-                    atalhoBg.setStroke(2, Color.parseColor("#FFFFFF"));
-                    atalho.setBackground(atalhoBg);
-
-                    const atalhoParams = classLoader.FrameLayout_LayoutParams.$new(CONF.tamanhoAtalho, CONF.tamanhoAtalho);
-                    atalhoParams.gravity.value = Gravity.TOP.value | Gravity.LEFT.value;
-                    atalhoParams.leftMargin.value = Math.round(screenWidth / 2);
-                    atalhoParams.topMargin.value = Math.round(screenHeight / 2);
-                    atalho.setLayoutParams(atalhoParams);
-
-                    let ax = 0, ay = 0, atx = 0, aty = 0;
-
-                    atalho.setOnTouchListener(Java.registerClass({
-                        name: "com.graal.AtalhoDrag_" + Math.random().toString(36).substr(2),
-                        implements: [classLoader.View_OnTouchListener],
-                        methods: {
-                            onTouch: function (v, event) {
-                                const action = event.getAction();
-                                if (action === MotionEvent.ACTION_DOWN.value) {
-                                    ax = atalhoParams.leftMargin.value; ay = atalhoParams.topMargin.value;
-                                    atx = event.getRawX(); aty = event.getRawY();
-                                    return true;
-                                } else if (action === MotionEvent.ACTION_MOVE.value) {
-                                    let nx = ax + Math.round(event.getRawX() - atx);
-                                    let ny = ay + Math.round(event.getRawY() - aty);
-                                    if (nx < 0) nx = 0; if (ny < 0) ny = 0;
-                                    if (nx > screenWidth - CONF.tamanhoAtalho) nx = screenWidth - CONF.tamanhoAtalho;
-                                    if (ny > screenHeight - CONF.tamanhoAtalho - 50) ny = screenHeight - CONF.tamanhoAtalho - 50;
-
-                                    atalhoParams.leftMargin.value = nx; atalhoParams.topMargin.value = ny;
-                                    v.setLayoutParams(atalhoParams); return true;
-                                } else if (action === MotionEvent.ACTION_UP.value) {
-                                    let dx = Math.abs(event.getRawX() - atx); let dy = Math.abs(event.getRawY() - aty);
-                                    if (dx < 15 && dy < 15) {
-                                        console.log("[HACK] Atalho rápido clicado: " + nomeBotao);
-                                        // PISCAR O ATALHO PARA CONFIRMAR CLIQUE
-                                        atalhoBg.setColor(Color.parseColor("#CC00FF00"));
-                                        setTimeout(() => { atalhoBg.setColor(Color.parseColor("#CCAA0000")); }, 200);
-                                    }
-                                    return true;
-                                } return false;
-                            }
-                        }
-                    }).$new());
-
-                    rootLayout.addView(atalho);
-                    return atalho;
-                }
-
-                // ========================================================================
-                // 4. FUNÇÃO PARA ADICIONAR BOTÕES (Com Efeitos de Click / Loop)
-                // ========================================================================
-                // O parâmetro 'tipo' define se é "click" (pisca) ou "loop" (fica verde)
-                function adicionarBotaoTeste(nomeBotao, tipo = "click") {
-                    const rowLayout = classLoader.LinearLayout.$new(mainActivity);
-                    rowLayout.setOrientation(classLoader.LinearLayout.HORIZONTAL.value);
-                    rowLayout.setGravity(Gravity.CENTER_VERTICAL.value);
-                    
-                    const rowParams = classLoader.LinearLayout_LayoutParams.$new(-1, -2);
-                    rowParams.topMargin.value = 8; rowParams.bottomMargin.value = 8;
-                    rowLayout.setLayoutParams(rowParams);
-
-                    // --- O Botão Principal ---
-                    const btnHack = classLoader.TextView.$new(mainActivity);
-                    btnHack.setText(classLoader.String.$new(nomeBotao));
-                    btnHack.setTextColor(Color.WHITE.value);
-                    btnHack.setGravity(Gravity.CENTER.value);
-                    btnHack.setPadding(0, 25, 0, 25);
-                    
-                    const btnBg = classLoader.GradientDrawable.$new();
-                    btnBg.setShape(0);
-                    btnBg.setCornerRadius(15.0);
-                    btnBg.setColor(Color.parseColor(CONF.corInativo)); 
-                    btnBg.setStroke(2, Color.parseColor(CONF.corBorda));
-                    btnHack.setBackground(btnBg);
-
-                    const btnHackParams = classLoader.LinearLayout_LayoutParams.$new(0, -2, 1.0);
-                    btnHack.setLayoutParams(btnHackParams);
-                    
-                    let isOn = false;
-
-                    // Lógica de Efeitos Visuais (Click vs Loop)
-                    btnHack.setOnClickListener(Java.registerClass({
-                        name: "com.graal.HackClick_" + Math.random().toString(36).substr(2),
-                        implements: [Java.use("android.view.View$OnClickListener")],
-                        methods: {
-                            onClick: function (v) {
-                                if (tipo === "click") {
-                                    // Efeito Click Único: Pisca verde por 200ms e volta ao escuro
-                                    btnBg.setColor(Color.parseColor(CONF.corAtivo));
-                                    setTimeout(() => { 
-                                        Java.scheduleOnMainThread(() => { btnBg.setColor(Color.parseColor(CONF.corInativo)); });
-                                    }, 200);
-                                    console.log("[EXEC] " + nomeBotao);
-                                } else if (tipo === "loop") {
-                                    // Efeito Loop: Alterna entre ligado (verde) e desligado (escuro)
-                                    isOn = !isOn;
-                                    btnBg.setColor(Color.parseColor(isOn ? CONF.corAtivo : CONF.corInativo));
-                                    console.log(isOn ? "[ON] " + nomeBotao : "[OFF] " + nomeBotao);
-                                }
-                            }
-                        }
-                    }).$new());
-                    
-                    rowLayout.addView(btnHack);
-
-                    // --- O Botão do Olho (Atalho) ---
-                    const btnOlho = classLoader.TextView.$new(mainActivity);
-                    btnOlho.setText(classLoader.String.$new(" 👁️ ")); 
-                    btnOlho.setTextColor(Color.GRAY.value);
-                    btnOlho.setGravity(Gravity.CENTER.value);
-                    btnOlho.setTextSize(16.0);
-                    
-                    const btnOlhoParams = classLoader.LinearLayout_LayoutParams.$new(-2, -1);
-                    btnOlhoParams.leftMargin.value = 15;
-                    btnOlho.setLayoutParams(btnOlhoParams);
-                    rowLayout.addView(btnOlho);
-
-                    let atalhoFlutuanteAtivo = null; 
-                    btnOlho.setOnClickListener(Java.registerClass({
-                        name: "com.graal.OlhoClick_" + Math.random().toString(36).substr(2),
-                        implements: [Java.use("android.view.View$OnClickListener")],
-                        methods: {
-                            onClick: function (v) {
-                                if (atalhoFlutuanteAtivo == null) {
-                                    btnOlho.setText(classLoader.String.$new(" 🟢 ")); 
-                                    atalhoFlutuanteAtivo = spawnAtalhoFlutuante(nomeBotao);
-                                } else {
-                                    btnOlho.setText(classLoader.String.$new(" 👁️ ")); 
-                                    rootLayout.removeView(atalhoFlutuanteAtivo);
-                                    atalhoFlutuanteAtivo = null;
-                                }
-                            }
-                        }
-                    }).$new());
-
-                    optionsContainer.addView(rowLayout);
-                }
-
-                // Injetando testes com tipos diferentes para você ver o efeito visual
-                adicionarBotaoTeste("🎯 Curar Agora", "click"); // Pisca e some
-                adicionarBotaoTeste("🛡️ Invencível", "loop");  // Liga/Desliga
-                adicionarBotaoTeste("🏃‍♂️ Super Velocidade", "loop");
-                adicionarBotaoTeste("💥 Lançar Bomba", "click");
-                adicionarBotaoTeste("👁️ Ver Inimigos", "loop");
-                adicionarBotaoTeste("💀 Auto-Kill", "loop");
-
-                // ========================================================================
-                // 5. LÓGICA DE ARRASTAR O MENU PRINCIPAL
-                // ========================================================================
-                let initialX = 0, initialY = 0, initialTouchX = 0, initialTouchY = 0;
-
-                floatIcon.setOnTouchListener(Java.registerClass({
-                    name: "com.graal.DragIcon_" + Math.random().toString(36).substr(2),
-                    implements: [classLoader.View_OnTouchListener],
-                    methods: {
-                        onTouch: function (v, event) {
-                            const action = event.getAction();
-                            if (action === MotionEvent.ACTION_DOWN.value) {
-                                initialX = containerParams.leftMargin.value; initialY = containerParams.topMargin.value;
-                                initialTouchX = event.getRawX(); initialTouchY = event.getRawY();
-                                return true;
-                            } else if (action === MotionEvent.ACTION_MOVE.value) {
-                                let newX = initialX + Math.round(event.getRawX() - initialTouchX);
-                                let newY = initialY + Math.round(event.getRawY() - initialTouchY);
-                                if (newX < 0) newX = 0; if (newY < 0) newY = 0;
-                                if (newX > screenWidth - CONF.iconeTamanho) newX = screenWidth - CONF.iconeTamanho;
-                                if (newY > screenHeight - CONF.iconeTamanho - 50) newY = screenHeight - CONF.iconeTamanho - 50;
-                                containerParams.leftMargin.value = newX; containerParams.topMargin.value = newY;
-                                dragContainer.setLayoutParams(containerParams);
-                                return true;
-                            } else if (action === MotionEvent.ACTION_UP.value) {
-                                let diffX = Math.abs(event.getRawX() - initialTouchX); let diffY = Math.abs(event.getRawY() - initialTouchY);
-                                if (diffX < 15 && diffY < 15) {
-                                    const isVisible = menuLayout.getVisibility() === View.VISIBLE.value;
-                                    menuLayout.setVisibility(isVisible ? View.GONE.value : View.VISIBLE.value);
-                                } return true;
-                            } return false;
-                        }
-                    }
-                }).$new());
-
-                // ========================================================================
-                // 6. INJEÇÃO FINAL NA TELA
-                // ========================================================================
-                dragContainer.addView(floatIcon);
-                dragContainer.addView(menuLayout);
-                rootLayout.addView(dragContainer);
-
-                const rootParams = classLoader.FrameLayout_LayoutParams.$new(-1, -1);
-                mainActivity.addContentView(rootLayout, rootParams);
-                
-                console.log("[MOTOR] Visual Loader Pronto!");
-
-            } catch (e) {
-                console.log("[MOTOR] Erro na injeção da UI: " + e);
-            }
+        mod.enumerateExports().forEach(e => {
+            if (e.name.includes("TGraalVar") && e.name.includes("setVarValue")) addrSetVar = e.address;
+            if (e.name === "_ZN7TClient19getGlobalPlayerByIDEi") addrGetPlayer = e.address;
+            if (e.name === "_ZN7TClient20getDeletedPlayerByIDEi") addrDeletePlayer = e.address;
+            if (e.name === "activeplayer") addrActiveGlobal = e.address;
+            if (e.name === "_ZN13TServerPlayerD1Ev" || e.name === "_ZN13TServerPlayerD2Ev") addrDestructor = e.address;
         });
-    });
-}, 8000);
+
+        const setVarValue = new NativeFunction(addrSetVar, "void", ["pointer", "pointer"]);
+        function cleanPtr(p) { return ptr(p).and(ptr("0x00007FFFFFFFFFFF")); }
+
+        let activePlayerPtr = ptr(0);
+        try { activePlayerPtr = cleanPtr(addrActiveGlobal.readPointer()); } catch(e) {}
+
+        let currentAlpha = "1.0";
+        let currentZoom = "1.0";
+        let playerList = new Map(); 
+        const accRegex = /^(pc\:|graal\d+|guest.*)/;
+
+        // =========================================================
+        // 2. FUNÇÃO DE TOAST (ANDROID NATIVO)
+        // =========================================================
+        function showAndroidToast(text) {
+            Java.perform(() => {
+                Java.scheduleOnMainThread(() => {
+                    const context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
+                    const toast = Java.use("android.widget.Toast");
+                    const string = Java.use("java.lang.String");
+                    toast.makeText(context, string.$new(text), 0).show();
+                });
+            });
+        }
+
+        // Vigiador de Admins para o Toast (roda a cada 5 segundos para não travar o jogo)
+        setInterval(() => {
+            let adminsPresentes = [];
+            playerList.forEach((isAdmin, pStr) => {
+                if (isAdmin) {
+                    const pPtr = ptr(pStr);
+                    // Pega o Nick atualizado (Offset 664 que confirmamos antes)
+                    const nick = readTString(pPtr.add(664));
+                    adminsPresentes.push(nick);
+                }
+            });
+
+            if (adminsPresentes.length > 0) {
+                showAndroidToast("⚠️ ADM PRESENTE: " + adminsPresentes.join(", "));
+            }
+        }, 5000);
+
+        // =========================================================
+        // 3. FUNÇÕES AUXILIARES E COMANDOS
+        // =========================================================
+        function readTString(address) {
+            try {
+                if (!address || address.isNull()) return "---";
+                const pstr = address.readPointer();
+                if (!pstr || pstr.isNull()) return "---";
+                const cPtr = cleanPtr(pstr);
+                const len = cPtr.readInt();
+                if (len > 0 && len < 100) return cPtr.add(8).readCString(len);
+            } catch (e) {}
+            return "---";
+        }
+
+        function removePlayer(ptrStr) {
+            if (playerList.has(ptrStr)) {
+                playerList.delete(ptrStr);
+            }
+        }
+
+        function forceCommand(playerPtr, command) {
+            try {
+                const p = cleanPtr(playerPtr);
+                if (p.isNull()) return;
+                let tstring_ptr = p.add(0x318).readPointer();
+                if (tstring_ptr.isNull()) return;
+                let cTstring = cleanPtr(tstring_ptr);
+                cTstring.add(8).writeUtf8String(command);
+                cTstring.writeInt(command.length);
+                setVarValue(p, p.add(0x318));
+            } catch (e) {
+                removePlayer(playerPtr.toString());
+            }
+        }
+
+        root.refreshAll = function() {
+            let players = Array.from(playerList.keys());
+            players.forEach((pStr, index) => {
+                setTimeout(() => {
+                    if (!playerList.has(pStr)) return;
+                    const pPtr = ptr(pStr);
+                    const isAdmin = playerList.get(pStr);
+                    let targetA = isAdmin ? "1.0" : currentAlpha;
+                    let targetZ = isAdmin ? "1.4" : currentZoom;
+                    Script.nextTick(() => {
+                        forceCommand(pPtr, "alpha=" + targetA);
+                        forceCommand(pPtr, "zoom=" + targetZ);
+                    });
+                }, index * 30);
+            });
+        };
+
+        root.setGlobal = function(a, z) {
+            currentAlpha = a.toString();
+            currentZoom = z.toString();
+            root.refreshAll();
+        };
+
+        // =========================================================
+        // 4. HOOKS
+        // =========================================================
+        if (addrDestructor) {
+            Interceptor.attach(addrDestructor, {
+                onEnter: function(args) { removePlayer(cleanPtr(args[0]).toString()); }
+            });
+        }
+
+        if (addrDeletePlayer) {
+            Interceptor.attach(addrDeletePlayer, {
+                onLeave: function(retval) { if (!retval.isNull()) removePlayer(cleanPtr(retval).toString()); }
+            });
+        }
+
+        if (addrGetPlayer) {
+            Interceptor.attach(addrGetPlayer, {
+                onLeave: function (retval) {
+                    if (retval.isNull()) return;
+                    const p = cleanPtr(retval);
+                    if (p.equals(activePlayerPtr)) return;
+                    const pStr = p.toString();
+                    if (!playerList.has(pStr)) {
+                        const account = readTString(p.add(936)).toLowerCase();
+                        if (account === "---") return;
+                        const isAdmin = !accRegex.test(account);
+                        playerList.set(pStr, isAdmin);
+                        if (isAdmin) {
+                            console.log("[🚨] ADMIN DETECTADO: " + account);
+                            showAndroidToast("🚨 ALERTA: ADMIN " + account + " ENTROU!");
+                        }
+                        root.refreshAll();
+                    }
+                }
+            });
+        }
+
+        console.log("[SUCCESS] Radar Híbrido com Alerta Toast ativo.");
+
+    }, 8000);
+})(this);
