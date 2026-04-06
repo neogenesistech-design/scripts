@@ -1,114 +1,81 @@
-// Script hospedado na URL
-(function(root) {
-    console.log("[*] Iniciando Script de Radar...");
-    
-    Java.perform(() => {
-        const libName = "libqplay.so";
-        
-        // Loop para esperar a lib carregar caso o jogo seja lento
-        let mod = null;
-        for (let i = 0; i < 20; i++) {
-            mod = Process.findModuleByName(libName);
-            if (mod) break;
-            Thread.sleep(1); 
-        }
+(function() {
+    // Usamos um delay menor para não perder o timing da lib
+    setTimeout(() => {
+        const mod = Process.findModuleByName("libqplay.so");
+        if (!mod) return;
 
-        if (!mod) {
-            console.log("[!] Erro: libqplay.so não encontrada no processo.");
+        console.log("[🛡️] Radar Mobile Ativo");
+
+        // Cache de endereços para não re-buscar
+        const addrSetVar = mod.findExportByName("_ZN9TGraalVar11setVarValueEPS_"); // Nome mangled comum
+        const addrGetPlayer = mod.findExportByName("_ZN7TClient19getGlobalPlayerByIDEi");
+        const addrDestructor = mod.findExportByName("_ZN13TServerPlayerD1Ev");
+
+        if (!addrGetPlayer || !addrSetVar) {
+            console.log("[!] Falha ao localizar funções essenciais.");
             return;
         }
-
-        // --- BUSCA DE EXPORTS ---
-        let addrSetVar = null, addrGetPlayer = null, addrDeletePlayer = null, addrActiveGlobal = null, addrDestructor = null;
-
-        mod.enumerateExports().forEach(e => {
-            if (e.name.includes("TGraalVar") && e.name.includes("setVarValue")) addrSetVar = e.address;
-            if (e.name === "_ZN7TClient19getGlobalPlayerByIDEi") addrGetPlayer = e.address;
-            if (e.name === "_ZN7TClient20getDeletedPlayerByIDEi") addrDeletePlayer = e.address;
-            if (e.name === "activeplayer") addrActiveGlobal = e.address;
-            if (e.name === "_ZN13TServerPlayerD1Ev" || e.name === "_ZN13TServerPlayerD2Ev") addrDestructor = e.address;
-        });
-
-        if (!addrSetVar) return;
 
         const setVarValue = new NativeFunction(addrSetVar, "void", ["pointer", "pointer"]);
         const cleanPtr = (p) => ptr(p).and(ptr("0x00007FFFFFFFFFFF"));
         const accRegex = /^(pc\:|graal\d+|guest.*)/;
-        let playerList = new Map();
-        let currentAlpha = "1.0", currentZoom = "1.0";
+        
+        // Usamos um objeto simples em vez de Map para economizar memória no gadget
+        const players = {}; 
 
-        const readTString = (address) => {
+        function readTString(address) {
             try {
-                if (!address || address.isNull()) return "---";
                 const pstr = address.readPointer();
-                if (!pstr || pstr.isNull()) return "---";
+                if (pstr.isNull()) return "---";
                 const cPtr = cleanPtr(pstr);
                 const len = cPtr.readInt();
-                if (len > 0 && len < 100) return cPtr.add(8).readCString(len);
+                if (len > 0 && len < 50) return cPtr.add(8).readCString(len);
             } catch (e) {}
             return "---";
-        };
+        }
 
-        const showAndroidToast = (text) => {
-            Java.scheduleOnMainThread(() => {
-                const context = Java.use("android.app.ActivityThread").currentApplication().getApplicationContext();
-                Java.use("android.widget.Toast").makeText(context, Java.use("java.lang.String").$new(text), 0).show();
-            });
-        };
-
-        const forceCommand = (playerPtr, command) => {
+        function applyEffect(pPtr, isAdmin) {
             try {
-                const p = cleanPtr(playerPtr);
-                let tstring_ptr = p.add(0x318).readPointer();
+                const p = cleanPtr(pPtr);
+                const tstring_ptr = p.add(0x318).readPointer();
                 if (tstring_ptr.isNull()) return;
-                let cTstring = cleanPtr(tstring_ptr);
-                cTstring.add(8).writeUtf8String(command);
-                cTstring.writeInt(command.length);
+                
+                const cmd = isAdmin ? "alpha=1.0\0zoom=1.4\0" : "alpha=0.5\0zoom=1.0\0";
+                const cTstring = cleanPtr(tstring_ptr);
+                cTstring.add(8).writeUtf8String(cmd);
+                cTstring.writeInt(cmd.length);
+                
                 setVarValue(p, p.add(0x318));
-            } catch (e) {}
-        };
+            } catch(e) {}
+        }
 
-        root.refreshAll = function() {
-            playerList.forEach((isAdmin, pStr) => {
-                const pPtr = ptr(pStr);
-                let targetA = isAdmin ? "1.0" : currentAlpha;
-                let targetZ = isAdmin ? "1.4" : currentZoom;
-                forceCommand(pPtr, "alpha=" + targetA);
-                forceCommand(pPtr, "zoom=" + targetZ);
-            });
-        };
-
-        // --- HOOKS ---
+        // Hook principal - Otimizado para não processar strings toda vez
         Interceptor.attach(addrGetPlayer, {
             onLeave: function(retval) {
                 if (retval.isNull()) return;
-                const p = cleanPtr(retval);
-                const pStr = p.toString();
-                if (!playerList.has(pStr)) {
-                    const account = readTString(p.add(936)).toLowerCase();
-                    if (account === "---") return;
-                    const isAdmin = !accRegex.test(account);
-                    playerList.set(pStr, isAdmin);
-                    if (isAdmin) showAndroidToast("🚨 ADMIN: " + account);
-                    root.refreshAll();
+                const pStr = cleanPtr(retval).toString();
+                
+                if (players[pStr] === undefined) {
+                    const acc = readTString(cleanPtr(retval).add(936)).toLowerCase();
+                    if (acc === "---") return;
+                    
+                    const isAdmin = !accRegex.test(acc);
+                    players[pStr] = isAdmin;
+                    
+                    if (isAdmin) console.log("🚨 ADMIN: " + acc);
+                    applyEffect(retval, isAdmin);
                 }
             }
         });
 
+        // Limpeza automática ao sair da tela
         if (addrDestructor) {
             Interceptor.attach(addrDestructor, {
-                onEnter: function(args) { playerList.delete(cleanPtr(args[0]).toString()); }
+                onEnter: function(args) {
+                    delete players[cleanPtr(args[0]).toString()];
+                }
             });
         }
 
-        setInterval(() => {
-            let admins = [];
-            playerList.forEach((isAdmin, pStr) => {
-                if (isAdmin) admins.push(readTString(ptr(pStr).add(664)));
-            });
-            if (admins.length > 0) showAndroidToast("⚠️ ADMS: " + admins.join(", "));
-        }, 8000);
-
-        showAndroidToast("✅ Radar Injetado!");
-    });
-})(this);
+    }, 5000); // 5 segundos costumam ser suficientes se o loader já demora
+})();
