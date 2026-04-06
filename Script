@@ -162,7 +162,7 @@
         }
 
         console.log("[SUCCESS] Radar Híbrido com Alerta Toast ativo.");
-        howAndroidToast("⚠️ ADM PRESENTE: ");
+        showAndroidToast("sucesso");
 
     }, 15000);
 })(this);
