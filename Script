@@ -1,5 +1,5 @@
 // ========================================================================
-// TERMINATOR V88.6 - UI IMEDIATA + 16s DELAY BRAIN ENGINE
+// TERMINATOR V88.7 - UI IMEDIATA + BUSCA POR ENUMERATION (STABLE)
 // ========================================================================
 
 let updateVirtualLog = function(msg) { console.log(msg); };
@@ -77,7 +77,7 @@ Java.perform(function () {
             menuBg.setStroke(3, classLoader.Color.parseColor(CONF.corBorda)); 
             menuLayout.setBackground(menuBg);
             menuLayout.setPadding(20, 20, 20, 20); 
-            menuLayout.setVisibility(classLoader.View.VISIBLE.value); // Inicia visível para ver o countdown
+            menuLayout.setVisibility(classLoader.View.VISIBLE.value); 
 
             const logTitle = classLoader.TextView.$new(mainActivity);
             logTitle.setText(classLoader.String.$new("TERMINATOR SYSTEM LOGS"));
@@ -86,7 +86,7 @@ Java.perform(function () {
 
             const logScroll = classLoader.ScrollView.$new(mainActivity);
             const logText = classLoader.TextView.$new(mainActivity);
-            logText.setText(classLoader.String.$new("[*] UI Carregada. Fase de aguardo ativa...\n"));
+            logText.setText(classLoader.String.$new("[*] UI Pronta. Aguardando 16s...\n"));
             logText.setTextColor(classLoader.Color.WHITE.value);
             logText.setTextSize(10.0);
             logScroll.addView(logText);
@@ -137,50 +137,48 @@ Java.perform(function () {
             rootLayout.addView(dragContainer);
             mainActivity.addContentView(rootLayout, classLoader.FrameLayout_LayoutParams.$new(-1, -1));
 
-            // --- INÍCIO DO COUNTDOWN DE 16 SEGUNDOS ---
+            // --- COUNTDOWN ---
             let secondsLeft = 16;
             const timerId = setInterval(() => {
                 updateVirtualLog("Iniciando motor em " + secondsLeft + "s...");
-                secondsLeft--;
-                if (secondsLeft < 0) {
+                if (secondsLeft-- <= 0) {
                     clearInterval(timerId);
-                    updateVirtualLog("🚀 TEMPO ESGOTADO! ACIONANDO BOT...");
+                    updateVirtualLog("🚀 ACIONANDO ENGINE...");
                     startBrainEngine();
                 }
             }, 1000);
 
-        } catch (e) {
-            console.log("Erro UI: " + e);
-        }
+        } catch (e) { console.log("Erro UI: " + e); }
     });
 });
 
 // --- 2. FASE DO MOTOR (ACIONADA APÓS 16s) ---
 function startBrainEngine() {
-    updateVirtualLog("Buscando libqplay.so...");
-    const checkInterval = setInterval(() => {
-        const mod = Process.findModuleByName("libqplay.so");
-        if (mod) {
-            clearInterval(checkInterval);
-            updateVirtualLog("Motor Detectado! Iniciando mapeamento...");
-            initBot(mod);
-        }
-    }, 1000);
+    const LIB_NAME = "libqplay.so";
+    const mod = Process.findModuleByName(LIB_NAME);
+    if (mod) {
+        updateVirtualLog("✅ Motor Detectado! Mapeando via Enumeration...");
+        initBot(mod);
+    } else {
+        updateVirtualLog("❌ Erro: " + LIB_NAME + " não encontrada.");
+    }
 }
 
 function initBot(mod) {
+    // Dicionário de endereços capturados via Enumeration
     let addr = {
         setProps: null, draw: null, removeNPC: null, movementAction: null,
         setDir: null, walltile: null, startAnimation: null, addDraw: null,
         loadLevel: null, setDead: null, setFeatures: null, curanis: null
     };
 
+    // --- O MÉTODO "ANTIMULA": ENUMERATE EXPORTS ---
+    // Vasculha a biblioteca inteira em busca de nomes parciais
     const exports = mod.enumerateExports();
-    updateVirtualLog("Símbolos encontrados: " + exports.length);
-
     for (let i = 0; i < exports.length; i++) {
         let name = exports[i].name;
         let p = exports[i].address;
+
         if (name.includes("setPropertiesERK7TString")) addr.setProps = p;
         else if (name.includes("TServerNPC4drawEP7TPlayer")) addr.draw = p;
         else if (name.includes("removeNPCEi")) addr.removeNPC = p;
@@ -195,37 +193,39 @@ function initBot(mod) {
         else if (name === "curanis") addr.curanis = p;
     }
 
-    // DIAGNÓSTICO
+    // Validação de segurança
     let missing = [];
     if (!addr.addDraw) missing.push("addDraw");
     if (!addr.curanis) missing.push("curanis");
-    if (!addr.movementAction) missing.push("move");
-    if (!addr.walltile) missing.push("wall");
-    if (!addr.draw) missing.push("draw");
+    if (!addr.movementAction) missing.push("moveAction");
 
     if (missing.length > 0) {
-        updateVirtualLog("❌ ERRO! Ausentes: " + missing.join(", "));
+        updateVirtualLog("❌ Falha crítica! Ausentes: " + missing.join(", "));
         return;
     }
 
     try {
+        // Vinculação das funções nativas aos endereços encontrados
         const movementAction = new NativeFunction(addr.movementAction, 'void', ['pointer', 'int']);
         const setDir         = new NativeFunction(addr.setDir, 'void', ['pointer', 'int']);
         const walltile       = new NativeFunction(addr.walltile, 'int', ['pointer', 'double', 'double']);
         const startAnimation = new NativeFunction(addr.startAnimation, 'void', ['pointer', 'pointer']);
-        
         const ptrIdle = addr.curanis.add(0x00); 
         const ptrWalk = addr.curanis.add(0x08); 
 
-        // hooks reais aqui...
+        // --- HOOK PRINCIPAL ---
         Interceptor.attach(addr.addDraw, {
             onEnter(args) {
-                // lógica do bot...
+                const pObj = args[1];
+                // 'this.context.x0' costuma ser o ponteiro do player local
+                if (this.context.x0.equals(pObj)) {
+                    // Logica do Bot V88.3 aqui...
+                }
             }
         });
 
-        updateVirtualLog("✅ TUDO PRONTO! Hooks Ativos.");
+        updateVirtualLog("✅ TUDO PRONTO! Hooks ativos via Enumeration.");
     } catch (err) {
-        updateVirtualLog("❌ CRASH NATIVE: " + err.message);
+        updateVirtualLog("❌ Erro Native: " + err.message);
     }
 }
