@@ -168,7 +168,7 @@ setTimeout(() => {
             }
         });
     });
-}, 2000);
+}, 8000);
 
 // ========================================================================
 // MOTOR PRINCIPAL DO BOT (V88.3 INTEGRADO COM ENUMERATE EXPORTS)
