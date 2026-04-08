@@ -1,12 +1,10 @@
 // ========================================================================
-// TERMINATOR V88.8 - UI COMPLETA + OFFSET TESTE (LOG RESTAURADO)
+// TERMINATOR V88.7 - UI ORIGINAL + OFFSET FIX
 // ========================================================================
 
 let updateVirtualLog = function(msg) { console.log(msg); };
 
-// --- UI ---
 Java.perform(function () {
-
     function getClassLoader() {
         return {
             Gravity: Java.use("android.view.Gravity"),
@@ -27,10 +25,13 @@ Java.perform(function () {
         };
     }
 
-    function getMainActivity(c) { 
-        const at = c.ActivityThread.sCurrentActivityThread.value;
-        const rec = Java.cast(at.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
-        return rec.activity.value;
+    function getMainActivity(classLoader) { 
+        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
+        const activityClientRecord = Java.cast(
+            activityThread.mActivities.value.valueAt(0),
+            Java.use("android.app.ActivityThread$ActivityClientRecord")
+        );
+        return activityClientRecord.activity.value;
     }
 
     Java.scheduleOnMainThread(function () {
@@ -41,102 +42,131 @@ Java.perform(function () {
             const screenHeight = metrics.heightPixels.value;
 
             const CONF = {
-                largura: 600,
-                altura: Math.round(screenHeight * 0.45)
+                letraIcone: "T",
+                menuLargura: 600,
+                alturaMenu: Math.round(screenHeight * 0.45),
+                corFundoMenu: "#F2050505",
+                corBorda: "#00FF00"
             };
 
-            const root = c.FrameLayout.$new(act);
-            const container = c.LinearLayout.$new(act);
-            container.setOrientation(c.LinearLayout.VERTICAL.value);
+            const rootLayout = c.FrameLayout.$new(act);
+            const dragContainer = c.LinearLayout.$new(act);
+            dragContainer.setOrientation(c.LinearLayout.VERTICAL.value);
+            
+            const containerParams = c.FrameLayout_LayoutParams.$new(-2, -2);
+            containerParams.gravity.value = c.Gravity.TOP.value | c.Gravity.LEFT.value;
+            containerParams.leftMargin.value = 50;
+            containerParams.topMargin.value = 300;
+            dragContainer.setLayoutParams(containerParams);
 
-            const params = c.FrameLayout_LayoutParams.$new(-2, -2);
-            params.gravity.value = c.Gravity.TOP.value | c.Gravity.LEFT.value;
-            params.leftMargin.value = 50;
-            params.topMargin.value = 300;
-            container.setLayoutParams(params);
+            const floatIcon = c.TextView.$new(act);
+            floatIcon.setText(c.String.$new(CONF.letraIcone));
+            floatIcon.setTextColor(c.Color.WHITE.value);
+            floatIcon.setTextSize(22.0); 
+            floatIcon.setGravity(c.Gravity.CENTER.value);
 
-            // botão
-            const icon = c.TextView.$new(act);
-            icon.setText(c.String.$new("T"));
-            icon.setTextColor(c.Color.WHITE.value);
-            icon.setTextSize(22);
-            icon.setGravity(c.Gravity.CENTER.value);
+            const iconBg = c.GradientDrawable.$new();
+            iconBg.setShape(1); 
+            iconBg.setColor(c.Color.parseColor("#CC000000")); 
+            iconBg.setStroke(3, c.Color.parseColor(CONF.corBorda)); 
+            floatIcon.setBackground(iconBg);
 
-            const bg = c.GradientDrawable.$new();
-            bg.setShape(1);
-            bg.setColor(c.Color.parseColor("#AA000000"));
-            bg.setStroke(3, c.Color.parseColor("#00FF00"));
-            icon.setBackground(bg);
+            dragContainer.addView(floatIcon, c.LinearLayout_LayoutParams.$new(100, 100));
 
-            container.addView(icon, c.LinearLayout_LayoutParams.$new(100, 100));
+            const menuLayout = c.LinearLayout.$new(act);
+            menuLayout.setOrientation(c.LinearLayout.VERTICAL.value);
 
-            // MENU
-            const menu = c.LinearLayout.$new(act);
-            menu.setOrientation(c.LinearLayout.VERTICAL.value);
+            const menuBg = c.GradientDrawable.$new();
+            menuBg.setCornerRadius(20.0); 
+            menuBg.setColor(c.Color.parseColor(CONF.corFundoMenu)); 
+            menuBg.setStroke(3, c.Color.parseColor(CONF.corBorda)); 
+            menuLayout.setBackground(menuBg);
 
-            const bgMenu = c.GradientDrawable.$new();
-            bgMenu.setCornerRadius(20);
-            bgMenu.setColor(c.Color.parseColor("#F2050505"));
-            bgMenu.setStroke(3, c.Color.parseColor("#00FF00"));
-            menu.setBackground(bgMenu);
+            menuLayout.setPadding(20, 20, 20, 20); 
+            menuLayout.setVisibility(c.View.VISIBLE.value); 
 
-            const title = c.TextView.$new(act);
-            title.setText(c.String.$new("TERMINATOR LOG"));
-            title.setTextColor(c.Color.parseColor("#00FF00"));
-            menu.addView(title);
+            const logTitle = c.TextView.$new(act);
+            logTitle.setText(c.String.$new("TERMINATOR SYSTEM LOGS"));
+            logTitle.setTextColor(c.Color.parseColor(CONF.corBorda));
+            menuLayout.addView(logTitle);
 
-            const scroll = c.ScrollView.$new(act);
+            const logScroll = c.ScrollView.$new(act);
             const logText = c.TextView.$new(act);
 
-            logText.setText(c.String.$new("[*] Iniciando...\n"));
+            logText.setText(c.String.$new("[*] UI Pronta...\n"));
             logText.setTextColor(c.Color.WHITE.value);
-            logText.setTextSize(10);
+            logText.setTextSize(10.0);
 
-            scroll.addView(logText);
-            menu.addView(scroll, c.LinearLayout_LayoutParams.$new(-1, CONF.altura));
+            logScroll.addView(logText);
+            menuLayout.addView(logScroll, c.LinearLayout_LayoutParams.$new(-1, CONF.alturaMenu));
 
-            container.addView(menu, c.LinearLayout_LayoutParams.$new(CONF.largura, -2));
-            root.addView(container);
-            act.addContentView(root, c.FrameLayout_LayoutParams.$new(-1, -1));
-
-            // LOG REAL (MULTILINE)
             updateVirtualLog = function(msg) {
                 Java.scheduleOnMainThread(() => {
                     let current = logText.getText().toString();
                     let lines = current.split('\n');
 
-                    if (lines.length > 30) lines.shift();
+                    if (lines.length > 25) lines.shift();
 
                     lines.push("[#] " + msg);
-
                     logText.setText(c.String.$new(lines.join('\n')));
 
-                    scroll.post(Java.registerClass({
+                    logScroll.post(Java.registerClass({
                         name: "Scroll_" + Math.random(),
                         implements: [Java.use("java.lang.Runnable")],
                         methods: {
-                            run: function() {
-                                scroll.fullScroll(130);
-                            }
+                            run: function() { logScroll.fullScroll(130); }
                         }
                     }).$new());
                 });
             };
 
+            // DRAG ORIGINAL (RESTAURADO)
+            let iX=0, iY=0, itX=0, itY=0;
+
+            floatIcon.setOnTouchListener(Java.registerClass({
+                name: "DragHandler",
+                implements: [c.View_OnTouchListener],
+                methods: {
+                    onTouch: function (v, event) {
+                        const action = event.getAction();
+
+                        if (action === c.MotionEvent.ACTION_DOWN.value) {
+                            iX = containerParams.leftMargin.value;
+                            iY = containerParams.topMargin.value;
+                            itX = event.getRawX();
+                            itY = event.getRawY();
+                        } 
+                        else if (action === c.MotionEvent.ACTION_MOVE.value) {
+                            containerParams.leftMargin.value = iX + Math.round(event.getRawX() - itX);
+                            containerParams.topMargin.value = iY + Math.round(event.getRawY() - itY);
+                            dragContainer.setLayoutParams(containerParams);
+                        } 
+                        else if (action === c.MotionEvent.ACTION_UP.value) {
+                            if (Math.abs(event.getRawX() - itX) < 15) {
+                                const vis = menuLayout.getVisibility() === c.View.VISIBLE.value;
+                                menuLayout.setVisibility(vis ? c.View.GONE.value : c.View.VISIBLE.value);
+                            }
+                        }
+                        return true;
+                    }
+                }
+            }).$new());
+
+            dragContainer.addView(menuLayout, c.LinearLayout_LayoutParams.$new(CONF.menuLargura, -2));
+            rootLayout.addView(dragContainer);
+            act.addContentView(rootLayout, c.FrameLayout_LayoutParams.$new(-1, -1));
+
             // START
-            setTimeout(() => {
-                startBrainEngine();
-            }, 3000);
+            setTimeout(() => startBrainEngine(), 3000);
 
         } catch (e) {
-            console.log(e);
+            console.log("Erro UI: " + e);
         }
     });
 });
 
 // --- ENGINE ---
 function startBrainEngine() {
-
     const mod = Process.findModuleByName("libqplay.so");
 
     if (!mod) {
@@ -161,9 +191,6 @@ function initBot(mod) {
     updateVirtualLog("📍 walltile: " + addr);
 
     try {
-
-        const walltile = new NativeFunction(addr, 'int', ['pointer', 'double', 'double']);
-
         Interceptor.attach(addr, {
             onEnter(args) {
                 updateVirtualLog("🔥 walltile chamada");
