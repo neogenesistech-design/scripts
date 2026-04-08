@@ -1,5 +1,5 @@
 // ========================================================================
-// TERMINATOR V88.7 - UI ORIGINAL + OFFSET FIX
+// TERMINATOR V88.7 - UI ORIGINAL + WALLTILE HOOK FIXED
 // ========================================================================
 
 let updateVirtualLog = function(msg) { console.log(msg); };
@@ -25,13 +25,13 @@ Java.perform(function () {
         };
     }
 
-    function getMainActivity(classLoader) { 
-        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-        const activityClientRecord = Java.cast(
-            activityThread.mActivities.value.valueAt(0),
+    function getMainActivity(c) { 
+        const at = c.ActivityThread.sCurrentActivityThread.value;
+        const rec = Java.cast(
+            at.mActivities.value.valueAt(0),
             Java.use("android.app.ActivityThread$ActivityClientRecord")
         );
-        return activityClientRecord.activity.value;
+        return rec.activity.value;
     }
 
     Java.scheduleOnMainThread(function () {
@@ -53,22 +53,22 @@ Java.perform(function () {
             const dragContainer = c.LinearLayout.$new(act);
             dragContainer.setOrientation(c.LinearLayout.VERTICAL.value);
             
-            const containerParams = c.FrameLayout_LayoutParams.$new(-2, -2);
-            containerParams.gravity.value = c.Gravity.TOP.value | c.Gravity.LEFT.value;
-            containerParams.leftMargin.value = 50;
-            containerParams.topMargin.value = 300;
-            dragContainer.setLayoutParams(containerParams);
+            const params = c.FrameLayout_LayoutParams.$new(-2, -2);
+            params.gravity.value = c.Gravity.TOP.value | c.Gravity.LEFT.value;
+            params.leftMargin.value = 50;
+            params.topMargin.value = 300;
+            dragContainer.setLayoutParams(params);
 
             const floatIcon = c.TextView.$new(act);
             floatIcon.setText(c.String.$new(CONF.letraIcone));
             floatIcon.setTextColor(c.Color.WHITE.value);
-            floatIcon.setTextSize(22.0); 
+            floatIcon.setTextSize(22.0);
             floatIcon.setGravity(c.Gravity.CENTER.value);
 
             const iconBg = c.GradientDrawable.$new();
-            iconBg.setShape(1); 
-            iconBg.setColor(c.Color.parseColor("#CC000000")); 
-            iconBg.setStroke(3, c.Color.parseColor(CONF.corBorda)); 
+            iconBg.setShape(1);
+            iconBg.setColor(c.Color.parseColor("#CC000000"));
+            iconBg.setStroke(3, c.Color.parseColor(CONF.corBorda));
             floatIcon.setBackground(iconBg);
 
             dragContainer.addView(floatIcon, c.LinearLayout_LayoutParams.$new(100, 100));
@@ -77,13 +77,13 @@ Java.perform(function () {
             menuLayout.setOrientation(c.LinearLayout.VERTICAL.value);
 
             const menuBg = c.GradientDrawable.$new();
-            menuBg.setCornerRadius(20.0); 
-            menuBg.setColor(c.Color.parseColor(CONF.corFundoMenu)); 
-            menuBg.setStroke(3, c.Color.parseColor(CONF.corBorda)); 
+            menuBg.setCornerRadius(20.0);
+            menuBg.setColor(c.Color.parseColor(CONF.corFundoMenu));
+            menuBg.setStroke(3, c.Color.parseColor(CONF.corBorda));
             menuLayout.setBackground(menuBg);
 
-            menuLayout.setPadding(20, 20, 20, 20); 
-            menuLayout.setVisibility(c.View.VISIBLE.value); 
+            menuLayout.setPadding(20, 20, 20, 20);
+            menuLayout.setVisibility(c.View.VISIBLE.value);
 
             const logTitle = c.TextView.$new(act);
             logTitle.setText(c.String.$new("TERMINATOR SYSTEM LOGS"));
@@ -105,7 +105,7 @@ Java.perform(function () {
                     let current = logText.getText().toString();
                     let lines = current.split('\n');
 
-                    if (lines.length > 25) lines.shift();
+                    if (lines.length > 60) lines.shift();
 
                     lines.push("[#] " + msg);
                     logText.setText(c.String.$new(lines.join('\n')));
@@ -120,7 +120,7 @@ Java.perform(function () {
                 });
             };
 
-            // DRAG ORIGINAL (RESTAURADO)
+            // DRAG
             let iX=0, iY=0, itX=0, itY=0;
 
             floatIcon.setOnTouchListener(Java.registerClass({
@@ -131,15 +131,15 @@ Java.perform(function () {
                         const action = event.getAction();
 
                         if (action === c.MotionEvent.ACTION_DOWN.value) {
-                            iX = containerParams.leftMargin.value;
-                            iY = containerParams.topMargin.value;
+                            iX = params.leftMargin.value;
+                            iY = params.topMargin.value;
                             itX = event.getRawX();
                             itY = event.getRawY();
                         } 
                         else if (action === c.MotionEvent.ACTION_MOVE.value) {
-                            containerParams.leftMargin.value = iX + Math.round(event.getRawX() - itX);
-                            containerParams.topMargin.value = iY + Math.round(event.getRawY() - itY);
-                            dragContainer.setLayoutParams(containerParams);
+                            params.leftMargin.value = iX + Math.round(event.getRawX() - itX);
+                            params.topMargin.value = iY + Math.round(event.getRawY() - itY);
+                            dragContainer.setLayoutParams(params);
                         } 
                         else if (action === c.MotionEvent.ACTION_UP.value) {
                             if (Math.abs(event.getRawX() - itX) < 15) {
@@ -156,7 +156,6 @@ Java.perform(function () {
             rootLayout.addView(dragContainer);
             act.addContentView(rootLayout, c.FrameLayout_LayoutParams.$new(-1, -1));
 
-            // START
             setTimeout(() => startBrainEngine(), 3000);
 
         } catch (e) {
@@ -165,7 +164,7 @@ Java.perform(function () {
     });
 });
 
-// --- ENGINE ---
+// ENGINE
 function startBrainEngine() {
     const mod = Process.findModuleByName("libqplay.so");
 
@@ -175,18 +174,17 @@ function startBrainEngine() {
     }
 
     updateVirtualLog("✅ BASE: " + mod.base);
-
     initBot(mod);
 }
 
-// --- OFFSET TEST ---
+// HOOK
 function initBot(mod) {
 
     const base = mod.base;
 
-    const OFFSET_WALLTILE = 0x002B04AC;
+    const OFFSET_WALLTILE = 0x002B04B0; // FIXED
 
-    let addr = base.add(OFFSET_WALLTILE);
+    const addr = base.add(OFFSET_WALLTILE);
 
     updateVirtualLog("📍 walltile: " + addr);
 
@@ -194,6 +192,13 @@ function initBot(mod) {
         Interceptor.attach(addr, {
             onEnter(args) {
                 updateVirtualLog("🔥 walltile chamada");
+
+                // leitura segura
+                try {
+                    const x = this.context.d0;
+                    const y = this.context.d1;
+                    updateVirtualLog("📌 pos: " + x + ", " + y);
+                } catch(e){}
             }
         });
 
