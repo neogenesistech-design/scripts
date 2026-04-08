@@ -1,10 +1,10 @@
 // ========================================================================
-// TERMINATOR V88.7 - UI IMEDIATA + BUSCA POR ENUMERATION (STABLE)
+// TERMINATOR V88.7 - UI IMEDIATA + BUSCA POR ENUMERATION (GADGET FIXED)
 // ========================================================================
 
 let updateVirtualLog = function(msg) { console.log(msg); };
 
-// --- 1. FASE VISUAL: DESENHA A UI IMEDIATAMENTE ---
+// --- 1. FASE VISUAL ---
 Java.perform(function () {
     function getClassLoader() {
         return {
@@ -107,7 +107,6 @@ Java.perform(function () {
                 });
             };
 
-            // Drag Handler
             let iX=0, iY=0, itX=0, itY=0;
             floatIcon.setOnTouchListener(Java.registerClass({
                 name: "com.term.DragHandler",
@@ -137,7 +136,6 @@ Java.perform(function () {
             rootLayout.addView(dragContainer);
             mainActivity.addContentView(rootLayout, classLoader.FrameLayout_LayoutParams.$new(-1, -1));
 
-            // --- COUNTDOWN ---
             let secondsLeft = 16;
             const timerId = setInterval(() => {
                 updateVirtualLog("Iniciando motor em " + secondsLeft + "s...");
@@ -152,79 +150,70 @@ Java.perform(function () {
     });
 });
 
-// --- 2. FASE DO MOTOR (ACIONADA APÓS 16s) ---
+// --- MOTOR ---
 function startBrainEngine() {
-    const LIB_NAME = "libqplay.so";
-    const mod = Process.findModuleByName(LIB_NAME);
+    const mod = Process.findModuleByName("libqplay.so");
     if (mod) {
-        updateVirtualLog("✅ Motor Detectado! Mapeando via Enumeration...");
+        updateVirtualLog("✅ Motor Detectado! Mapeando via SYMBOLS...");
         initBot(mod);
     } else {
-        updateVirtualLog("❌ Erro: " + LIB_NAME + " não encontrada.");
+        updateVirtualLog("❌ libqplay.so não encontrada.");
     }
 }
 
 function initBot(mod) {
-    // Dicionário de endereços capturados via Enumeration
     let addr = {
-        setProps: null, draw: null, removeNPC: null, movementAction: null,
-        setDir: null, walltile: null, startAnimation: null, addDraw: null,
-        loadLevel: null, setDead: null, setFeatures: null, curanis: null
+        movementAction: null,
+        setDir: null,
+        walltile: null,
+        startAnimation: null,
+        addDraw: null,
+        curanis: null
     };
 
-    // --- O MÉTODO "ANTIMULA": ENUMERATE EXPORTS ---
-    // Vasculha a biblioteca inteira em busca de nomes parciais
-    const exports = mod.enumerateExports();
-    for (let i = 0; i < exports.length; i++) {
-        let name = exports[i].name;
-        let p = exports[i].address;
+    const symbols = mod.enumerateSymbols();
 
-        if (name.includes("setPropertiesERK7TString")) addr.setProps = p;
-        else if (name.includes("TServerNPC4drawEP7TPlayer")) addr.draw = p;
-        else if (name.includes("removeNPCEi")) addr.removeNPC = p;
-        else if (name.includes("movementActionEi")) addr.movementAction = p;
-        else if (name.includes("setdirEi")) addr.setDir = p;
-        else if (name.includes("walltileEdd")) addr.walltile = p;
-        else if (name.includes("startAnimationERK7TString")) addr.startAnimation = p;
-        else if (name.includes("addDrawObjectEP12TLevelObject")) addr.addDraw = p;
-        else if (name.includes("loadStartLevelEb")) addr.loadLevel = p;
-        else if (name.includes("setDeadEb")) addr.setDead = p;
-        else if (name.includes("setEnabledFeaturesEi")) addr.setFeatures = p;
-        else if (name === "curanis") addr.curanis = p;
+    for (let i = 0; i < symbols.length; i++) {
+        let name = symbols[i].name;
+        let p = symbols[i].address;
+
+        if (name.indexOf("movementAction") !== -1) addr.movementAction = p;
+        else if (name.indexOf("setdir") !== -1) addr.setDir = p;
+        else if (name.indexOf("walltile") !== -1) addr.walltile = p;
+        else if (name.indexOf("startAnimation") !== -1) addr.startAnimation = p;
+        else if (name.indexOf("addDrawObject") !== -1) addr.addDraw = p;
+        else if (name.indexOf("curanis") !== -1) addr.curanis = p;
     }
 
-    // Validação de segurança
     let missing = [];
     if (!addr.addDraw) missing.push("addDraw");
     if (!addr.curanis) missing.push("curanis");
     if (!addr.movementAction) missing.push("moveAction");
 
     if (missing.length > 0) {
-        updateVirtualLog("❌ Falha crítica! Ausentes: " + missing.join(", "));
+        updateVirtualLog("❌ Ausentes: " + missing.join(", "));
         return;
     }
 
     try {
-        // Vinculação das funções nativas aos endereços encontrados
         const movementAction = new NativeFunction(addr.movementAction, 'void', ['pointer', 'int']);
         const setDir         = new NativeFunction(addr.setDir, 'void', ['pointer', 'int']);
         const walltile       = new NativeFunction(addr.walltile, 'int', ['pointer', 'double', 'double']);
         const startAnimation = new NativeFunction(addr.startAnimation, 'void', ['pointer', 'pointer']);
-        const ptrIdle = addr.curanis.add(0x00); 
-        const ptrWalk = addr.curanis.add(0x08); 
 
-        // --- HOOK PRINCIPAL ---
+        const ptrIdle = addr.curanis.add(0x00);
+        const ptrWalk = addr.curanis.add(0x08);
+
         Interceptor.attach(addr.addDraw, {
             onEnter(args) {
                 const pObj = args[1];
-                // 'this.context.x0' costuma ser o ponteiro do player local
                 if (this.context.x0.equals(pObj)) {
-                    // Logica do Bot V88.3 aqui...
+                    // lógica aqui
                 }
             }
         });
 
-        updateVirtualLog("✅ TUDO PRONTO! Hooks ativos via Enumeration.");
+        updateVirtualLog("✅ Hooks ativos via SYMBOLS (Gadget OK)");
     } catch (err) {
         updateVirtualLog("❌ Erro Native: " + err.message);
     }
