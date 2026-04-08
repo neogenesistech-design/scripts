@@ -1,5 +1,5 @@
 // ========================================================================
-// TERMINATOR V88.7 - UI ORIGINAL + WALLTILE HOOK FIXED
+// TERMINATOR V88.8 - DUAL OFFSET HOOK (WALLTILE + MOVEMENT)
 // ========================================================================
 
 let updateVirtualLog = function(msg) { console.log(msg); };
@@ -25,13 +25,13 @@ Java.perform(function () {
         };
     }
 
-    function getMainActivity(c) { 
-        const at = c.ActivityThread.sCurrentActivityThread.value;
-        const rec = Java.cast(
-            at.mActivities.value.valueAt(0),
+    function getMainActivity(classLoader) { 
+        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
+        const activityClientRecord = Java.cast(
+            activityThread.mActivities.value.valueAt(0),
             Java.use("android.app.ActivityThread$ActivityClientRecord")
         );
-        return rec.activity.value;
+        return activityClientRecord.activity.value;
     }
 
     Java.scheduleOnMainThread(function () {
@@ -53,37 +53,32 @@ Java.perform(function () {
             const dragContainer = c.LinearLayout.$new(act);
             dragContainer.setOrientation(c.LinearLayout.VERTICAL.value);
             
-            const params = c.FrameLayout_LayoutParams.$new(-2, -2);
-            params.gravity.value = c.Gravity.TOP.value | c.Gravity.LEFT.value;
-            params.leftMargin.value = 50;
-            params.topMargin.value = 300;
-            dragContainer.setLayoutParams(params);
+            const containerParams = c.FrameLayout_LayoutParams.$new(-2, -2);
+            containerParams.gravity.value = c.Gravity.TOP.value | c.Gravity.LEFT.value;
+            containerParams.leftMargin.value = 50;
+            containerParams.topMargin.value = 300;
+            dragContainer.setLayoutParams(containerParams);
 
             const floatIcon = c.TextView.$new(act);
             floatIcon.setText(c.String.$new(CONF.letraIcone));
             floatIcon.setTextColor(c.Color.WHITE.value);
-            floatIcon.setTextSize(22.0);
+            floatIcon.setTextSize(22.0); 
             floatIcon.setGravity(c.Gravity.CENTER.value);
-
             const iconBg = c.GradientDrawable.$new();
-            iconBg.setShape(1);
-            iconBg.setColor(c.Color.parseColor("#CC000000"));
-            iconBg.setStroke(3, c.Color.parseColor(CONF.corBorda));
+            iconBg.setShape(1); 
+            iconBg.setColor(c.Color.parseColor("#CC000000")); 
+            iconBg.setStroke(3, c.Color.parseColor(CONF.corBorda)); 
             floatIcon.setBackground(iconBg);
-
             dragContainer.addView(floatIcon, c.LinearLayout_LayoutParams.$new(100, 100));
 
             const menuLayout = c.LinearLayout.$new(act);
             menuLayout.setOrientation(c.LinearLayout.VERTICAL.value);
-
             const menuBg = c.GradientDrawable.$new();
-            menuBg.setCornerRadius(20.0);
-            menuBg.setColor(c.Color.parseColor(CONF.corFundoMenu));
-            menuBg.setStroke(3, c.Color.parseColor(CONF.corBorda));
+            menuBg.setCornerRadius(20.0); 
+            menuBg.setColor(c.Color.parseColor(CONF.corFundoMenu)); 
+            menuBg.setStroke(3, c.Color.parseColor(CONF.corBorda)); 
             menuLayout.setBackground(menuBg);
-
-            menuLayout.setPadding(20, 20, 20, 20);
-            menuLayout.setVisibility(c.View.VISIBLE.value);
+            menuLayout.setPadding(20, 20, 20, 20); 
 
             const logTitle = c.TextView.$new(act);
             logTitle.setText(c.String.$new("TERMINATOR SYSTEM LOGS"));
@@ -92,11 +87,9 @@ Java.perform(function () {
 
             const logScroll = c.ScrollView.$new(act);
             const logText = c.TextView.$new(act);
-
             logText.setText(c.String.$new("[*] UI Pronta...\n"));
             logText.setTextColor(c.Color.WHITE.value);
             logText.setTextSize(10.0);
-
             logScroll.addView(logText);
             menuLayout.addView(logScroll, c.LinearLayout_LayoutParams.$new(-1, CONF.alturaMenu));
 
@@ -104,44 +97,32 @@ Java.perform(function () {
                 Java.scheduleOnMainThread(() => {
                     let current = logText.getText().toString();
                     let lines = current.split('\n');
-
-                    if (lines.length > 60) lines.shift();
-
+                    if (lines.length > 25) lines.shift();
                     lines.push("[#] " + msg);
                     logText.setText(c.String.$new(lines.join('\n')));
-
                     logScroll.post(Java.registerClass({
                         name: "Scroll_" + Math.random(),
                         implements: [Java.use("java.lang.Runnable")],
-                        methods: {
-                            run: function() { logScroll.fullScroll(130); }
-                        }
+                        methods: { run: function() { logScroll.fullScroll(130); } }
                     }).$new());
                 });
             };
 
-            // DRAG
             let iX=0, iY=0, itX=0, itY=0;
-
             floatIcon.setOnTouchListener(Java.registerClass({
-                name: "DragHandler",
+                name: "DragHandler_" + Math.random(),
                 implements: [c.View_OnTouchListener],
                 methods: {
                     onTouch: function (v, event) {
                         const action = event.getAction();
-
                         if (action === c.MotionEvent.ACTION_DOWN.value) {
-                            iX = params.leftMargin.value;
-                            iY = params.topMargin.value;
-                            itX = event.getRawX();
-                            itY = event.getRawY();
-                        } 
-                        else if (action === c.MotionEvent.ACTION_MOVE.value) {
-                            params.leftMargin.value = iX + Math.round(event.getRawX() - itX);
-                            params.topMargin.value = iY + Math.round(event.getRawY() - itY);
-                            dragContainer.setLayoutParams(params);
-                        } 
-                        else if (action === c.MotionEvent.ACTION_UP.value) {
+                            iX = containerParams.leftMargin.value; iY = containerParams.topMargin.value;
+                            itX = event.getRawX(); itY = event.getRawY();
+                        } else if (action === c.MotionEvent.ACTION_MOVE.value) {
+                            containerParams.leftMargin.value = iX + Math.round(event.getRawX() - itX);
+                            containerParams.topMargin.value = iY + Math.round(event.getRawY() - itY);
+                            dragContainer.setLayoutParams(containerParams);
+                        } else if (action === c.MotionEvent.ACTION_UP.value) {
                             if (Math.abs(event.getRawX() - itX) < 15) {
                                 const vis = menuLayout.getVisibility() === c.View.VISIBLE.value;
                                 menuLayout.setVisibility(vis ? c.View.GONE.value : c.View.VISIBLE.value);
@@ -158,51 +139,55 @@ Java.perform(function () {
 
             setTimeout(() => startBrainEngine(), 3000);
 
-        } catch (e) {
-            console.log("Erro UI: " + e);
-        }
+        } catch (e) { console.log("Erro UI: " + e); }
     });
 });
 
-// ENGINE
+// --- ENGINE ---
 function startBrainEngine() {
     const mod = Process.findModuleByName("libqplay.so");
-
     if (!mod) {
         updateVirtualLog("❌ lib não encontrada");
         return;
     }
-
     updateVirtualLog("✅ BASE: " + mod.base);
     initBot(mod);
 }
 
-// HOOK
+// --- OFFSET INJECTION ---
 function initBot(mod) {
-
     const base = mod.base;
 
-    const OFFSET_WALLTILE = 0x002B04B0; // FIXED
+    // OFFSETS DO SEU DUMP
+    const OFFSETS = {
+        walltile: 0x002B04AC,
+        movement: 0x002A4538
+    };
 
-    const addr = base.add(OFFSET_WALLTILE);
+    const addrWall = base.add(OFFSETS.walltile);
+    const addrMove = base.add(OFFSETS.movement);
 
-    updateVirtualLog("📍 walltile: " + addr);
+    updateVirtualLog("📍 walltile: " + addrWall);
+    updateVirtualLog("📍 movement: " + addrMove);
 
     try {
-        Interceptor.attach(addr, {
+        // HOOK 1: WALLTILE (Colisões)
+        Interceptor.attach(addrWall, {
             onEnter(args) {
-                updateVirtualLog("🔥 walltile chamada");
-
-                // leitura segura
-                try {
-                    const x = this.context.d0;
-                    const y = this.context.d1;
-                    updateVirtualLog("📌 pos: " + x + ", " + y);
-                } catch(e){}
+                // updateVirtualLog("🔥 walltile"); 
             }
         });
 
-        updateVirtualLog("✅ hook aplicado");
+        // HOOK 2: MOVEMENT ACTION (Movimento do Player)
+        Interceptor.attach(addrMove, {
+            onEnter(args) {
+                // args[1] é o 'int' da direção ou ação (param_1 no seu dump)
+                const action = args[1].toInt32();
+                updateVirtualLog("👟 Movimento ID: " + action);
+            }
+        });
+
+        updateVirtualLog("🚀 Hooks aplicados com sucesso!");
 
     } catch (e) {
         updateVirtualLog("❌ erro: " + e.message);
