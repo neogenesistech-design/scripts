@@ -1,107 +1,137 @@
 // ========================================================================
-// TERMINATOR V88.9 - FINAL OFFSET INJECTOR (READY)
+// TERMINATOR V88.10 - GADGET GHOST (FORCED UI + NATIVE THREAD)
 // ========================================================================
 
-let updateVirtualLog = function(msg) { console.log(msg); };
+console.log("[*] Script carregado no Gadget. Iniciando busca de contexto...");
 
-Java.perform(function () {
+let updateVirtualLog = function(msg) { console.log("[UI-WAIT] " + msg); };
+
+// Tenta estabilizar o Java primeiro
+Java.performNow(function() {
     const ActivityThread = Java.use("android.app.ActivityThread");
-    
-    Java.scheduleOnMainThread(function () {
+    const Handler = Java.use("android.os.Handler");
+    const Looper = Java.use("android.os.Looper");
+
+    // Loop de verificação: só cria a janela quando a Activity estiver viva
+    const checkActivity = setInterval(function() {
         try {
-            const activity = ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0).activity.value;
-            const Color = Java.use("android.graphics.Color");
-            const cl = {
-                FrameLayout: Java.use("android.widget.FrameLayout"),
-                LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
-                LinearLayout: Java.use("android.widget.LinearLayout"),
-                Text: Java.use("android.widget.TextView"),
-                Scroll: Java.use("android.widget.ScrollView"),
-                Drawable: Java.use("android.graphics.drawable.GradientDrawable")
-            };
-
-            const root = cl.FrameLayout.$new(activity);
-            const panel = cl.LinearLayout.$new(activity);
-            panel.setOrientation(1);
-            const bg = cl.Drawable.$new();
-            bg.setColor(Color.parseColor("#F2050505"));
-            bg.setStroke(3, Color.parseColor("#00FF00"));
-            panel.setBackground(bg);
-            panel.setPadding(15, 15, 15, 15);
-
-            const scroll = cl.Scroll.$new(activity);
-            const txt = cl.Text.$new(activity);
-            txt.setText("--- TERMINATOR OFFSET LOG ---\n");
-            txt.setTextColor(Color.WHITE.value);
-            txt.setTextSize(9);
-            scroll.addView(txt);
-            panel.addView(scroll, cl.LinearLayout.LayoutParams.$new(-1, 550));
-
-            updateVirtualLog = function(msg) {
-                Java.scheduleOnMainThread(() => {
-                    let lines = txt.getText().toString().split('\n');
-                    if (lines.length > 25) lines.shift();
-                    txt.setText(lines.join('\n') + "\n[#] " + msg);
-                    scroll.fullScroll(130);
-                });
-            };
-
-            const params = cl.LayoutParams.$new(620, -2);
-            params.topMargin = 250; params.leftMargin = 50;
-            activity.addContentView(root, cl.LayoutParams.$new(-1, -1));
-            root.addView(panel, params);
-
-            updateVirtualLog("Aguardando motor...");
-            setTimeout(startBrainEngine, 2000);
-
-        } catch (e) { console.log("Erro UI: " + e); }
-    });
+            const thread = ActivityThread.sCurrentActivityThread.value;
+            if (thread) {
+                const mActivities = thread.mActivities.value;
+                if (mActivities.size() > 0) {
+                    clearInterval(checkActivity);
+                    
+                    // Executa na MainThread do Android com prioridade
+                    const mainHandler = Handler.$new(Looper.getMainLooper());
+                    mainHandler.post(Java.registerClass({
+                        name: "com.ghost.Runner",
+                        implements: [Java.use("java.lang.Runnable")],
+                        methods: {
+                            run: function() {
+                                setupWindow();
+                            }
+                        }
+                    }).$new());
+                }
+            }
+        } catch(e) {}
+    }, 1000);
 });
+
+function setupWindow() {
+    try {
+        const ActivityThread = Java.use("android.app.ActivityThread");
+        const activity = ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0).activity.value;
+        const Color = Java.use("android.graphics.Color");
+        const cl = {
+            FrameLayout: Java.use("android.widget.FrameLayout"),
+            LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
+            LinearLayout: Java.use("android.widget.LinearLayout"),
+            Text: Java.use("android.widget.TextView"),
+            Scroll: Java.use("android.widget.ScrollView"),
+            Drawable: Java.use("android.graphics.drawable.GradientDrawable")
+        };
+
+        const root = cl.FrameLayout.$new(activity);
+        const panel = cl.LinearLayout.$new(activity);
+        panel.setOrientation(1);
+        const bg = cl.Drawable.$new();
+        bg.setColor(Color.parseColor("#E6050505"));
+        bg.setStroke(3, Color.parseColor("#00FF00"));
+        panel.setBackground(bg);
+        panel.setPadding(10, 10, 10, 10);
+
+        const scroll = cl.Scroll.$new(activity);
+        const txt = cl.Text.$new(activity);
+        txt.setText("--- GHOST SYSTEM ACTIVE ---\n");
+        txt.setTextColor(Color.WHITE.value);
+        txt.setTextSize(8);
+        scroll.addView(txt);
+        panel.addView(scroll, cl.LinearLayout.LayoutParams.$new(-1, 400));
+
+        updateVirtualLog = function(msg) {
+            const thread = ActivityThread.sCurrentActivityThread.value;
+            if (!thread) return;
+            const handler = Handler.$new(Looper.getMainLooper());
+            handler.post(Java.registerClass({
+                name: "com.ghost.Log_" + Math.random().toString(36).substr(2, 5),
+                implements: [Java.use("java.lang.Runnable")],
+                methods: {
+                    run: function() {
+                        let lines = txt.getText().toString().split('\n');
+                        if (lines.length > 20) lines.shift();
+                        txt.setText(lines.join('\n') + "\n> " + msg);
+                        scroll.fullScroll(130);
+                    }
+                }
+            }).$new());
+        };
+
+        const params = cl.LayoutParams.$new(550, -2);
+        params.topMargin = 150; params.leftMargin = 30;
+        activity.addContentView(root, cl.LayoutParams.$new(-1, -1));
+        root.addView(panel, params);
+
+        updateVirtualLog("Janela Injetada!");
+        
+        // Inicia a parte nativa em background
+        setTimeout(startBrainEngine, 1000);
+
+    } catch (e) {
+        console.log("Erro SetupWindow: " + e);
+    }
+}
 
 function startBrainEngine() {
     const mod = Process.findModuleByName("libqplay.so");
     if (!mod) {
-        updateVirtualLog("❌ Erro: libqplay.so não achada.");
+        updateVirtualLog("❌ Erro: Lib não encontrada.");
         return;
     }
 
     const base = mod.base;
-    updateVirtualLog("✅ Base: " + base);
+    // OFFSETS DO SEU DUMP
+    const addrWall = base.add(0x002B04AC);
+    const addrMove = base.add(0x002A4538);
 
-    // OFFSETS EXTRAÍDOS DO SEU DUMP
-    const OFFSETS = {
-        walltile: 0x002B04AC,
-        movement: 0x002A4538
-    };
-
-    const addrWall = base.add(OFFSETS.walltile);
-    const addrMove = base.add(OFFSETS.movement);
+    updateVirtualLog("Base: " + base);
 
     try {
-        // HOOK MOVEMENT (Forçado)
+        // Interceptor Nativo (Roda fora da MainThread do Java para não travar)
         Interceptor.attach(addrMove, {
             onEnter: function(args) {
-                const actionID = args[1].toInt32();
-                // Log imediato no terminal do PC
-                console.log("MOVIMENTO DETECTADO! ID: " + actionID);
-                // Log na tela do celular
-                updateVirtualLog("👟 MOV: " + actionID);
+                const id = args[1].toInt32();
+                updateVirtualLog("Mov: " + id);
             }
         });
 
-        // HOOK WALLTILE (Amostragem para não travar)
-        let wallCount = 0;
         Interceptor.attach(addrWall, {
             onEnter: function(args) {
-                wallCount++;
-                if (wallCount % 50 === 0) {
-                    updateVirtualLog("🧱 Check Wall...");
-                }
+                // Muito pesado para logar no Gadget, apenas validação
             }
         });
 
-        updateVirtualLog("🎯 HOOKS ATIVOS NO OFFSET!");
-        updateVirtualLog("Mova o personagem agora.");
+        updateVirtualLog("✅ Hooks prontos!");
 
     } catch (err) {
         updateVirtualLog("❌ Erro Hook: " + err.message);
