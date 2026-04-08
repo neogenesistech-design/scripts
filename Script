@@ -1,41 +1,50 @@
 // ========================================================================
-// TERMINATOR V88.11 - GADGET STABLE (UI + OFFSETS)
+// TERMINATOR V88.12 - ESTRUTURA V88.8 + BOOTSTRAP ESTÁVEL
 // ========================================================================
 
 let updateVirtualLog = function(msg) { console.log(msg); };
 
-// Encapsulamos em uma função para chamar via setImmediate (melhor para Gadget)
-function bootstrap() {
+// 1. BOOTSTRAP: Garante que o Java está pronto antes de chamar a UI
+setImmediate(() => {
     Java.perform(function () {
         const ActivityThread = Java.use("android.app.ActivityThread");
 
-        // Loop de espera: garante que a MainThread e a Activity existem
         const checkReady = setInterval(() => {
             try {
                 const thread = ActivityThread.sCurrentActivityThread.value;
                 if (thread && thread.mActivities.value.size() > 0) {
                     clearInterval(checkReady);
-                    iniciarInterface(ActivityThread);
+                    // Só inicia a interface quando o app está realmente carregado
+                    iniciarInterfaceFuncional();
                 }
             } catch (e) {}
         }, 500);
     });
-}
+});
 
-function iniciarInterface(ActivityThread) {
+function iniciarInterfaceFuncional() {
     Java.scheduleOnMainThread(function () {
         try {
-            const activity = ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0).activity.value;
-            const metrics = activity.getResources().getDisplayMetrics();
+            // --- CLASSES E MÉTODOS EXATOS DA V88.8 ---
+            const ActivityThread = Java.use("android.app.ActivityThread");
+            const activityThread = ActivityThread.sCurrentActivityThread.value;
+            const activityClientRecord = Java.cast(
+                activityThread.mActivities.value.valueAt(0),
+                Java.use("android.app.ActivityThread$ActivityClientRecord")
+            );
+            const act = activityClientRecord.activity.value;
+            
+            const metrics = act.getResources().getDisplayMetrics();
             const screenHeight = metrics.heightPixels.value;
 
+            // Loader de classes Android
             const cl = {
                 Gravity: Java.use("android.view.Gravity"),
                 TextView: Java.use("android.widget.TextView"),
                 LinearLayout: Java.use("android.widget.LinearLayout"),
-                LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
+                LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
                 FrameLayout: Java.use("android.widget.FrameLayout"),
-                FLayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
+                FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
                 ScrollView: Java.use("android.widget.ScrollView"),
                 Color: Java.use("android.graphics.Color"),
                 Touch: Java.use("android.view.View$OnTouchListener"),
@@ -47,81 +56,88 @@ function iniciarInterface(ActivityThread) {
             const CONF = {
                 letraIcone: "T",
                 menuLargura: 600,
-                alturaMenu: Math.round(screenHeight * 0.40),
+                alturaMenu: Math.round(screenHeight * 0.45),
                 corFundoMenu: "#F2050505",
                 corBorda: "#00FF00"
             };
 
-            const rootLayout = cl.FrameLayout.$new(activity);
-            const dragContainer = cl.LinearLayout.$new(activity);
-            dragContainer.setOrientation(1);
+            const rootLayout = cl.FrameLayout.$new(act);
+            const dragContainer = cl.LinearLayout.$new(act);
+            dragContainer.setOrientation(cl.LinearLayout.VERTICAL.value);
             
-            const containerParams = cl.FLayoutParams.$new(-2, -2);
-            containerParams.topMargin.value = 250; containerParams.leftMargin.value = 50;
+            const containerParams = cl.FrameLayout_LayoutParams.$new(-2, -2);
+            containerParams.gravity.value = cl.Gravity.TOP.value | cl.Gravity.LEFT.value;
+            containerParams.leftMargin.value = 50;
+            containerParams.topMargin.value = 300;
             dragContainer.setLayoutParams(containerParams);
 
-            const floatIcon = cl.TextView.$new(activity);
+            const floatIcon = cl.TextView.$new(act);
             floatIcon.setText(cl.String.$new(CONF.letraIcone));
             floatIcon.setTextColor(cl.Color.WHITE.value);
-            floatIcon.setTextSize(22);
+            floatIcon.setTextSize(22.0); 
             floatIcon.setGravity(cl.Gravity.CENTER.value);
             const iconBg = cl.Drawable.$new();
             iconBg.setShape(1); 
             iconBg.setColor(cl.Color.parseColor("#CC000000")); 
             iconBg.setStroke(3, cl.Color.parseColor(CONF.corBorda)); 
             floatIcon.setBackground(iconBg);
-            dragContainer.addView(floatIcon, cl.LayoutParams.$new(100, 100));
+            dragContainer.addView(floatIcon, cl.LinearLayout_LayoutParams.$new(100, 100));
 
-            const menuLayout = cl.LinearLayout.$new(activity);
-            menuLayout.setOrientation(1);
+            const menuLayout = cl.LinearLayout.$new(act);
+            menuLayout.setOrientation(cl.LinearLayout.VERTICAL.value);
             const menuBg = cl.Drawable.$new();
-            menuBg.setCornerRadius(20); 
+            menuBg.setCornerRadius(20.0); 
             menuBg.setColor(cl.Color.parseColor(CONF.corFundoMenu)); 
             menuBg.setStroke(3, cl.Color.parseColor(CONF.corBorda)); 
             menuLayout.setBackground(menuBg);
-            menuLayout.setPadding(15, 15, 15, 15);
+            menuLayout.setPadding(20, 20, 20, 20); 
 
-            const logTitle = cl.TextView.$new(activity);
-            logTitle.setText(cl.String.$new("TERMINATOR GADGET LOG"));
+            const logTitle = cl.TextView.$new(act);
+            logTitle.setText(cl.String.$new("TERMINATOR SYSTEM LOGS"));
             logTitle.setTextColor(cl.Color.parseColor(CONF.corBorda));
             menuLayout.addView(logTitle);
 
-            const logScroll = cl.ScrollView.$new(activity);
-            const logText = cl.TextView.$new(activity);
-            logText.setText(cl.String.$new("[*] Sistema Inicializado...\n"));
+            const logScroll = cl.ScrollView.$new(act);
+            const logText = cl.TextView.$new(act);
+            logText.setText(cl.String.$new("[*] UI Pronta (Estrutura V88.8)...\n"));
             logText.setTextColor(cl.Color.WHITE.value);
-            logText.setTextSize(9);
+            logText.setTextSize(10.0);
             logScroll.addView(logText);
-            menuLayout.addView(logScroll, cl.LayoutParams.$new(-1, CONF.alturaMenu));
+            menuLayout.addView(logScroll, cl.LinearLayout_LayoutParams.$new(-1, CONF.alturaMenu));
 
             updateVirtualLog = function(msg) {
                 Java.scheduleOnMainThread(() => {
                     let lines = logText.getText().toString().split('\n');
-                    if (lines.length > 22) lines.shift();
-                    logText.setText(cl.String.$new(lines.join('\n') + "\n[#] " + msg));
-                    logScroll.fullScroll(130);
+                    if (lines.length > 25) lines.shift();
+                    lines.push("[#] " + msg);
+                    logText.setText(cl.String.$new(lines.join('\n')));
+                    logScroll.post(Java.registerClass({
+                        name: "Scroll_" + Math.random().toString(36).substr(2, 5),
+                        implements: [Java.use("java.lang.Runnable")],
+                        methods: { run: function() { logScroll.fullScroll(130); } }
+                    }).$new());
                 });
             };
 
-            // DRAG HANDLER
+            // DRAG HANDLER ORIGINAL
             let iX=0, iY=0, itX=0, itY=0;
             floatIcon.setOnTouchListener(Java.registerClass({
-                name: "com.term.Drag",
+                name: "DragHandler_" + Math.random().toString(36).substr(2, 5),
                 implements: [cl.Touch],
                 methods: {
                     onTouch: function (v, event) {
                         const action = event.getAction();
-                        if (action === 0) { // ACTION_DOWN
+                        if (action === cl.Motion.ACTION_DOWN.value) {
                             iX = containerParams.leftMargin.value; iY = containerParams.topMargin.value;
                             itX = event.getRawX(); itY = event.getRawY();
-                        } else if (action === 2) { // ACTION_MOVE
+                        } else if (action === cl.Motion.ACTION_MOVE.value) {
                             containerParams.leftMargin.value = iX + Math.round(event.getRawX() - itX);
                             containerParams.topMargin.value = iY + Math.round(event.getRawY() - itY);
                             dragContainer.setLayoutParams(containerParams);
-                        } else if (action === 1) { // ACTION_UP
+                        } else if (action === cl.Motion.ACTION_UP.value) {
                             if (Math.abs(event.getRawX() - itX) < 15) {
-                                const vis = menuLayout.getVisibility() === 0;
-                                menuLayout.setVisibility(vis ? 8 : 0);
+                                const vis = menuLayout.getVisibility() === 0; // VISIBLE = 0
+                                menuLayout.setVisibility(vis ? 8 : 0); // GONE = 8
                             }
                         }
                         return true;
@@ -129,53 +145,57 @@ function iniciarInterface(ActivityThread) {
                 }
             }).$new());
 
-            dragContainer.addView(menuLayout, cl.LayoutParams.$new(CONF.menuLargura, -2));
+            dragContainer.addView(menuLayout, cl.LinearLayout_LayoutParams.$new(CONF.menuLargura, -2));
             rootLayout.addView(dragContainer);
-            activity.addContentView(rootLayout, cl.FLayoutParams.$new(-1, -1));
+            act.addContentView(rootLayout, cl.FrameLayout_LayoutParams.$new(-1, -1));
 
-            // Dispara motor nativo
-            setTimeout(startBrainEngine, 1000);
+            // Dispara motor nativo após 3 segundos da UI aparecer
+            setTimeout(startBrainEngine, 3000);
 
         } catch (e) { console.log("Erro UI: " + e); }
     });
 }
 
+// 2. ENGINE: Offsets Reais da libqplay.so
 function startBrainEngine() {
     const mod = Process.findModuleByName("libqplay.so");
     if (!mod) {
-        updateVirtualLog("❌ Erro: libqplay.so não carregada.");
+        updateVirtualLog("❌ lib não encontrada");
         return;
     }
+    updateVirtualLog("✅ BASE: " + mod.base);
 
-    updateVirtualLog("✅ Base: " + mod.base);
-
+    const base = mod.base;
     const OFFSETS = {
         walltile: 0x002B04AC,
         movement: 0x002A4538
     };
 
+    const addrWall = base.add(OFFSETS.walltile);
+    const addrMove = base.add(OFFSETS.movement);
+
+    updateVirtualLog("📍 walltile: " + addrWall);
+    updateVirtualLog("📍 movement: " + addrMove);
+
     try {
-        // HOOK 1: WALLTILE (Observador passivo)
-        Interceptor.attach(mod.base.add(OFFSETS.walltile), {
+        // HOOK 1: WALLTILE (Monitoramento)
+        Interceptor.attach(addrWall, {
             onEnter(args) {
-                // Aqui roda milhares de vezes, evite logs frequentes
+                // updateVirtualLog("🔥 walltile"); 
             }
         });
 
-        // HOOK 2: MOVEMENT (Ação do Player)
-        Interceptor.attach(mod.base.add(OFFSETS.movement), {
+        // HOOK 2: MOVEMENT ACTION
+        Interceptor.attach(addrMove, {
             onEnter(args) {
-                const actionID = args[1].toInt32();
-                updateVirtualLog("👟 Movimento ID: " + actionID);
+                const action = args[1].toInt32();
+                updateVirtualLog("👟 Movimento ID: " + action);
             }
         });
 
         updateVirtualLog("🚀 Hooks ativos via Offset!");
 
-    } catch (err) {
-        updateVirtualLog("❌ Erro Hook: " + err.message);
+    } catch (e) {
+        updateVirtualLog("❌ erro: " + e.message);
     }
 }
-
-// Inicia o processo
-setImmediate(bootstrap);
