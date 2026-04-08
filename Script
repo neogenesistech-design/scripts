@@ -1,164 +1,74 @@
 // ========================================================================
-// TERMINATOR V88.8 - DUAL OFFSET HOOK (WALLTILE + MOVEMENT)
+// TERMINATOR V88.9 - FINAL OFFSET INJECTOR (READY)
 // ========================================================================
 
 let updateVirtualLog = function(msg) { console.log(msg); };
 
 Java.perform(function () {
-    function getClassLoader() {
-        return {
-            Gravity: Java.use("android.view.Gravity"),
-            TextView: Java.use("android.widget.TextView"),
-            LinearLayout: Java.use("android.widget.LinearLayout"),
-            LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
-            FrameLayout: Java.use("android.widget.FrameLayout"),
-            FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
-            ScrollView: Java.use("android.widget.ScrollView"),
-            Color: Java.use("android.graphics.Color"),
-            ActivityThread: Java.use("android.app.ActivityThread"),
-            View_OnTouchListener: Java.use("android.view.View$OnTouchListener"),
-            MotionEvent: Java.use("android.view.MotionEvent"),
-            String: Java.use("java.lang.String"),
-            View: Java.use("android.view.View"),
-            DisplayMetrics: Java.use("android.util.DisplayMetrics"),
-            GradientDrawable: Java.use("android.graphics.drawable.GradientDrawable")
-        };
-    }
-
-    function getMainActivity(classLoader) { 
-        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-        const activityClientRecord = Java.cast(
-            activityThread.mActivities.value.valueAt(0),
-            Java.use("android.app.ActivityThread$ActivityClientRecord")
-        );
-        return activityClientRecord.activity.value;
-    }
-
+    const ActivityThread = Java.use("android.app.ActivityThread");
+    
     Java.scheduleOnMainThread(function () {
         try {
-            const c = getClassLoader();
-            const act = getMainActivity(c);
-            const metrics = act.getResources().getDisplayMetrics();
-            const screenHeight = metrics.heightPixels.value;
-
-            const CONF = {
-                letraIcone: "T",
-                menuLargura: 600,
-                alturaMenu: Math.round(screenHeight * 0.45),
-                corFundoMenu: "#F2050505",
-                corBorda: "#00FF00"
+            const activity = ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0).activity.value;
+            const Color = Java.use("android.graphics.Color");
+            const cl = {
+                FrameLayout: Java.use("android.widget.FrameLayout"),
+                LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
+                LinearLayout: Java.use("android.widget.LinearLayout"),
+                Text: Java.use("android.widget.TextView"),
+                Scroll: Java.use("android.widget.ScrollView"),
+                Drawable: Java.use("android.graphics.drawable.GradientDrawable")
             };
 
-            const rootLayout = c.FrameLayout.$new(act);
-            const dragContainer = c.LinearLayout.$new(act);
-            dragContainer.setOrientation(c.LinearLayout.VERTICAL.value);
-            
-            const containerParams = c.FrameLayout_LayoutParams.$new(-2, -2);
-            containerParams.gravity.value = c.Gravity.TOP.value | c.Gravity.LEFT.value;
-            containerParams.leftMargin.value = 50;
-            containerParams.topMargin.value = 300;
-            dragContainer.setLayoutParams(containerParams);
+            const root = cl.FrameLayout.$new(activity);
+            const panel = cl.LinearLayout.$new(activity);
+            panel.setOrientation(1);
+            const bg = cl.Drawable.$new();
+            bg.setColor(Color.parseColor("#F2050505"));
+            bg.setStroke(3, Color.parseColor("#00FF00"));
+            panel.setBackground(bg);
+            panel.setPadding(15, 15, 15, 15);
 
-            const floatIcon = c.TextView.$new(act);
-            floatIcon.setText(c.String.$new(CONF.letraIcone));
-            floatIcon.setTextColor(c.Color.WHITE.value);
-            floatIcon.setTextSize(22.0); 
-            floatIcon.setGravity(c.Gravity.CENTER.value);
-            const iconBg = c.GradientDrawable.$new();
-            iconBg.setShape(1); 
-            iconBg.setColor(c.Color.parseColor("#CC000000")); 
-            iconBg.setStroke(3, c.Color.parseColor(CONF.corBorda)); 
-            floatIcon.setBackground(iconBg);
-            dragContainer.addView(floatIcon, c.LinearLayout_LayoutParams.$new(100, 100));
-
-            const menuLayout = c.LinearLayout.$new(act);
-            menuLayout.setOrientation(c.LinearLayout.VERTICAL.value);
-            const menuBg = c.GradientDrawable.$new();
-            menuBg.setCornerRadius(20.0); 
-            menuBg.setColor(c.Color.parseColor(CONF.corFundoMenu)); 
-            menuBg.setStroke(3, c.Color.parseColor(CONF.corBorda)); 
-            menuLayout.setBackground(menuBg);
-            menuLayout.setPadding(20, 20, 20, 20); 
-
-            const logTitle = c.TextView.$new(act);
-            logTitle.setText(c.String.$new("TERMINATOR SYSTEM LOGS"));
-            logTitle.setTextColor(c.Color.parseColor(CONF.corBorda));
-            menuLayout.addView(logTitle);
-
-            const logScroll = c.ScrollView.$new(act);
-            const logText = c.TextView.$new(act);
-            logText.setText(c.String.$new("[*] UI Pronta...\n"));
-            logText.setTextColor(c.Color.WHITE.value);
-            logText.setTextSize(10.0);
-            logScroll.addView(logText);
-            menuLayout.addView(logScroll, c.LinearLayout_LayoutParams.$new(-1, CONF.alturaMenu));
+            const scroll = cl.Scroll.$new(activity);
+            const txt = cl.Text.$new(activity);
+            txt.setText("--- TERMINATOR OFFSET LOG ---\n");
+            txt.setTextColor(Color.WHITE.value);
+            txt.setTextSize(9);
+            scroll.addView(txt);
+            panel.addView(scroll, cl.LinearLayout.LayoutParams.$new(-1, 550));
 
             updateVirtualLog = function(msg) {
                 Java.scheduleOnMainThread(() => {
-                    let current = logText.getText().toString();
-                    let lines = current.split('\n');
+                    let lines = txt.getText().toString().split('\n');
                     if (lines.length > 25) lines.shift();
-                    lines.push("[#] " + msg);
-                    logText.setText(c.String.$new(lines.join('\n')));
-                    logScroll.post(Java.registerClass({
-                        name: "Scroll_" + Math.random(),
-                        implements: [Java.use("java.lang.Runnable")],
-                        methods: { run: function() { logScroll.fullScroll(130); } }
-                    }).$new());
+                    txt.setText(lines.join('\n') + "\n[#] " + msg);
+                    scroll.fullScroll(130);
                 });
             };
 
-            let iX=0, iY=0, itX=0, itY=0;
-            floatIcon.setOnTouchListener(Java.registerClass({
-                name: "DragHandler_" + Math.random(),
-                implements: [c.View_OnTouchListener],
-                methods: {
-                    onTouch: function (v, event) {
-                        const action = event.getAction();
-                        if (action === c.MotionEvent.ACTION_DOWN.value) {
-                            iX = containerParams.leftMargin.value; iY = containerParams.topMargin.value;
-                            itX = event.getRawX(); itY = event.getRawY();
-                        } else if (action === c.MotionEvent.ACTION_MOVE.value) {
-                            containerParams.leftMargin.value = iX + Math.round(event.getRawX() - itX);
-                            containerParams.topMargin.value = iY + Math.round(event.getRawY() - itY);
-                            dragContainer.setLayoutParams(containerParams);
-                        } else if (action === c.MotionEvent.ACTION_UP.value) {
-                            if (Math.abs(event.getRawX() - itX) < 15) {
-                                const vis = menuLayout.getVisibility() === c.View.VISIBLE.value;
-                                menuLayout.setVisibility(vis ? c.View.GONE.value : c.View.VISIBLE.value);
-                            }
-                        }
-                        return true;
-                    }
-                }
-            }).$new());
+            const params = cl.LayoutParams.$new(620, -2);
+            params.topMargin = 250; params.leftMargin = 50;
+            activity.addContentView(root, cl.LayoutParams.$new(-1, -1));
+            root.addView(panel, params);
 
-            dragContainer.addView(menuLayout, c.LinearLayout_LayoutParams.$new(CONF.menuLargura, -2));
-            rootLayout.addView(dragContainer);
-            act.addContentView(rootLayout, c.FrameLayout_LayoutParams.$new(-1, -1));
-
-            setTimeout(() => startBrainEngine(), 3000);
+            updateVirtualLog("Aguardando motor...");
+            setTimeout(startBrainEngine, 2000);
 
         } catch (e) { console.log("Erro UI: " + e); }
     });
 });
 
-// --- ENGINE ---
 function startBrainEngine() {
     const mod = Process.findModuleByName("libqplay.so");
     if (!mod) {
-        updateVirtualLog("❌ lib não encontrada");
+        updateVirtualLog("❌ Erro: libqplay.so não achada.");
         return;
     }
-    updateVirtualLog("✅ BASE: " + mod.base);
-    initBot(mod);
-}
 
-// --- OFFSET INJECTION ---
-function initBot(mod) {
     const base = mod.base;
+    updateVirtualLog("✅ Base: " + base);
 
-    // OFFSETS DO SEU DUMP
+    // OFFSETS EXTRAÍDOS DO SEU DUMP
     const OFFSETS = {
         walltile: 0x002B04AC,
         movement: 0x002A4538
@@ -167,29 +77,33 @@ function initBot(mod) {
     const addrWall = base.add(OFFSETS.walltile);
     const addrMove = base.add(OFFSETS.movement);
 
-    updateVirtualLog("📍 walltile: " + addrWall);
-    updateVirtualLog("📍 movement: " + addrMove);
-
     try {
-        // HOOK 1: WALLTILE (Colisões)
-        Interceptor.attach(addrWall, {
-            onEnter(args) {
-                // updateVirtualLog("🔥 walltile"); 
-            }
-        });
-
-        // HOOK 2: MOVEMENT ACTION (Movimento do Player)
+        // HOOK MOVEMENT (Forçado)
         Interceptor.attach(addrMove, {
-            onEnter(args) {
-                // args[1] é o 'int' da direção ou ação (param_1 no seu dump)
-                const action = args[1].toInt32();
-                updateVirtualLog("👟 Movimento ID: " + action);
+            onEnter: function(args) {
+                const actionID = args[1].toInt32();
+                // Log imediato no terminal do PC
+                console.log("MOVIMENTO DETECTADO! ID: " + actionID);
+                // Log na tela do celular
+                updateVirtualLog("👟 MOV: " + actionID);
             }
         });
 
-        updateVirtualLog("🚀 Hooks aplicados com sucesso!");
+        // HOOK WALLTILE (Amostragem para não travar)
+        let wallCount = 0;
+        Interceptor.attach(addrWall, {
+            onEnter: function(args) {
+                wallCount++;
+                if (wallCount % 50 === 0) {
+                    updateVirtualLog("🧱 Check Wall...");
+                }
+            }
+        });
 
-    } catch (e) {
-        updateVirtualLog("❌ erro: " + e.message);
+        updateVirtualLog("🎯 HOOKS ATIVOS NO OFFSET!");
+        updateVirtualLog("Mova o personagem agora.");
+
+    } catch (err) {
+        updateVirtualLog("❌ Erro Hook: " + err.message);
     }
 }
