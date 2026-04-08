@@ -1,11 +1,12 @@
 // ========================================================================
-// TERMINATOR V88.7 - TESTE OFFSET DIRETO (GADGET READY)
+// TERMINATOR V88.8 - UI COMPLETA + OFFSET TESTE (LOG RESTAURADO)
 // ========================================================================
 
 let updateVirtualLog = function(msg) { console.log(msg); };
 
 // --- UI ---
 Java.perform(function () {
+
     function getClassLoader() {
         return {
             Gravity: Java.use("android.view.Gravity"),
@@ -26,13 +27,10 @@ Java.perform(function () {
         };
     }
 
-    function getMainActivity(classLoader) { 
-        const activityThread = classLoader.ActivityThread.sCurrentActivityThread.value;
-        const activityClientRecord = Java.cast(
-            activityThread.mActivities.value.valueAt(0),
-            Java.use("android.app.ActivityThread$ActivityClientRecord")
-        );
-        return activityClientRecord.activity.value;
+    function getMainActivity(c) { 
+        const at = c.ActivityThread.sCurrentActivityThread.value;
+        const rec = Java.cast(at.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
+        return rec.activity.value;
     }
 
     Java.scheduleOnMainThread(function () {
@@ -40,21 +38,92 @@ Java.perform(function () {
             const c = getClassLoader();
             const act = getMainActivity(c);
             const metrics = act.getResources().getDisplayMetrics();
+            const screenHeight = metrics.heightPixels.value;
+
+            const CONF = {
+                largura: 600,
+                altura: Math.round(screenHeight * 0.45)
+            };
 
             const root = c.FrameLayout.$new(act);
-            const txt = c.TextView.$new(act);
-            txt.setText(c.String.$new("[*] Iniciando..."));
-            txt.setTextColor(c.Color.WHITE.value);
-            root.addView(txt);
+            const container = c.LinearLayout.$new(act);
+            container.setOrientation(c.LinearLayout.VERTICAL.value);
 
+            const params = c.FrameLayout_LayoutParams.$new(-2, -2);
+            params.gravity.value = c.Gravity.TOP.value | c.Gravity.LEFT.value;
+            params.leftMargin.value = 50;
+            params.topMargin.value = 300;
+            container.setLayoutParams(params);
+
+            // botão
+            const icon = c.TextView.$new(act);
+            icon.setText(c.String.$new("T"));
+            icon.setTextColor(c.Color.WHITE.value);
+            icon.setTextSize(22);
+            icon.setGravity(c.Gravity.CENTER.value);
+
+            const bg = c.GradientDrawable.$new();
+            bg.setShape(1);
+            bg.setColor(c.Color.parseColor("#AA000000"));
+            bg.setStroke(3, c.Color.parseColor("#00FF00"));
+            icon.setBackground(bg);
+
+            container.addView(icon, c.LinearLayout_LayoutParams.$new(100, 100));
+
+            // MENU
+            const menu = c.LinearLayout.$new(act);
+            menu.setOrientation(c.LinearLayout.VERTICAL.value);
+
+            const bgMenu = c.GradientDrawable.$new();
+            bgMenu.setCornerRadius(20);
+            bgMenu.setColor(c.Color.parseColor("#F2050505"));
+            bgMenu.setStroke(3, c.Color.parseColor("#00FF00"));
+            menu.setBackground(bgMenu);
+
+            const title = c.TextView.$new(act);
+            title.setText(c.String.$new("TERMINATOR LOG"));
+            title.setTextColor(c.Color.parseColor("#00FF00"));
+            menu.addView(title);
+
+            const scroll = c.ScrollView.$new(act);
+            const logText = c.TextView.$new(act);
+
+            logText.setText(c.String.$new("[*] Iniciando...\n"));
+            logText.setTextColor(c.Color.WHITE.value);
+            logText.setTextSize(10);
+
+            scroll.addView(logText);
+            menu.addView(scroll, c.LinearLayout_LayoutParams.$new(-1, CONF.altura));
+
+            container.addView(menu, c.LinearLayout_LayoutParams.$new(CONF.largura, -2));
+            root.addView(container);
             act.addContentView(root, c.FrameLayout_LayoutParams.$new(-1, -1));
 
+            // LOG REAL (MULTILINE)
             updateVirtualLog = function(msg) {
                 Java.scheduleOnMainThread(() => {
-                    txt.setText(c.String.$new(msg));
+                    let current = logText.getText().toString();
+                    let lines = current.split('\n');
+
+                    if (lines.length > 30) lines.shift();
+
+                    lines.push("[#] " + msg);
+
+                    logText.setText(c.String.$new(lines.join('\n')));
+
+                    scroll.post(Java.registerClass({
+                        name: "Scroll_" + Math.random(),
+                        implements: [Java.use("java.lang.Runnable")],
+                        methods: {
+                            run: function() {
+                                scroll.fullScroll(130);
+                            }
+                        }
+                    }).$new());
                 });
             };
 
+            // START
             setTimeout(() => {
                 startBrainEngine();
             }, 3000);
@@ -65,8 +134,9 @@ Java.perform(function () {
     });
 });
 
-// --- MOTOR ---
+// --- ENGINE ---
 function startBrainEngine() {
+
     const mod = Process.findModuleByName("libqplay.so");
 
     if (!mod) {
@@ -74,40 +144,35 @@ function startBrainEngine() {
         return;
     }
 
-    updateVirtualLog("✅ base: " + mod.base);
+    updateVirtualLog("✅ BASE: " + mod.base);
 
     initBot(mod);
 }
 
-// --- TESTE OFFSET ---
+// --- OFFSET TEST ---
 function initBot(mod) {
 
     const base = mod.base;
 
-    // 🔥 SEU OFFSET
     const OFFSET_WALLTILE = 0x002B04AC;
 
-    let addr_walltile = base.add(OFFSET_WALLTILE);
+    let addr = base.add(OFFSET_WALLTILE);
 
-    updateVirtualLog("📍 walltile: " + addr_walltile);
+    updateVirtualLog("📍 walltile: " + addr);
 
     try {
 
-        const walltile = new NativeFunction(
-            addr_walltile,
-            'int',
-            ['pointer', 'double', 'double']
-        );
+        const walltile = new NativeFunction(addr, 'int', ['pointer', 'double', 'double']);
 
-        Interceptor.attach(addr_walltile, {
+        Interceptor.attach(addr, {
             onEnter(args) {
-                updateVirtualLog("🔥 walltile chamada!");
+                updateVirtualLog("🔥 walltile chamada");
             }
         });
 
-        updateVirtualLog("✅ HOOK OK");
+        updateVirtualLog("✅ hook aplicado");
 
-    } catch (err) {
-        updateVirtualLog("❌ erro: " + err.message);
+    } catch (e) {
+        updateVirtualLog("❌ erro: " + e.message);
     }
 }
