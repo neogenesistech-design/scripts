@@ -1,20 +1,17 @@
 // ========================================================================
-// TERMINATOR V88.12 - ESTRUTURA V88.8 + BOOTSTRAP ESTÁVEL
+// TERMINATOR V88.13 - FORCE INJECTOR (RWX + DEEP HOOK)
 // ========================================================================
 
 let updateVirtualLog = function(msg) { console.log(msg); };
 
-// 1. BOOTSTRAP: Garante que o Java está pronto antes de chamar a UI
 setImmediate(() => {
     Java.perform(function () {
         const ActivityThread = Java.use("android.app.ActivityThread");
-
         const checkReady = setInterval(() => {
             try {
                 const thread = ActivityThread.sCurrentActivityThread.value;
                 if (thread && thread.mActivities.value.size() > 0) {
                     clearInterval(checkReady);
-                    // Só inicia a interface quando o app está realmente carregado
                     iniciarInterfaceFuncional();
                 }
             } catch (e) {}
@@ -25,177 +22,131 @@ setImmediate(() => {
 function iniciarInterfaceFuncional() {
     Java.scheduleOnMainThread(function () {
         try {
-            // --- CLASSES E MÉTODOS EXATOS DA V88.8 ---
             const ActivityThread = Java.use("android.app.ActivityThread");
             const activityThread = ActivityThread.sCurrentActivityThread.value;
-            const activityClientRecord = Java.cast(
-                activityThread.mActivities.value.valueAt(0),
-                Java.use("android.app.ActivityThread$ActivityClientRecord")
-            );
+            const activityClientRecord = Java.cast(activityThread.mActivities.value.valueAt(0), Java.use("android.app.ActivityThread$ActivityClientRecord"));
             const act = activityClientRecord.activity.value;
-            
             const metrics = act.getResources().getDisplayMetrics();
-            const screenHeight = metrics.heightPixels.value;
-
-            // Loader de classes Android
+            
             const cl = {
-                Gravity: Java.use("android.view.Gravity"),
                 TextView: Java.use("android.widget.TextView"),
                 LinearLayout: Java.use("android.widget.LinearLayout"),
-                LinearLayout_LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
+                LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
                 FrameLayout: Java.use("android.widget.FrameLayout"),
-                FrameLayout_LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
+                FLayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
                 ScrollView: Java.use("android.widget.ScrollView"),
                 Color: Java.use("android.graphics.Color"),
                 Touch: Java.use("android.view.View$OnTouchListener"),
-                Motion: Java.use("android.view.MotionEvent"),
-                String: Java.use("java.lang.String"),
                 Drawable: Java.use("android.graphics.drawable.GradientDrawable")
-            };
-
-            const CONF = {
-                letraIcone: "T",
-                menuLargura: 600,
-                alturaMenu: Math.round(screenHeight * 0.45),
-                corFundoMenu: "#F2050505",
-                corBorda: "#00FF00"
             };
 
             const rootLayout = cl.FrameLayout.$new(act);
             const dragContainer = cl.LinearLayout.$new(act);
-            dragContainer.setOrientation(cl.LinearLayout.VERTICAL.value);
-            
-            const containerParams = cl.FrameLayout_LayoutParams.$new(-2, -2);
-            containerParams.gravity.value = cl.Gravity.TOP.value | cl.Gravity.LEFT.value;
-            containerParams.leftMargin.value = 50;
-            containerParams.topMargin.value = 300;
+            dragContainer.setOrientation(1);
+            const containerParams = cl.FLayoutParams.$new(-2, -2);
+            containerParams.topMargin.value = 250; containerParams.leftMargin.value = 50;
             dragContainer.setLayoutParams(containerParams);
 
             const floatIcon = cl.TextView.$new(act);
-            floatIcon.setText(cl.String.$new(CONF.letraIcone));
-            floatIcon.setTextColor(cl.Color.WHITE.value);
-            floatIcon.setTextSize(22.0); 
-            floatIcon.setGravity(cl.Gravity.CENTER.value);
+            floatIcon.setText("T");
+            floatIcon.setTextColor(-1);
+            floatIcon.setTextSize(22);
             const iconBg = cl.Drawable.$new();
-            iconBg.setShape(1); 
-            iconBg.setColor(cl.Color.parseColor("#CC000000")); 
-            iconBg.setStroke(3, cl.Color.parseColor(CONF.corBorda)); 
+            iconBg.setShape(1); iconBg.setColor(cl.Color.parseColor("#CC000000")); iconBg.setStroke(3, cl.Color.parseColor("#00FF00"));
             floatIcon.setBackground(iconBg);
-            dragContainer.addView(floatIcon, cl.LinearLayout_LayoutParams.$new(100, 100));
+            floatIcon.setGravity(17);
+            dragContainer.addView(floatIcon, cl.LayoutParams.$new(100, 100));
 
             const menuLayout = cl.LinearLayout.$new(act);
-            menuLayout.setOrientation(cl.LinearLayout.VERTICAL.value);
+            menuLayout.setOrientation(1);
             const menuBg = cl.Drawable.$new();
-            menuBg.setCornerRadius(20.0); 
-            menuBg.setColor(cl.Color.parseColor(CONF.corFundoMenu)); 
-            menuBg.setStroke(3, cl.Color.parseColor(CONF.corBorda)); 
+            menuBg.setCornerRadius(20); menuBg.setColor(cl.Color.parseColor("#F2050505")); menuBg.setStroke(3, cl.Color.parseColor("#00FF00"));
             menuLayout.setBackground(menuBg);
-            menuLayout.setPadding(20, 20, 20, 20); 
-
-            const logTitle = cl.TextView.$new(act);
-            logTitle.setText(cl.String.$new("TERMINATOR SYSTEM LOGS"));
-            logTitle.setTextColor(cl.Color.parseColor(CONF.corBorda));
-            menuLayout.addView(logTitle);
+            menuLayout.setPadding(15, 15, 15, 15);
 
             const logScroll = cl.ScrollView.$new(act);
             const logText = cl.TextView.$new(act);
-            logText.setText(cl.String.$new("[*] UI Pronta (Estrutura V88.8)...\n"));
-            logText.setTextColor(cl.Color.WHITE.value);
-            logText.setTextSize(10.0);
+            logText.setText("[*] Engine V88.13 Pronta...\n");
+            logText.setTextColor(-1); logText.setTextSize(9);
             logScroll.addView(logText);
-            menuLayout.addView(logScroll, cl.LinearLayout_LayoutParams.$new(-1, CONF.alturaMenu));
+            menuLayout.addView(logScroll, cl.LayoutParams.$new(600, 450));
 
             updateVirtualLog = function(msg) {
                 Java.scheduleOnMainThread(() => {
                     let lines = logText.getText().toString().split('\n');
-                    if (lines.length > 25) lines.shift();
-                    lines.push("[#] " + msg);
-                    logText.setText(cl.String.$new(lines.join('\n')));
-                    logScroll.post(Java.registerClass({
-                        name: "Scroll_" + Math.random().toString(36).substr(2, 5),
-                        implements: [Java.use("java.lang.Runnable")],
-                        methods: { run: function() { logScroll.fullScroll(130); } }
-                    }).$new());
+                    if (lines.length > 20) lines.shift();
+                    logText.setText(lines.join('\n') + "\n> " + msg);
+                    logScroll.fullScroll(130);
                 });
             };
 
-            // DRAG HANDLER ORIGINAL
-            let iX=0, iY=0, itX=0, itY=0;
             floatIcon.setOnTouchListener(Java.registerClass({
                 name: "DragHandler_" + Math.random().toString(36).substr(2, 5),
                 implements: [cl.Touch],
                 methods: {
                     onTouch: function (v, event) {
-                        const action = event.getAction();
-                        if (action === cl.Motion.ACTION_DOWN.value) {
-                            iX = containerParams.leftMargin.value; iY = containerParams.topMargin.value;
-                            itX = event.getRawX(); itY = event.getRawY();
-                        } else if (action === cl.Motion.ACTION_MOVE.value) {
-                            containerParams.leftMargin.value = iX + Math.round(event.getRawX() - itX);
-                            containerParams.topMargin.value = iY + Math.round(event.getRawY() - itY);
-                            dragContainer.setLayoutParams(containerParams);
-                        } else if (action === cl.Motion.ACTION_UP.value) {
-                            if (Math.abs(event.getRawX() - itX) < 15) {
-                                const vis = menuLayout.getVisibility() === 0; // VISIBLE = 0
-                                menuLayout.setVisibility(vis ? 8 : 0); // GONE = 8
-                            }
+                        if (event.getAction() === 1) { 
+                            const vis = menuLayout.getVisibility() === 0;
+                            menuLayout.setVisibility(vis ? 8 : 0);
                         }
                         return true;
                     }
                 }
             }).$new());
 
-            dragContainer.addView(menuLayout, cl.LinearLayout_LayoutParams.$new(CONF.menuLargura, -2));
+            dragContainer.addView(menuLayout);
             rootLayout.addView(dragContainer);
-            act.addContentView(rootLayout, cl.FrameLayout_LayoutParams.$new(-1, -1));
+            act.addContentView(rootLayout, cl.FLayoutParams.$new(-1, -1));
 
-            // Dispara motor nativo após 3 segundos da UI aparecer
-            setTimeout(startBrainEngine, 3000);
-
+            setTimeout(startBrainEngine, 2000);
         } catch (e) { console.log("Erro UI: " + e); }
     });
 }
 
-// 2. ENGINE: Offsets Reais da libqplay.so
 function startBrainEngine() {
     const mod = Process.findModuleByName("libqplay.so");
-    if (!mod) {
-        updateVirtualLog("❌ lib não encontrada");
-        return;
-    }
-    updateVirtualLog("✅ BASE: " + mod.base);
+    if (!mod) { updateVirtualLog("❌ Lib faltante"); return; }
 
-    const base = mod.base;
     const OFFSETS = {
-        walltile: 0x002B04AC,
-        movement: 0x002A4538
+        movement: 0x002A4538, // Offset do seu dump
+        walltile: 0x002B04AC  // Offset do seu dump
     };
 
-    const addrWall = base.add(OFFSETS.walltile);
-    const addrMove = base.add(OFFSETS.movement);
+    const addrMove = mod.base.add(OFFSETS.movement);
 
-    updateVirtualLog("📍 walltile: " + addrWall);
-    updateVirtualLog("📍 movement: " + addrMove);
+    // PASSO 1: FORÇAR PERMISSÃO DE ESCRITA (ESSENCIAL NO GADGET)
+    Memory.protect(addrMove, 64, 'rwx');
+
+    updateVirtualLog("📍 Base: " + mod.base);
+    updateVirtualLog("🎯 Alvo: " + addrMove);
 
     try {
-        // HOOK 1: WALLTILE (Monitoramento)
-        Interceptor.attach(addrWall, {
-            onEnter(args) {
-                // updateVirtualLog("🔥 walltile"); 
-            }
-        });
-
-        // HOOK 2: MOVEMENT ACTION
+        // PASSO 2: HOOK DE BAIXO NÍVEL
         Interceptor.attach(addrMove, {
-            onEnter(args) {
-                const action = args[1].toInt32();
-                updateVirtualLog("👟 Movimento ID: " + action);
+            onEnter: function(args) {
+                // Se a função for chamada, isso VAI aparecer
+                const id = args[1].toInt32();
+                const playerPtr = args[0]; // 'this' em C++
+                
+                // Log de emergência no terminal do PC (mais rápido que a UI)
+                console.log("[HIT] MovementAction chamada! ID: " + id);
+                
+                updateVirtualLog("👟 Mov: " + id + " | PTR: " + playerPtr);
             }
         });
 
-        updateVirtualLog("🚀 Hooks ativos via Offset!");
+        // Teste de chamada: Vamos ver se a lib walltile responde
+        Memory.protect(mod.base.add(OFFSETS.walltile), 64, 'rwx');
+        Interceptor.attach(mod.base.add(OFFSETS.walltile), {
+            onEnter: function(args) {
+                // Walltile costuma floodar, use com cuidado
+            }
+        });
 
-    } catch (e) {
-        updateVirtualLog("❌ erro: " + e.message);
+        updateVirtualLog("✅ Hooks injetados com RWX!");
+        updateVirtualLog("Tente se mover AGORA.");
+
+    } catch (err) {
+        updateVirtualLog("❌ Falha crítica: " + err.message);
     }
 }
