@@ -1,139 +1,181 @@
 // ========================================================================
-// TERMINATOR V88.10 - GADGET GHOST (FORCED UI + NATIVE THREAD)
+// TERMINATOR V88.11 - GADGET STABLE (UI + OFFSETS)
 // ========================================================================
 
-console.log("[*] Script carregado no Gadget. Iniciando busca de contexto...");
+let updateVirtualLog = function(msg) { console.log(msg); };
 
-let updateVirtualLog = function(msg) { console.log("[UI-WAIT] " + msg); };
+// Encapsulamos em uma função para chamar via setImmediate (melhor para Gadget)
+function bootstrap() {
+    Java.perform(function () {
+        const ActivityThread = Java.use("android.app.ActivityThread");
 
-// Tenta estabilizar o Java primeiro
-Java.performNow(function() {
-    const ActivityThread = Java.use("android.app.ActivityThread");
-    const Handler = Java.use("android.os.Handler");
-    const Looper = Java.use("android.os.Looper");
+        // Loop de espera: garante que a MainThread e a Activity existem
+        const checkReady = setInterval(() => {
+            try {
+                const thread = ActivityThread.sCurrentActivityThread.value;
+                if (thread && thread.mActivities.value.size() > 0) {
+                    clearInterval(checkReady);
+                    iniciarInterface(ActivityThread);
+                }
+            } catch (e) {}
+        }, 500);
+    });
+}
 
-    // Loop de verificação: só cria a janela quando a Activity estiver viva
-    const checkActivity = setInterval(function() {
+function iniciarInterface(ActivityThread) {
+    Java.scheduleOnMainThread(function () {
         try {
-            const thread = ActivityThread.sCurrentActivityThread.value;
-            if (thread) {
-                const mActivities = thread.mActivities.value;
-                if (mActivities.size() > 0) {
-                    clearInterval(checkActivity);
-                    
-                    // Executa na MainThread do Android com prioridade
-                    const mainHandler = Handler.$new(Looper.getMainLooper());
-                    mainHandler.post(Java.registerClass({
-                        name: "com.ghost.Runner",
-                        implements: [Java.use("java.lang.Runnable")],
-                        methods: {
-                            run: function() {
-                                setupWindow();
+            const activity = ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0).activity.value;
+            const metrics = activity.getResources().getDisplayMetrics();
+            const screenHeight = metrics.heightPixels.value;
+
+            const cl = {
+                Gravity: Java.use("android.view.Gravity"),
+                TextView: Java.use("android.widget.TextView"),
+                LinearLayout: Java.use("android.widget.LinearLayout"),
+                LayoutParams: Java.use("android.widget.LinearLayout$LayoutParams"),
+                FrameLayout: Java.use("android.widget.FrameLayout"),
+                FLayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
+                ScrollView: Java.use("android.widget.ScrollView"),
+                Color: Java.use("android.graphics.Color"),
+                Touch: Java.use("android.view.View$OnTouchListener"),
+                Motion: Java.use("android.view.MotionEvent"),
+                String: Java.use("java.lang.String"),
+                Drawable: Java.use("android.graphics.drawable.GradientDrawable")
+            };
+
+            const CONF = {
+                letraIcone: "T",
+                menuLargura: 600,
+                alturaMenu: Math.round(screenHeight * 0.40),
+                corFundoMenu: "#F2050505",
+                corBorda: "#00FF00"
+            };
+
+            const rootLayout = cl.FrameLayout.$new(activity);
+            const dragContainer = cl.LinearLayout.$new(activity);
+            dragContainer.setOrientation(1);
+            
+            const containerParams = cl.FLayoutParams.$new(-2, -2);
+            containerParams.topMargin.value = 250; containerParams.leftMargin.value = 50;
+            dragContainer.setLayoutParams(containerParams);
+
+            const floatIcon = cl.TextView.$new(activity);
+            floatIcon.setText(cl.String.$new(CONF.letraIcone));
+            floatIcon.setTextColor(cl.Color.WHITE.value);
+            floatIcon.setTextSize(22);
+            floatIcon.setGravity(cl.Gravity.CENTER.value);
+            const iconBg = cl.Drawable.$new();
+            iconBg.setShape(1); 
+            iconBg.setColor(cl.Color.parseColor("#CC000000")); 
+            iconBg.setStroke(3, cl.Color.parseColor(CONF.corBorda)); 
+            floatIcon.setBackground(iconBg);
+            dragContainer.addView(floatIcon, cl.LayoutParams.$new(100, 100));
+
+            const menuLayout = cl.LinearLayout.$new(activity);
+            menuLayout.setOrientation(1);
+            const menuBg = cl.Drawable.$new();
+            menuBg.setCornerRadius(20); 
+            menuBg.setColor(cl.Color.parseColor(CONF.corFundoMenu)); 
+            menuBg.setStroke(3, cl.Color.parseColor(CONF.corBorda)); 
+            menuLayout.setBackground(menuBg);
+            menuLayout.setPadding(15, 15, 15, 15);
+
+            const logTitle = cl.TextView.$new(activity);
+            logTitle.setText(cl.String.$new("TERMINATOR GADGET LOG"));
+            logTitle.setTextColor(cl.Color.parseColor(CONF.corBorda));
+            menuLayout.addView(logTitle);
+
+            const logScroll = cl.ScrollView.$new(activity);
+            const logText = cl.TextView.$new(activity);
+            logText.setText(cl.String.$new("[*] Sistema Inicializado...\n"));
+            logText.setTextColor(cl.Color.WHITE.value);
+            logText.setTextSize(9);
+            logScroll.addView(logText);
+            menuLayout.addView(logScroll, cl.LayoutParams.$new(-1, CONF.alturaMenu));
+
+            updateVirtualLog = function(msg) {
+                Java.scheduleOnMainThread(() => {
+                    let lines = logText.getText().toString().split('\n');
+                    if (lines.length > 22) lines.shift();
+                    logText.setText(cl.String.$new(lines.join('\n') + "\n[#] " + msg));
+                    logScroll.fullScroll(130);
+                });
+            };
+
+            // DRAG HANDLER
+            let iX=0, iY=0, itX=0, itY=0;
+            floatIcon.setOnTouchListener(Java.registerClass({
+                name: "com.term.Drag",
+                implements: [cl.Touch],
+                methods: {
+                    onTouch: function (v, event) {
+                        const action = event.getAction();
+                        if (action === 0) { // ACTION_DOWN
+                            iX = containerParams.leftMargin.value; iY = containerParams.topMargin.value;
+                            itX = event.getRawX(); itY = event.getRawY();
+                        } else if (action === 2) { // ACTION_MOVE
+                            containerParams.leftMargin.value = iX + Math.round(event.getRawX() - itX);
+                            containerParams.topMargin.value = iY + Math.round(event.getRawY() - itY);
+                            dragContainer.setLayoutParams(containerParams);
+                        } else if (action === 1) { // ACTION_UP
+                            if (Math.abs(event.getRawX() - itX) < 15) {
+                                const vis = menuLayout.getVisibility() === 0;
+                                menuLayout.setVisibility(vis ? 8 : 0);
                             }
                         }
-                    }).$new());
-                }
-            }
-        } catch(e) {}
-    }, 1000);
-});
-
-function setupWindow() {
-    try {
-        const ActivityThread = Java.use("android.app.ActivityThread");
-        const activity = ActivityThread.sCurrentActivityThread.value.mActivities.value.valueAt(0).activity.value;
-        const Color = Java.use("android.graphics.Color");
-        const cl = {
-            FrameLayout: Java.use("android.widget.FrameLayout"),
-            LayoutParams: Java.use("android.widget.FrameLayout$LayoutParams"),
-            LinearLayout: Java.use("android.widget.LinearLayout"),
-            Text: Java.use("android.widget.TextView"),
-            Scroll: Java.use("android.widget.ScrollView"),
-            Drawable: Java.use("android.graphics.drawable.GradientDrawable")
-        };
-
-        const root = cl.FrameLayout.$new(activity);
-        const panel = cl.LinearLayout.$new(activity);
-        panel.setOrientation(1);
-        const bg = cl.Drawable.$new();
-        bg.setColor(Color.parseColor("#E6050505"));
-        bg.setStroke(3, Color.parseColor("#00FF00"));
-        panel.setBackground(bg);
-        panel.setPadding(10, 10, 10, 10);
-
-        const scroll = cl.Scroll.$new(activity);
-        const txt = cl.Text.$new(activity);
-        txt.setText("--- GHOST SYSTEM ACTIVE ---\n");
-        txt.setTextColor(Color.WHITE.value);
-        txt.setTextSize(8);
-        scroll.addView(txt);
-        panel.addView(scroll, cl.LinearLayout.LayoutParams.$new(-1, 400));
-
-        updateVirtualLog = function(msg) {
-            const thread = ActivityThread.sCurrentActivityThread.value;
-            if (!thread) return;
-            const handler = Handler.$new(Looper.getMainLooper());
-            handler.post(Java.registerClass({
-                name: "com.ghost.Log_" + Math.random().toString(36).substr(2, 5),
-                implements: [Java.use("java.lang.Runnable")],
-                methods: {
-                    run: function() {
-                        let lines = txt.getText().toString().split('\n');
-                        if (lines.length > 20) lines.shift();
-                        txt.setText(lines.join('\n') + "\n> " + msg);
-                        scroll.fullScroll(130);
+                        return true;
                     }
                 }
             }).$new());
-        };
 
-        const params = cl.LayoutParams.$new(550, -2);
-        params.topMargin = 150; params.leftMargin = 30;
-        activity.addContentView(root, cl.LayoutParams.$new(-1, -1));
-        root.addView(panel, params);
+            dragContainer.addView(menuLayout, cl.LayoutParams.$new(CONF.menuLargura, -2));
+            rootLayout.addView(dragContainer);
+            activity.addContentView(rootLayout, cl.FLayoutParams.$new(-1, -1));
 
-        updateVirtualLog("Janela Injetada!");
-        
-        // Inicia a parte nativa em background
-        setTimeout(startBrainEngine, 1000);
+            // Dispara motor nativo
+            setTimeout(startBrainEngine, 1000);
 
-    } catch (e) {
-        console.log("Erro SetupWindow: " + e);
-    }
+        } catch (e) { console.log("Erro UI: " + e); }
+    });
 }
 
 function startBrainEngine() {
     const mod = Process.findModuleByName("libqplay.so");
     if (!mod) {
-        updateVirtualLog("❌ Erro: Lib não encontrada.");
+        updateVirtualLog("❌ Erro: libqplay.so não carregada.");
         return;
     }
 
-    const base = mod.base;
-    // OFFSETS DO SEU DUMP
-    const addrWall = base.add(0x002B04AC);
-    const addrMove = base.add(0x002A4538);
+    updateVirtualLog("✅ Base: " + mod.base);
 
-    updateVirtualLog("Base: " + base);
+    const OFFSETS = {
+        walltile: 0x002B04AC,
+        movement: 0x002A4538
+    };
 
     try {
-        // Interceptor Nativo (Roda fora da MainThread do Java para não travar)
-        Interceptor.attach(addrMove, {
-            onEnter: function(args) {
-                const id = args[1].toInt32();
-                updateVirtualLog("Mov: " + id);
+        // HOOK 1: WALLTILE (Observador passivo)
+        Interceptor.attach(mod.base.add(OFFSETS.walltile), {
+            onEnter(args) {
+                // Aqui roda milhares de vezes, evite logs frequentes
             }
         });
 
-        Interceptor.attach(addrWall, {
-            onEnter: function(args) {
-                // Muito pesado para logar no Gadget, apenas validação
+        // HOOK 2: MOVEMENT (Ação do Player)
+        Interceptor.attach(mod.base.add(OFFSETS.movement), {
+            onEnter(args) {
+                const actionID = args[1].toInt32();
+                updateVirtualLog("👟 Movimento ID: " + actionID);
             }
         });
 
-        updateVirtualLog("✅ Hooks prontos!");
+        updateVirtualLog("🚀 Hooks ativos via Offset!");
 
     } catch (err) {
         updateVirtualLog("❌ Erro Hook: " + err.message);
     }
 }
+
+// Inicia o processo
+setImmediate(bootstrap);
